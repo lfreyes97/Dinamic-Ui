@@ -137,7 +137,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
         .wallpaper
         .wallpaper_selected
         .and_then(|i| WALLPAPERS.get(i));
-    let real = state.system.wallpaper.clone();
+    let real = state.shared.system.wallpaper.clone();
     // Miniaturas terminadas: subirlas como texturas.
     for thumb in state.wallpaper.thumbs.drain() {
         let image = egui::ColorImage::from_rgba_unmultiplied(

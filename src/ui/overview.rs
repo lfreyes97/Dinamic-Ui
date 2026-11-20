@@ -1,13 +1,12 @@
 //! Overview de workspaces con ventanas en posición relativa.
 
+use super::dock::dock_icon;
 use super::*;
 
 /// Estado del overview (modo pantalla completa).
 #[derive(Default)]
 pub struct OverviewState {
     pub overview: bool,
-    pub overview_focus: Option<String>,
-    pub overview_workspace: Option<u32>,
 }
 
 /// Overview: rejilla de workspaces con las ventanas en su posición relativa.
@@ -29,8 +28,8 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
         state.overview.overview = false;
     }
 
-    let mut ids: Vec<u32> = state.snapshot.occupied.clone();
-    let current = state.snapshot.workspace.parse::<u32>().unwrap_or(1);
+    let mut ids: Vec<u32> = state.shared.snapshot.occupied.clone();
+    let current = state.shared.snapshot.workspace.parse::<u32>().unwrap_or(1);
     if !ids.contains(&current) {
         ids.push(current);
     }
@@ -92,7 +91,7 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
             egui::Sense::click(),
         );
         if card_response.clicked() {
-            state.overview.overview_workspace = Some(*id);
+            state.shared.overview_workspace = Some(*id);
         }
 
         // Cabecera reservada: las ventanas nunca tapan el título del workspace.
@@ -109,7 +108,8 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
             palette.muted,
         );
         let windows: Vec<_> = state
-            .dock_clients
+            .shared
+            .clients
             .iter()
             .filter(|c| c.workspace == *id as i32)
             .collect();
@@ -120,7 +120,7 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
             let wh = (win.h as f32 / monitor_h * content.height()).max(8.0);
             let rect = egui::Rect::from_min_size(egui::pos2(wx, wy), egui::vec2(ww, wh))
                 .intersect(content);
-            let active_window = win.address == state.snapshot.window_address;
+            let active_window = win.address == state.shared.snapshot.window_address;
             let response = ui.interact(
                 rect,
                 ui.scope_id().with(("overview-win", j, *id)),
@@ -151,7 +151,11 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
                 StrokeKind::Middle,
             );
             let icon_center = rect.min + egui::vec2(9.0, 9.0);
-            if let Some(texture) = state.app_icon_textures.get(&win.class.to_lowercase()) {
+            if let Some(texture) = state
+                .shared
+                .app_icon_textures
+                .get(&win.class.to_lowercase())
+            {
                 egui::Image::new(egui::load::SizedTexture::new(
                     texture.id(),
                     egui::vec2(12.0, 12.0),
@@ -182,7 +186,7 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             }
             if response.clicked() {
-                state.overview.overview_focus = Some(win.address.clone());
+                state.shared.overview_focus = Some(win.address.clone());
             }
         }
     }

@@ -10,7 +10,6 @@ pub struct MenuState {
     pub menu_query: String,
     pub menu_selected: usize,
     pub menu_entries: Vec<crate::launcher::Entry>,
-    pub menu_action: Option<crate::launcher::EntryAction>,
 }
 
 /// Command menu: lanzador y buscador, con pestañas de modo.
@@ -140,7 +139,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
         state.menu.menu_entries = match state.menu.menu_mode {
             MenuMode::Apps => crate::launcher::apps(),
             MenuMode::Files => crate::launcher::files(&config::get().menu.file_dirs),
-            MenuMode::Workspaces => crate::launcher::workspaces(&state.snapshot.occupied),
+            MenuMode::Workspaces => crate::launcher::workspaces(&state.shared.snapshot.occupied),
             MenuMode::Commands => crate::launcher::commands(),
         };
     }
@@ -169,7 +168,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             rect.min + egui::vec2(26.0, rect.height() / 2.0),
             egui::vec2(30.0, 30.0),
         );
-        if let Some(texture) = state.app_icon_textures.get(&entry.icon_key) {
+        if let Some(texture) = state.shared.app_icon_textures.get(&entry.icon_key) {
             egui::Image::new(egui::load::SizedTexture::new(
                 texture.id(),
                 icon_rect.size(),
@@ -226,7 +225,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         }
         if r.clicked() {
-            state.menu.menu_action = Some(entry.action.clone());
+            state.shared.menu_action = Some(entry.action.clone());
             state.menu.menu_open = false;
         }
     }

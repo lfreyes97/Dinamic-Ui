@@ -5,30 +5,20 @@ use chrono::{Datelike, Local};
 use egui::{Color32, CornerRadius, CursorIcon, Frame, Margin, RichText, Stroke, StrokeKind};
 use egui_phosphor::regular as ic;
 
-use crate::{
-    config,
-    ipc::HyprlandSnapshot,
-    notifications::Notification,
-    power::BatteryState,
-    sysinfo::{SystemInfo, Wallpaper},
-    theme::Palette,
-};
+use crate::{config, notifications::Notification, sysinfo::Wallpaper, theme::Palette};
 
 mod bar;
+mod component;
+
+pub use component::{dispatch_command, input_rects};
+
+use panel::*;
 mod dock;
 mod menu;
 mod notifications;
 mod overview;
 pub mod panel;
 pub mod wallpaper;
-
-use bar::*;
-use dock::*;
-use menu::*;
-use notifications::*;
-use overview::*;
-use panel::*;
-use wallpaper::*;
 
 /// Ancho mínimo de la tarjeta del panel (con la isla) y separación respecto a la barra.
 /// Con la barra expandida el panel crece hasta `bar_w`: ver `panel_width`.
@@ -142,28 +132,9 @@ pub struct UiState {
     pub overview: overview::OverviewState,
     pub wallpaper: wallpaper::WallpaperState,
 
-    /// Destello breve cuando cambia el workspace/ventana.
-    pub pulse: f32,
-    pub battery: BatteryState,
-    /// Wi-Fi, Bluetooth, niveles y dispositivos (hilo de `sysinfo.rs`).
-    pub system: SystemInfo,
-    /// Comandos externos (argv) que `main` lanza sin esperar.
-    pub pending_spawns: Vec<Vec<String>>,
-    pub snapshot: HyprlandSnapshot,
+    pub shared: crate::shared::Shared,
+    /// El proceso debe terminar (lo decide `main`, no un componente).
     pub should_exit: bool,
-    /// Comandos `dispatch` pendientes de enviar al IPC de Hyprland.
-    pub pending_commands: Vec<String>,
-    /// Clientes de Hyprland, compartidos por dock y overview (Fase 2: `Shared.clients`).
-    pub dock_clients: Vec<crate::ipc::ClientInfo>,
-    /// Iconos reales y sus texturas, compartidos por dock, overview y command menu.
-    pub app_icons: crate::appicons::AppIcons,
-    pub app_icon_textures: std::collections::HashMap<String, egui::TextureHandle>,
-}
-
-#[derive(Debug, Clone)]
-pub enum DockAction {
-    Focus(String),
-    Launch(String),
 }
 
 impl UiState {
@@ -175,16 +146,8 @@ impl UiState {
             notifications: notifications::NotificationState::default(),
             overview: overview::OverviewState::default(),
             wallpaper: wallpaper::WallpaperState::default(),
-            pulse: 0.0,
-            battery: BatteryState::default(),
-            system: SystemInfo::default(),
-            pending_spawns: Vec::new(),
-            snapshot: HyprlandSnapshot::default(),
+            shared: crate::shared::Shared::new(),
             should_exit: false,
-            pending_commands: Vec::new(),
-            dock_clients: Vec::new(),
-            app_icons: crate::appicons::AppIcons::new(),
-            app_icon_textures: std::collections::HashMap::new(),
         }
     }
 }
@@ -248,189 +211,9 @@ pub fn draw(
     visuals.widgets.noninteractive.bg_fill = Color32::TRANSPARENT;
     ui.ctx().set_visuals(visuals);
 
-    // El borde se enciende con decaimiento suave tras un evento de Hyprland.
-    let glow = state.pulse * state.pulse;
-    let accent = palette.accent;
-    let border = if glow > 0.01 {
-        let a = (70.0 + 150.0 * glow).min(255.0) as u8;
-        Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), a)
-    } else {
-        palette.border
-    };
-
-    // El surface es ancho completo y fijo; los elementos se dibujan centrados.
-    let screen = ui.max_rect();
-    // Caída con aceleración (gravedad), no lineal: la gota cae y se posa.
-    let p = state.bar.island_progress;
-    let island_t = p * p;
-    let in_island_mode = t < 0.5;
-    let pill = if in_island_mode {
-        island_rect(screen.width(), island_t)
-    } else {
-        egui::Rect::from_min_size(
-            egui::Pos2::new(((screen.width() - pill_w) / 2.0).round(), 0.0),
-            egui::Vec2::new(pill_w.round(), metrics().bar_h as f32),
-        )
-    };
-    let radius = (pill.height() / 2.0).round().min(16.0) as u8;
-    // En modo isla las esquinas superiores son rectas (tocan el borde de la
-    // pantalla); solo se redondean las inferiores.
-    let corners = if in_island_mode {
-        CornerRadius {
-            nw: 0,
-            ne: 0,
-            sw: radius,
-            se: radius,
-        }
-    } else {
-        CornerRadius::same(radius)
-    };
-    ui.painter().rect(
-        pill,
-        corners,
-        palette.surface,
-        Stroke::new(1.0 + glow * 1.5, border),
-        StrokeKind::Middle,
-    );
-
-    let inner = egui::Rect::from_min_max(
-        pill.min + egui::Vec2::new(BAR_INSET_X, 5.0),
-        pill.max - egui::Vec2::new(BAR_INSET_X, 5.0),
-    );
-    let header_h = metrics().bar_h as f32 - 8.0;
-    let header = egui::Rect::from_min_size(
-        inner.min,
-        egui::Vec2::new(inner.width(), header_h.min(inner.height())),
-    );
-
-    // Crossfade isla <-> barra sobre el mismo rectángulo.
-    let island_alpha = 1.0 - smoothstep(0.15, 0.75, t);
-    let bar_alpha = smoothstep(0.25, 0.85, t);
-
-    if island_alpha > 0.01 && in_island_mode {
-        if island_t > 0.1 {
-            // Icono + hora con más presencia, agrupados y centrados.
-            let now = Local::now().format("%H:%M").to_string();
-            let icon_pos = pill.center() - egui::vec2(30.0, 0.0);
-            let time_pos = pill.center() + egui::vec2(8.0, 0.0);
-            ui.painter().text(
-                icon_pos,
-                egui::Align2::CENTER_CENTER,
-                ic::CLOCK,
-                icon_font(ICON_MD),
-                palette.accent,
-            );
-            text_at(
-                ui,
-                time_pos,
-                egui::Align2::CENTER_CENTER,
-                now,
-                TEXT_DISPLAY_SM,
-                palette.text,
-            );
-        }
-        // Un punto de acento en el notch en reposo.
-        if island_t < 0.5 {
-            ui.painter().circle_filled(
-                pill.center(),
-                1.4,
-                palette.accent.gamma_multiply(0.5 + island_t),
-            );
-        }
-        // Clic: notch/compacto -> compacto enganchado -> barra.
-        let response = ui.interact(
-            pill,
-            ui.scope_id().with(egui::IdSalt::new("island-click")),
-            egui::Sense::click(),
-        );
-        if response.hovered() {
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-        }
-        if response.clicked() {
-            if state.bar.island_compact {
-                state.bar.expanded = true;
-                state.bar.island_compact = false;
-            } else {
-                state.bar.island_compact = true;
-            }
-        }
-    }
-    if bar_alpha > 0.01 {
-        let mut child = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(header)
-                .layout(egui::Layout::left_to_right(egui::Align::Center))
-                .id_salt("bar-layer"),
-        );
-        child.set_opacity(bar_alpha);
-        draw_bar_row(&mut child, state, palette);
-    }
-
-    // Notificación: tarjeta propia, separada de la barra. Se oculta al abrir el panel.
-    let notif_t = smoothstep(0.0, 1.0, state.notifications.notification_progress);
-    if notif_t > 0.01 && panel_t < 0.5 && state.notifications.notification.is_some() {
-        // Slide in desde arriba / slide out hacia arriba: la tarjeta se desplaza
-        // desde detrás de la barra hasta su sitio (y viceversa al salir).
-        let base = notification_card(screen.width());
-        let slide = (1.0 - notif_t) * (metrics().bar_h as f32 + PANEL_GAP + base.height());
-        let card = base.translate(egui::vec2(0.0, -slide));
-        let mut child = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(card)
-                .id_salt("notification-layer"),
-        );
-        child.set_clip_rect(card.intersect(ui.clip_rect()));
-        child.set_opacity(smoothstep(
-            0.0,
-            0.6,
-            state.notifications.notification_progress,
-        ));
-        draw_notification_card(&mut child, card, state, palette);
-    }
-
-    if panel_t > 0.01 {
-        // Tarjeta independiente, centrada bajo la píldora y tan ancha como el modo.
-        let card_w = panel_width(t).round();
-        let card_h = metrics().panel_h as f32 * panel_t;
-        let card = egui::Rect::from_min_size(
-            egui::Pos2::new(
-                ((screen.width() - card_w) / 2.0).round(),
-                metrics().bar_h as f32 + PANEL_GAP,
-            ),
-            egui::Vec2::new(card_w, card_h),
-        );
-        let card_fill = Color32::from_rgba_unmultiplied(8, 8, 8, 245);
-        let card_border = Color32::from_rgba_unmultiplied(41, 41, 41, 255);
-        ui.painter().rect(
-            card,
-            CornerRadius::same(18),
-            card_fill,
-            Stroke::new(1.0, card_border),
-            StrokeKind::Middle,
-        );
-        let inner_min = card.min + egui::Vec2::new(PANEL_PAD_X, PANEL_PAD_Y);
-        // Al abrir, la tarjeta mide menos que el padding: sin rect invertido.
-        let panel_inner = egui::Rect::from_min_max(
-            inner_min,
-            (card.max - egui::Vec2::new(PANEL_PAD_X, PANEL_PAD_Y)).max(inner_min),
-        );
-        let mut child = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(panel_inner)
-                .id_salt("panel-layer"),
-        );
-        // Durante la animación de apertura el contenido no sale de la tarjeta.
-        child.set_clip_rect(card.intersect(ui.clip_rect()));
-        child.set_opacity(panel_t);
-        draw_panel(&mut child, state, palette);
-    }
-
-    draw_dock(ui, state, palette);
-    if state.overview.overview {
-        draw_overview(ui, state, palette);
-    }
-    if state.menu.menu_open {
-        draw_command_menu(ui, state, palette);
+    let ctx = component::DrawCtx { t, panel_t, pill_w };
+    for mut component in component::build_components() {
+        component.draw(ui, state, ctx, palette);
     }
 }
 

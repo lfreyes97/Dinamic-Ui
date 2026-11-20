@@ -90,3 +90,34 @@ pub(super) fn draw_notification_card(
         }
     });
 }
+
+/// Tarjeta de notificación con slide in/out.
+pub(super) fn draw_notification(
+    ui: &mut egui::Ui,
+    state: &mut UiState,
+    palette: Palette,
+    panel_t: f32,
+) {
+    let screen = ui.max_rect();
+    // Notificación: tarjeta propia, separada de la barra. Se oculta al abrir el panel.
+    let notif_t = smoothstep(0.0, 1.0, state.notifications.notification_progress);
+    if notif_t > 0.01 && panel_t < 0.5 && state.notifications.notification.is_some() {
+        // Slide in desde arriba / slide out hacia arriba: la tarjeta se desplaza
+        // desde detrás de la barra hasta su sitio (y viceversa al salir).
+        let base = notification_card(screen.width());
+        let slide = (1.0 - notif_t) * (metrics().bar_h as f32 + PANEL_GAP + base.height());
+        let card = base.translate(egui::vec2(0.0, -slide));
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(card)
+                .id_salt("notification-layer"),
+        );
+        child.set_clip_rect(card.intersect(ui.clip_rect()));
+        child.set_opacity(smoothstep(
+            0.0,
+            0.6,
+            state.notifications.notification_progress,
+        ));
+        draw_notification_card(&mut child, card, state, palette);
+    }
+}

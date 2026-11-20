@@ -71,19 +71,21 @@ hilos de lo demás.
 
 ## Fase 2 — Estado compartido y trait `Component`
 
-- [ ] Definir `Shared` en el núcleo con:
+- [x] Definir `Shared` en el núcleo (`src/shared.rs`) con:
   - datos: clientes/workspaces/monitores (`ipc`), config, paleta, texturas de iconos
     (`app_icon_textures`);
   - **colas diferidas** que hoy viven en `UiState` (`src/ui/mod.rs`): `pending_commands`,
     `pending_spawns`, `dock_action`, `overview_focus`, `overview_workspace`, `menu_action`.
   Sin las colas, "ningún componente depende de otro" se incumple por debajo.
-- [ ] **Mover el polling de `ipc.clients()` al núcleo** (hoy en `main.rs:546-566`, colgado del
-      temporizador del dock). Hoy `overview` lee `state.dock_clients`; con `overview` sin
-      `dock` no habría datos. `dock_clients` pasa a `Shared.clients`.
-- [ ] `bar`: enum de estados + interpolación entre rects; `max_state` en config.
-- [ ] Trait `Component` con `draw`, `input_rects` y `on_command`.
-- [ ] `build_components()` como único lugar de registro.
-- [ ] `input_region` = unión de `input_rects` de los componentes activos.
+- [x] **Mover el polling de `ipc.clients()` al núcleo** (antes colgado del temporizador del
+      dock). Ahora corre cada 400 ms con su propio temporizador y alimenta
+      `Shared.clients`, que leen dock, overview y command menu.
+- [x] `bar`: enum `BarPhase` + `max_state` en config (`[bar]`). La interpolación entre rects
+      sigue en `ui::component::{bar_rect, card_rect}` con `smootherstep`.
+- [x] Trait `Component` con `draw`, `input_rects` y `on_command` (`src/ui/component.rs`).
+- [x] `build_components()` como único lugar de registro; el orden del vector es el z-order.
+- [x] `input_region` = unión de `input_rects` de los componentes activos. `main.rs` ya no
+      calcula rects: llama a `ui::input_rects()`.
 
 ## Fase 3 — Features de Cargo
 

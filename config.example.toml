@@ -1,4 +1,8 @@
 # Copiar a ~/.config/dinamic-ui/config.toml
+
+# Techo de expansión de la barra: notch | compact | bar | panel (default: panel).
+# [bar]
+# max_state = "panel"
 # Recargar en caliente: dinamic-ui --reload
 
 [theme]

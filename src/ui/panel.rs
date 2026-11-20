@@ -1,5 +1,6 @@
 //! Panel de control: pestañas, helpers y constantes propias.
 
+use super::wallpaper::panel_wallpaper;
 use super::*;
 
 // ── Panel de control ────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ pub fn layout_preset_index(layout: &str) -> Option<usize> {
 
 /// Abre una ruta con la aplicación por defecto (vía `main`, sin bloquear).
 pub(super) fn open_path(state: &mut UiState, path: &std::path::Path) {
-    state.pending_spawns.push(vec![
+    state.shared.pending_spawns.push(vec![
         "xdg-open".to_string(),
         path.to_string_lossy().into_owned(),
     ]);
@@ -233,8 +234,8 @@ pub(super) fn panel_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: 
                 egui::Sense::click(),
             )
             .on_hover_cursor(CursorIcon::PointingHand);
-        let active = state.snapshot.workspace == n.to_string();
-        let occupied = state.snapshot.occupied.contains(&(n as u32));
+        let active = state.shared.snapshot.workspace == n.to_string();
+        let occupied = state.shared.snapshot.occupied.contains(&(n as u32));
         let (fill, stroke, fg) = if active {
             (P_INVERT, P_INVERT, P_INK)
         } else if response.hovered() {
@@ -284,7 +285,10 @@ pub(super) fn panel_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: 
             );
         }
         if response.clicked() {
-            state.pending_commands.push(switch_workspace_cmd(n as u32));
+            state
+                .shared
+                .pending_commands
+                .push(switch_workspace_cmd(n as u32));
         }
     }
     ui.add_space(SP_L);
@@ -352,18 +356,18 @@ pub(super) fn panel_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: 
             // por eso solo se envían ids de `LAYOUT_IDS`.
             if let Some(id) = layout_id {
                 state.bar.layout_preset = i;
-                state.pending_spawns.push(layout_command(id));
+                state.shared.pending_spawns.push(layout_command(id));
             }
         }
     }
 
-    let ws = if state.snapshot.workspace.is_empty() {
+    let ws = if state.shared.snapshot.workspace.is_empty() {
         "-"
     } else {
-        &state.snapshot.workspace
+        &state.shared.snapshot.workspace
     };
     // Layout real de Hyprland si se pudo leer; si no, el preset marcado.
-    let layout = match &state.system.layout {
+    let layout = match &state.shared.system.layout {
         Some(layout) => capitalize(layout),
         None => LAYOUT_PRESETS[state.bar.layout_preset.min(3)].to_string(),
     };
@@ -682,7 +686,7 @@ pub(super) fn eu_summer_time(utc: chrono::DateTime<chrono::Utc>) -> bool {
 
 pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
     let width = ui.available_width();
-    let battery = &state.battery;
+    let battery = &state.shared.battery;
 
     section_heading(ui, "BATTERY", "Power status");
     let (card, _) = ui.allocate_exact_size(egui::Vec2::new(width, 78.0), egui::Sense::hover());
@@ -747,7 +751,7 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
     ui.add_space(15.0);
 
     // Wi-Fi (nmcli) y Bluetooth (bluetoothctl), leídos por `sysinfo.rs`.
-    let system = &state.system;
+    let system = &state.shared.system;
     section_heading(ui, "CONNECTIVITY", "Network status");
     let wifi = match &system.wifi {
         None => (None, "Sin datos".to_string()),
@@ -1087,6 +1091,7 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
     if let Some(app) = open {
         // Comportamiento previo: enfocar la ventana por clase = nombre de la app.
         state
+            .shared
             .pending_commands
             .push(format!("focuswindow class:{app}"));
     }
@@ -1101,6 +1106,53 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
         false,
         false,
     );
+}
+
+/// Tarjeta del panel de control, centrada bajo la barra.
+pub(super) fn draw_panel_card(
+    ui: &mut egui::Ui,
+    state: &mut UiState,
+    palette: Palette,
+    t: f32,
+    panel_t: f32,
+) {
+    let screen = ui.max_rect();
+    if panel_t > 0.01 {
+        // Tarjeta independiente, centrada bajo la píldora y tan ancha como el modo.
+        let card_w = panel_width(t).round();
+        let card_h = metrics().panel_h as f32 * panel_t;
+        let card = egui::Rect::from_min_size(
+            egui::Pos2::new(
+                ((screen.width() - card_w) / 2.0).round(),
+                metrics().bar_h as f32 + PANEL_GAP,
+            ),
+            egui::Vec2::new(card_w, card_h),
+        );
+        let card_fill = Color32::from_rgba_unmultiplied(8, 8, 8, 245);
+        let card_border = Color32::from_rgba_unmultiplied(41, 41, 41, 255);
+        ui.painter().rect(
+            card,
+            CornerRadius::same(18),
+            card_fill,
+            Stroke::new(1.0, card_border),
+            StrokeKind::Middle,
+        );
+        let inner_min = card.min + egui::Vec2::new(PANEL_PAD_X, PANEL_PAD_Y);
+        // Al abrir, la tarjeta mide menos que el padding: sin rect invertido.
+        let panel_inner = egui::Rect::from_min_max(
+            inner_min,
+            (card.max - egui::Vec2::new(PANEL_PAD_X, PANEL_PAD_Y)).max(inner_min),
+        );
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(panel_inner)
+                .id_salt("panel-layer"),
+        );
+        // Durante la animación de apertura el contenido no sale de la tarjeta.
+        child.set_clip_rect(card.intersect(ui.clip_rect()));
+        child.set_opacity(panel_t);
+        draw_panel(&mut child, state, palette);
+    }
 }
 
 #[cfg(test)]

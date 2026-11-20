@@ -1,13 +1,13 @@
 //! Dock inferior: modelo (pinned + clientes) y vista autohide.
 
 use super::*;
+use crate::shared::DockAction;
 
 /// Estado del dock: animación, visibilidad y menú de ventanas.
 #[derive(Default)]
 pub struct DockState {
     pub dock_progress: f32,
     pub dock_visible: bool,
-    pub dock_action: Option<DockAction>,
     pub dock_menu: Option<usize>,
 }
 
@@ -63,7 +63,8 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
     for pinned in &cfg.pinned {
         let key = pinned.to_lowercase();
         let windows: Vec<_> = state
-            .dock_clients
+            .shared
+            .clients
             .iter()
             .filter(|c| c.class.to_lowercase() == key)
             .cloned()
@@ -74,11 +75,12 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             windows,
         });
     }
-    for client in &state.dock_clients {
+    for client in &state.shared.clients {
         let key = client.class.to_lowercase();
         if !items.iter().any(|it| it.name.to_lowercase() == key) {
             let windows: Vec<_> = state
-                .dock_clients
+                .shared
+                .clients
                 .iter()
                 .filter(|c| c.class.to_lowercase() == key)
                 .cloned()
@@ -96,9 +98,9 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
 
     // Pedir iconos reales y subir los que ya vinieron del hilo.
     for item in &items {
-        state.app_icons.request(&item.name);
+        state.shared.app_icons.request(&item.name);
     }
-    for (class, rgba) in state.app_icons.drain() {
+    for (class, rgba) in state.shared.app_icons.drain() {
         let image = egui::ColorImage::from_rgba_unmultiplied(
             [
                 crate::appicons::SIZE as usize,
@@ -111,7 +113,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             image,
             egui::TextureOptions::LINEAR,
         );
-        state.app_icon_textures.insert(class, handle);
+        state.shared.app_icon_textures.insert(class, handle);
     }
 
     const ITEM: f32 = 42.0;
@@ -146,7 +148,11 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             egui::pos2(dock.min.x + 7.0 + i as f32 * (ITEM + GAP), icon_y),
             egui::vec2(ITEM, ITEM),
         );
-        let active = state.snapshot.window_class.eq_ignore_ascii_case(name);
+        let active = state
+            .shared
+            .snapshot
+            .window_class
+            .eq_ignore_ascii_case(name);
         let color = if active {
             Color32::from_gray(17)
         } else {
@@ -173,7 +179,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
         let icon_size = if pressed { 22.0 } else { 26.0 };
         let icon_rect =
             egui::Rect::from_center_size(rect.center(), egui::vec2(icon_size, icon_size));
-        if let Some(texture) = state.app_icon_textures.get(&name.to_lowercase()) {
+        if let Some(texture) = state.shared.app_icon_textures.get(&name.to_lowercase()) {
             egui::Image::new(egui::load::SizedTexture::new(
                 texture.id(),
                 icon_rect.size(),
@@ -217,18 +223,18 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
 
         if response.clicked() {
             if item.windows.is_empty() {
-                state.dock.dock_action = Some(DockAction::Launch(item.command.clone()));
+                state.shared.dock_action = Some(DockAction::Launch(item.command.clone()));
             } else if item.windows.len() == 1 {
-                state.dock.dock_action = Some(DockAction::Focus(item.windows[0].address.clone()));
+                state.shared.dock_action = Some(DockAction::Focus(item.windows[0].address.clone()));
             } else if active {
                 // Ya está activa: ciclar a la siguiente ventana.
                 let current = item
                     .windows
                     .iter()
-                    .position(|w| w.address == state.snapshot.window_address)
+                    .position(|w| w.address == state.shared.snapshot.window_address)
                     .unwrap_or(0);
                 let next = (current + 1) % item.windows.len();
-                state.dock.dock_action =
+                state.shared.dock_action =
                     Some(DockAction::Focus(item.windows[next].address.clone()));
             } else {
                 state.dock.dock_menu = if state.dock.dock_menu == Some(i) {
@@ -242,7 +248,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             state.dock.dock_menu = Some(i);
         }
         if response.middle_clicked() {
-            state.dock.dock_action = Some(DockAction::Launch(item.command.clone()));
+            state.shared.dock_action = Some(DockAction::Launch(item.command.clone()));
         }
     }
 
@@ -298,7 +304,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                     palette.text,
                 );
                 if r.clicked() {
-                    state.dock.dock_action = Some(DockAction::Focus(win.address.clone()));
+                    state.shared.dock_action = Some(DockAction::Focus(win.address.clone()));
                     state.dock.dock_menu = None;
                 }
             }
@@ -324,7 +330,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                 palette.muted,
             );
             if r.clicked() {
-                state.dock.dock_action = Some(DockAction::Launch(item.command.clone()));
+                state.shared.dock_action = Some(DockAction::Launch(item.command.clone()));
                 state.dock.dock_menu = None;
             }
         }

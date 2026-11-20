@@ -14,6 +14,7 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    pub bar: BarConfig,
     pub theme: ThemeConfig,
     pub sizes: Sizes,
     pub workspaces: Workspaces,
@@ -22,6 +23,31 @@ pub struct Config {
     pub wallpapers: WallpaperConfig,
     pub dock: DockConfig,
     pub menu: MenuConfig,
+}
+
+/// Techo de expansión de la barra: notch → compacto → barra → panel.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum BarMaxState {
+    Notch,
+    Compact,
+    Bar,
+    #[default]
+    Panel,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(default)]
+pub struct BarConfig {
+    pub max_state: BarMaxState,
+}
+
+impl Default for BarConfig {
+    fn default() -> Self {
+        Self {
+            max_state: BarMaxState::Panel,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

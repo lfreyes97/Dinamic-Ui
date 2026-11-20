@@ -6,6 +6,7 @@ mod ipc;
 mod launcher;
 mod notifications;
 mod power;
+mod shared;
 mod sysinfo;
 mod theme;
 mod thumbs;
@@ -41,19 +42,14 @@ use smithay_client_toolkit::{
     },
 };
 use theme::Palette;
-use ui::{metrics, UiState, PANEL_GAP};
+use ui::{metrics, UiState};
 use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_region, wl_seat, wl_surface},
     Connection, QueueHandle,
 };
 
-type InputRects = (
-    (i32, i32, i32, i32),
-    (i32, i32, i32, i32),
-    (i32, i32, i32, i32),
-    (i32, i32, i32, i32),
-);
+type InputRects = Vec<(i32, i32, i32, i32)>;
 
 struct DinamicUi {
     registry_state: RegistryState,
@@ -87,6 +83,8 @@ struct DinamicUi {
     last_frame: Instant,
     last_battery: Instant,
     last_dock_query: Instant,
+    /// Clientes de Hyprland, consultados por el núcleo (no por el dock).
+    last_clients_query: Instant,
     menu_focus: bool,
     idle_frames: u32,
     /// Comandos del socket de control (entregados por la fuente calloop).
@@ -160,6 +158,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         last_frame: Instant::now(),
         last_battery: Instant::now() - std::time::Duration::from_secs(5),
         last_dock_query: Instant::now() - std::time::Duration::from_secs(2),
+        last_clients_query: Instant::now() - std::time::Duration::from_secs(2),
         menu_focus: false,
         idle_frames: 0,
         pending_control: Vec::new(),
@@ -226,7 +225,7 @@ impl DinamicUi {
         self.ui_state.menu.menu_entries = match self.ui_state.menu.menu_mode {
             MenuMode::Apps => launcher::apps(),
             MenuMode::Files => launcher::files(&config::get().menu.file_dirs),
-            MenuMode::Workspaces => launcher::workspaces(&self.ui_state.snapshot.occupied),
+            MenuMode::Workspaces => launcher::workspaces(&self.ui_state.shared.snapshot.occupied),
             MenuMode::Commands => launcher::commands(),
         };
         self.ui_state.menu.menu_selected = 0;
@@ -258,50 +257,14 @@ impl DinamicUi {
         let pending_control = std::mem::take(&mut self.pending_control);
         for command in pending_control {
             dirty = true;
+            let was_menu_open = self.ui_state.menu.menu_open;
+            if ui::dispatch_command(command.name(), &mut self.ui_state) {
+                if !was_menu_open && self.ui_state.menu.menu_open {
+                    self.refresh_menu_entries();
+                }
+                continue;
+            }
             match command {
-                control::Command::Toggle => {
-                    self.ui_state.bar.expanded = !self.ui_state.bar.expanded
-                }
-                control::Command::Expand => self.ui_state.bar.expanded = true,
-                control::Command::Collapse => {
-                    self.ui_state.bar.expanded = false;
-                    self.ui_state.bar.show_panel = false;
-                }
-                control::Command::Panel => {
-                    self.ui_state.bar.show_panel = !self.ui_state.bar.show_panel
-                }
-                control::Command::Compact => {
-                    self.ui_state.bar.expanded = false;
-                    self.ui_state.bar.island_compact = true;
-                }
-                control::Command::Notch => {
-                    self.ui_state.bar.expanded = false;
-                    self.ui_state.bar.island_compact = false;
-                    self.ui_state.bar.island_active = false;
-                }
-                control::Command::Overview => {
-                    self.ui_state.overview.overview = !self.ui_state.overview.overview;
-                    if self.ui_state.overview.overview {
-                        self.ui_state.bar.show_panel = false;
-                    }
-                }
-                control::Command::Menu => {
-                    self.ui_state.menu.menu_open = !self.ui_state.menu.menu_open;
-                    let focus = if self.ui_state.menu.menu_open {
-                        KeyboardInteractivity::Exclusive
-                    } else {
-                        KeyboardInteractivity::OnDemand
-                    };
-                    self.layer.set_keyboard_interactivity(focus);
-                    self.layer.commit();
-                    if self.ui_state.menu.menu_open {
-                        self.ui_state.overview.overview = false;
-                        self.ui_state.bar.show_panel = false;
-                        self.ui_state.menu.menu_query.clear();
-                        self.ui_state.menu.menu_selected = 0;
-                        self.refresh_menu_entries();
-                    }
-                }
                 control::Command::Quit => self.exit = true,
                 control::Command::Reload => {
                     if let Err(e) = config::reload() {
@@ -309,12 +272,13 @@ impl DinamicUi {
                     }
                     self.palette = Palette::load();
                 }
+                _ => {}
             }
         }
 
         // Eventos de Hyprland: destello breve y consulta inmediata.
         if self.ipc.poll_events() {
-            self.ui_state.pulse = 1.0;
+            self.ui_state.shared.pulse = 1.0;
             self.ipc.force_refresh();
             dirty = true;
         }
@@ -322,8 +286,19 @@ impl DinamicUi {
         let snapshot = self.ipc.snapshot().clone();
         if snapshot != self.last_snapshot {
             self.last_snapshot = snapshot.clone();
-            self.ui_state.snapshot = snapshot;
+            self.ui_state.shared.snapshot = snapshot;
             dirty = true;
+        }
+
+        // Clientes: los consulta el núcleo, no el dock. Así overview y taskbar
+        // tienen datos aunque el dock no esté compilado o nunca aparezca.
+        if self.last_clients_query.elapsed() >= Duration::from_millis(400) {
+            self.last_clients_query = Instant::now();
+            let clients = self.ipc.clients();
+            if clients != self.ui_state.shared.clients {
+                self.ui_state.shared.clients = clients;
+                dirty = true;
+            }
         }
 
         // Notificaciones DBus (cola alimentada por un hilo propio).
@@ -369,11 +344,11 @@ impl DinamicUi {
             dirty = true;
         }
 
-        for command in self.ui_state.pending_commands.drain(..) {
+        for command in self.ui_state.shared.pending_commands.drain(..) {
             self.ipc.dispatch(&command);
         }
         // Comandos externos (hyprctl eval, xdg-open…) fuera del hilo de render.
-        for argv in self.ui_state.pending_spawns.drain(..) {
+        for argv in self.ui_state.shared.pending_spawns.drain(..) {
             sysinfo::spawn_detached(argv);
         }
 
@@ -390,7 +365,7 @@ impl DinamicUi {
         if let Some((info, revision)) = self.sysinfo.poll() {
             if revision != self.last_sysinfo_revision {
                 self.last_sysinfo_revision = revision;
-                if info.layout != self.ui_state.system.layout {
+                if info.layout != self.ui_state.shared.system.layout {
                     if let Some(preset) = info
                         .layout
                         .as_deref()
@@ -410,7 +385,7 @@ impl DinamicUi {
                     Some(sysinfo::Wallpaper::Image(path)) => Some(std::path::PathBuf::from(path)),
                     _ => None,
                 };
-                self.ui_state.system = info;
+                self.ui_state.shared.system = info;
                 dirty = true;
             }
         }
@@ -422,8 +397,8 @@ impl DinamicUi {
         let dt = now.duration_since(self.last_frame).as_secs_f32().min(0.1);
         self.last_frame = now;
 
-        if self.ui_state.pulse > 0.0 {
-            self.ui_state.pulse = (self.ui_state.pulse - dt * 1.6).max(0.0);
+        if self.ui_state.shared.pulse > 0.0 {
+            self.ui_state.shared.pulse = (self.ui_state.shared.pulse - dt * 1.6).max(0.0);
             dirty = true;
         }
 
@@ -464,72 +439,17 @@ impl DinamicUi {
         let m = metrics();
         // La notificación tiene tarjeta propia: la isla no cambia de ancho.
         let pill_w = lerp(m.island_w as f32, m.bar_w as f32, t);
-        // El surface no se redimensiona: solo movemos el input region con la
-        // barra, el panel y la tarjeta de notificación.
-        let bar = if t < 0.5 {
-            let r = ui::island_rect(
-                self.width as f32,
-                self.ui_state.bar.island_progress * self.ui_state.bar.island_progress,
-            );
-            (
-                r.min.x as i32,
-                0,
-                r.width() as i32,
-                r.height().max(8.0) as i32,
-            )
-        } else {
-            (
-                ((self.width as f32 - pill_w) / 2.0).round() as i32,
-                0,
-                pill_w.round() as i32,
-                metrics().bar_h as i32,
-            )
-        };
-        let card_w = ui::panel_width(t).round();
-        let card_x = ((self.width as f32 - card_w) / 2.0).round() as i32;
-        let card = (
-            card_x,
-            (metrics().bar_h as f32 + PANEL_GAP) as i32,
-            card_w as i32,
-            (metrics().panel_h as f32 * panel_t).round() as i32,
-        );
-        let nr = ui::notification_card(self.width as f32);
-        let notif = (
-            nr.min.x as i32,
-            nr.min.y as i32,
-            nr.width() as i32,
-            if panel_t < 0.5 && self.ui_state.notifications.notification.is_some() {
-                nr.height() as i32
-            } else {
-                0
-            },
-        );
-        let dock = if self.ui_state.dock.dock_progress > 0.01 {
-            (0, self.height as i32 - 72, self.width as i32, 72)
-        } else {
-            (0, 0, 0, 0)
-        };
-        let screen_rect = (0, 0, self.width as i32, self.height as i32);
-        let region = if self.ui_state.overview.overview || self.ui_state.menu.menu_open {
-            (screen_rect, screen_rect, screen_rect, screen_rect)
-        } else {
-            (bar, card, notif, dock)
-        };
-        if self.last_input_region != Some(region) {
+        // El input region lo declaran los componentes activos. El surface no
+        // se redimensiona: solo cambia la zona que acepta eventos.
+        let rects = ui::input_rects(&self.ui_state, self.width as i32, self.height as i32);
+        if self.last_input_region.as_ref() != Some(&rects) {
             let wl_region = self.compositor_state.wl_compositor().create_region(qh, ());
-            wl_region.add(bar.0, bar.1, bar.2, bar.3);
-            if card.3 > 0 {
-                wl_region.add(card.0, card.1, card.2, card.3);
-            }
-            if notif.3 > 0 {
-                wl_region.add(notif.0, notif.1, notif.2, notif.3);
-            }
-            if dock.3 > 0 {
-                wl_region.add(dock.0, dock.1, dock.2, dock.3);
+            for (x, y, w, h) in &rects {
+                wl_region.add(*x, *y, *w, *h);
             }
             self.layer.set_input_region(Some(&wl_region));
             wl_region.destroy();
-            self.last_input_region = Some(region);
+            self.last_input_region = Some(rects);
         }
 
         let minute = Local::now().format("%H:%M").to_string();
@@ -542,8 +462,8 @@ impl DinamicUi {
         if self.last_battery.elapsed() >= std::time::Duration::from_secs(2) {
             self.last_battery = Instant::now();
             let battery = power::read();
-            if battery != self.ui_state.battery {
-                self.ui_state.battery = battery;
+            if battery != self.ui_state.shared.battery {
+                self.ui_state.shared.battery = battery;
                 dirty = true;
             }
         }
@@ -578,11 +498,6 @@ impl DinamicUi {
                     dirty = true;
                 }
             }
-            let clients = self.ipc.clients();
-            if clients != self.ui_state.dock_clients {
-                self.ui_state.dock_clients = clients;
-                dirty = true;
-            }
         }
         let island_target = if self.ui_state.bar.island_active || self.ui_state.bar.island_compact {
             1.0
@@ -607,18 +522,18 @@ impl DinamicUi {
         if (self.ui_state.dock.dock_progress - dock_before).abs() > 0.0005 {
             dirty = true;
         }
-        if let Some(action) = self.ui_state.dock.dock_action.take() {
+        if let Some(action) = self.ui_state.shared.dock_action.take() {
             match action {
-                ui::DockAction::Focus(address) => {
+                shared::DockAction::Focus(address) => {
                     self.ipc.dispatch(&format!("focuswindow address:{address}"));
                 }
-                ui::DockAction::Launch(command) => {
+                shared::DockAction::Launch(command) => {
                     let _ = std::process::Command::new(&command).spawn();
                 }
             }
             dirty = true;
         }
-        if let Some(action) = self.ui_state.menu.menu_action.take() {
+        if let Some(action) = self.ui_state.shared.menu_action.take() {
             match action {
                 launcher::EntryAction::Launch(command) => {
                     let parts: Vec<&str> = command.split_whitespace().collect();
@@ -648,12 +563,12 @@ impl DinamicUi {
             }
             dirty = true;
         }
-        if let Some(address) = self.ui_state.overview.overview_focus.take() {
+        if let Some(address) = self.ui_state.shared.overview_focus.take() {
             self.ipc.dispatch(&format!("focuswindow address:{address}"));
             self.ui_state.overview.overview = false;
             dirty = true;
         }
-        if let Some(id) = self.ui_state.overview.overview_workspace.take() {
+        if let Some(id) = self.ui_state.shared.overview_workspace.take() {
             self.ipc.dispatch(&format!("workspace {id}"));
             self.ui_state.overview.overview = false;
             dirty = true;
@@ -695,12 +610,12 @@ impl DinamicUi {
     }
 }
 
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
+pub(crate) fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
 /// Curva con velocidad cero en ambos extremos: el morph arranca y termina suave.
-fn smootherstep(t: f32) -> f32 {
+pub(crate) fn smootherstep(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
 }
@@ -912,7 +827,7 @@ impl KeyboardHandler for DinamicUi {
                     .nth(self.ui_state.menu.menu_selected)
                     {
                         let action = entry.action;
-                        self.ui_state.menu.menu_action = Some(action);
+                        self.ui_state.shared.menu_action = Some(action);
                         self.ui_state.menu.menu_open = false;
                         self.layer
                             .set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
