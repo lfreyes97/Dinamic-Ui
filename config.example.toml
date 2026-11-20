@@ -6,13 +6,24 @@
 # Recargar en caliente: dinamic-ui --reload
 
 [theme]
-name = "black-metal"        # o "bathory"
+# Esquema base16. Incluidos (metalelf0/base16-black-metal-scheme): black-metal, bathory,
+# burzum, dark-funeral, gorgoroth, immortal, khold, marduk, mayhem, nile, venom.
+# También una ruta a cualquier esquema base16 (YAML o TOML con base00..base0F).
+scheme = "black-metal"
+# scheme = "~/.config/dinamic-ui/gruvbox-dark.yaml"
+contrast_correction = false # true: corrige texto/indicadores bajo 4,5:1 / 3:1 (WCAG)
+# accent = "base0B"         # un slot (base0A…) o un hex; por defecto base0B
+#
+# Cambiar un slot del esquema:
+# [theme.slots]
+# base0B = "ddeecc"
+#
+# Overrides de token suelto (hex RRGGBB):
 # surface = "121212"
 # border = "303030"
 # badge = "242424"
 # text = "c1c1c1"
 # muted = "999999"
-# accent = "dd9999"
 
 [sizes]
 bar_h = 32                  # 24..48

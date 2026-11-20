@@ -173,9 +173,18 @@ impl Default for DockConfig {
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct ThemeConfig {
-    /// "black-metal" (default) o "bathory".
+    /// Esquema base16: uno incluido (`black-metal`, `bathory`, `venom`…; ver
+    /// `docs/DESIGN_TOKENS.md`) o la ruta a un archivo base16 (`~/.config/…/esquema.yaml`).
+    pub scheme: Option<String>,
+    /// Alias antiguo de `scheme`.
     pub name: Option<String>,
-    /// Colores hexadecimales opcionales (RRGGBB) que sobrescriben la paleta.
+    /// Corrige los colores de texto e indicadores que no alcancen el contraste WCAG
+    /// (4,5:1 texto, 3:1 elementos). Apagado: se respeta el esquema y solo se avisa en el log.
+    pub contrast_correction: bool,
+    /// Sustituye slots del esquema: `base0B = "ddeecc"`.
+    pub slots: std::collections::HashMap<String, String>,
+    /// Colores hexadecimales opcionales (RRGGBB) que sobrescriben un token. `accent` también
+    /// acepta un slot (`"base0A"`); por defecto es `base0B`.
     pub surface: Option<String>,
     pub border: Option<String>,
     pub badge: Option<String>,
