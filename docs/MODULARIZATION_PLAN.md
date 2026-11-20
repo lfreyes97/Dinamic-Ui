@@ -141,6 +141,8 @@ hilos de lo demás.
 | `notifications` | — | 232 (+`zbus`) |
 | completo (default) | **19,4 MB** | 258 |
 
+> Continúa en `docs/WIDGETS_PLAN.md` (widgets, panel desacoplado, dashboard y bento editable).
+
 ## Fase 4 — Verificación y CI
 
 - [x] Matriz mínima: `--no-default-features`, cada feature sola, y `--all-features`
