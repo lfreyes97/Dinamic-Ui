@@ -96,17 +96,35 @@ lint-colors:
 # Todo lo que debe pasar antes de un commit
 ci: fmt-check check lint lint-colors test
 
+# La matriz de features compila ~13 variantes y, en el `target/` normal, dejaba ~8 GB. Ahora va en
+# su propio directorio y sin compilación incremental (que es lo que más pesa y no se reutiliza
+# entre variantes), así no engorda `target/` y se puede borrar aparte con `just clean-matrix`.
+# Para que se borre sola al terminar: `just lint-matrix no` (más lento la próxima vez).
+matrix_env := "CARGO_TARGET_DIR=target/matrix CARGO_INCREMENTAL=0"
+
 # Matriz de features: sin ninguna, cada una sola, combinaciones de referencia y todas.
-check-matrix:
-    cargo check --no-default-features
-    for f in bar topbar dock taskbar overview activities dashboard config-panel command-menu notifications wallpaper; do echo "== $f"; cargo check --no-default-features --features $f; done
-    cargo check --no-default-features --features dock,bar
-    cargo check --no-default-features --features taskbar,overview
-    cargo check --all-features
+check-matrix keep="yes":
+    env {{matrix_env}} cargo check --no-default-features
+    for f in bar topbar dock taskbar overview activities dashboard config-panel command-menu notifications wallpaper; do echo "== $f"; env {{matrix_env}} cargo check --no-default-features --features $f; done
+    env {{matrix_env}} cargo check --no-default-features --features dock,bar
+    env {{matrix_env}} cargo check --no-default-features --features taskbar,overview
+    env {{matrix_env}} cargo check --all-features
+    @just _matrix-done {{keep}}
 
 # Clippy (sin avisos) en la matriz: lo que debe pasar antes de tocar features
-lint-matrix:
-    for f in "" bar topbar dock overview activities dashboard config-panel command-menu notifications wallpaper dock,bar taskbar,overview; do echo "== ${f:-ninguna}"; cargo clippy --all-targets --no-default-features ${f:+--features $f} -- -D warnings; done
+lint-matrix keep="yes":
+    for f in "" bar topbar dock overview activities dashboard config-panel command-menu notifications wallpaper dock,bar taskbar,overview; do echo "== ${f:-ninguna}"; env {{matrix_env}} cargo clippy --all-targets --no-default-features ${f:+--features $f} -- -D warnings; done
+    @just _matrix-done {{keep}}
+
+# Informa del tamaño de la matriz y, con `no`, la borra.
+_matrix-done keep:
+    @echo "target/matrix: $(du -sh target/matrix 2>/dev/null | cut -f1)"
+    @if [ "{{keep}}" = "no" ]; then rm -rf target/matrix && echo "target/matrix borrado"; else echo '(se conserva para repetir rápido; "just clean-matrix" lo borra)'; fi
+
+# Borra solo los artefactos de la matriz de features (el `target/` normal queda intacto).
+clean-matrix:
+    rm -rf target/matrix
+    @echo "target/matrix borrado"
 
 # Binario release mínimo: solo la barra (sin zbus, image ni iconos)
 build-minimal:
