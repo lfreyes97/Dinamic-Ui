@@ -83,11 +83,8 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
     use crate::launcher::{filter, MenuMode};
 
     let screen = ui.max_rect();
-    ui.painter().rect_filled(
-        screen,
-        CornerRadius::same(0),
-        Color32::from_black_alpha(205),
-    );
+    ui.painter()
+        .rect_filled(screen, CornerRadius::same(0), Palette::scrim(205));
 
     let w = 560.0f32.min(screen.width() - 60.0);
     let h = 520.0f32.min(screen.height() - 60.0);
@@ -95,8 +92,8 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
     ui.painter().rect(
         card,
         CornerRadius::same(18),
-        Color32::from_rgba_unmultiplied(10, 10, 11, 252),
-        Stroke::new(1.0, Color32::from_gray(0x2a)),
+        pal().card_fill,
+        Stroke::new(1.0, pal().border),
         StrokeKind::Middle,
     );
 
@@ -152,7 +149,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             egui::pos2(card.min.x + 1.0, y),
             egui::pos2(card.max.x - 1.0, y),
         ],
-        Stroke::new(1.0, Color32::from_gray(0x2a)),
+        Stroke::new(1.0, pal().border),
     );
 
     // ── Modos ──
@@ -166,7 +163,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
         let active = *mode == state.menu.menu_mode;
         if active {
             ui.painter()
-                .rect_filled(rect, CornerRadius::same(8), Color32::from_gray(0x1c));
+                .rect_filled(rect, CornerRadius::same(8), pal().hover);
         }
         let label = format!("{}  {}", mode.label(), mode.shortcut());
         ui.painter().text(
@@ -196,7 +193,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             egui::pos2(card.min.x + 1.0, y),
             egui::pos2(card.max.x - 1.0, y),
         ],
-        Stroke::new(1.0, Color32::from_gray(0x2a)),
+        Stroke::new(1.0, pal().border),
     );
 
     // ── Resultados ──
@@ -219,16 +216,8 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
         );
         let selected = i == state.menu.menu_selected;
         if selected {
-            ui.painter().rect_filled(
-                rect,
-                CornerRadius::same(10),
-                Color32::from_rgba_unmultiplied(
-                    palette.accent.r(),
-                    palette.accent.g(),
-                    palette.accent.b(),
-                    36,
-                ),
-            );
+            ui.painter()
+                .rect_filled(rect, CornerRadius::same(10), palette.accent_soft);
         }
         let icon_rect = egui::Rect::from_center_size(
             rect.min + egui::vec2(26.0, rect.height() / 2.0),
@@ -303,7 +292,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             egui::pos2(card.min.x + 1.0, footer_y - 8.0),
             egui::pos2(card.max.x - 1.0, footer_y - 8.0),
         ],
-        Stroke::new(1.0, Color32::from_gray(0x24)),
+        Stroke::new(1.0, pal().border),
     );
     ui.painter().text(
         egui::pos2(x, footer_y),

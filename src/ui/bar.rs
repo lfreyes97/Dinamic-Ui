@@ -52,7 +52,7 @@ pub(super) fn draw_bar_row(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
                     ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::click());
                 let response = response.on_hover_cursor(CursorIcon::PointingHand);
                 let (bg, fg) = if active {
-                    (palette.text, Color32::from_gray(17))
+                    (palette.text, palette.solid())
                 } else if response.hovered() {
                     (palette.border, palette.text)
                 } else {
@@ -108,7 +108,7 @@ pub(super) fn draw_bar_row(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     );
 
     // Zona derecha: batería · % · wifi · audio, con el estado real de `sysinfo`.
-    let system_color = Color32::from_rgb(0xf0, 0xf0, 0xf0);
+    let system_color = palette.text_hi;
     let battery_color = battery_tone(state.shared.battery.percent, state.shared.battery.charging);
     let (wifi_icon, wifi_color, wifi_tip) = match &state.shared.system.wifi {
         None => (ic::WIFI_HIGH, palette.muted, "Wi-Fi: sin datos".to_string()),
@@ -180,7 +180,7 @@ pub(super) fn draw_bar_shell(
     let accent = palette.accent;
     let border = if glow > 0.01 {
         let a = (70.0 + 150.0 * glow).min(255.0) as u8;
-        Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), a)
+        Palette::with_alpha(accent, a)
     } else {
         palette.border
     };

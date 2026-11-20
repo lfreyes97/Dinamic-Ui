@@ -44,8 +44,8 @@ fn search_pill(ui: &egui::Ui, screen: egui::Rect, placeholder: &str) {
     ui.painter().rect(
         r,
         CornerRadius::same(17),
-        Color32::from_rgba_unmultiplied(20, 20, 23, 250),
-        Stroke::new(1.0, Color32::from_gray(0x2a)),
+        Palette::with_alpha(pal().solid(), 250),
+        Stroke::new(1.0, pal().border),
         StrokeKind::Middle,
     );
     icon_at(
@@ -53,7 +53,7 @@ fn search_pill(ui: &egui::Ui, screen: egui::Rect, placeholder: &str) {
         egui::pos2(r.min.x + 16.0, r.center().y),
         ic::MAGNIFYING_GLASS,
         ICON_MD,
-        palette_muted(),
+        pal().muted,
     );
     text_at(
         ui,
@@ -61,7 +61,7 @@ fn search_pill(ui: &egui::Ui, screen: egui::Rect, placeholder: &str) {
         egui::Align2::LEFT_CENTER,
         placeholder,
         TEXT_BODY,
-        Color32::from_gray(0x66),
+        pal().dim,
     );
     text_at(
         ui,
@@ -69,12 +69,8 @@ fn search_pill(ui: &egui::Ui, screen: egui::Rect, placeholder: &str) {
         egui::Align2::RIGHT_CENTER,
         "ESC",
         TEXT_CAPTION,
-        Color32::from_gray(0x88),
+        pal().muted,
     );
-}
-
-fn palette_muted() -> Color32 {
-    Color32::from_gray(0x88)
 }
 
 fn app_names(state: &UiState) -> Vec<String> {
@@ -100,11 +96,8 @@ fn app_names(state: &UiState) -> Vec<String> {
 /// Overview de actividades: apps + tira de ventanas.
 pub(super) fn draw_activities(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
-    ui.painter().rect_filled(
-        screen,
-        CornerRadius::same(0),
-        Color32::from_black_alpha(205),
-    );
+    ui.painter()
+        .rect_filled(screen, CornerRadius::same(0), Palette::scrim(205));
     let backdrop = ui.interact(
         screen,
         ui.scope_id().with("ov-act-backdrop"),
@@ -134,7 +127,7 @@ pub(super) fn draw_activities(ui: &mut egui::Ui, state: &mut UiState, palette: P
             egui::Sense::click(),
         );
         ui.painter()
-            .rect_filled(box_rect, CornerRadius::same(12), Color32::from_gray(0x1c));
+            .rect_filled(box_rect, CornerRadius::same(12), pal().hover);
         if let Some(texture) = state.shared.icon(ui.ctx(), name) {
             egui::Image::new(egui::load::SizedTexture::new(
                 texture.id(),
@@ -202,7 +195,7 @@ pub(super) fn draw_activities(ui: &mut egui::Ui, state: &mut UiState, palette: P
         ui.painter().rect(
             r,
             CornerRadius::same(7),
-            Color32::from_rgba_unmultiplied(24, 24, 28, 250),
+            Palette::with_alpha(pal().hover, 250),
             Stroke::new(
                 1.0,
                 if win.address == state.shared.snapshot.window_address {
@@ -246,8 +239,8 @@ pub(super) fn draw_activities(ui: &mut egui::Ui, state: &mut UiState, palette: P
 fn nav_button(ui: &mut egui::Ui, rect: egui::Rect, glyph: &str, id: &'static str) -> bool {
     let resp = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     ui.painter()
-        .rect_filled(rect, CornerRadius::same(6), Color32::from_gray(0x1e));
-    icon_at(ui, rect.center(), glyph, ICON_SM, Color32::from_gray(0x99));
+        .rect_filled(rect, CornerRadius::same(6), pal().hover);
+    icon_at(ui, rect.center(), glyph, ICON_SM, pal().muted);
     resp.clicked()
 }
 
@@ -265,7 +258,7 @@ fn thumb(
     ui.painter().rect(
         rect,
         CornerRadius::same(6),
-        Color32::from_gray(0x18),
+        pal().hover,
         Stroke::new(
             if active { 2.0 } else { 1.0 },
             if active {
@@ -329,17 +322,14 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         egui::pos2(x as f32, y as f32),
         egui::vec2(w as f32, h as f32),
     );
-    ui.painter().rect_filled(
-        strip,
-        CornerRadius::same(0),
-        Color32::from_rgba_unmultiplied(18, 18, 21, 238),
-    );
+    ui.painter()
+        .rect_filled(strip, CornerRadius::same(0), pal().surface);
     ui.painter().line_segment(
         [
             egui::pos2(strip.min.x, if y == 0 { strip.max.y } else { strip.min.y }),
             egui::pos2(strip.max.x, if y == 0 { strip.max.y } else { strip.min.y }),
         ],
-        Stroke::new(1.0, Color32::from_gray(0x2a)),
+        Stroke::new(1.0, pal().border),
     );
 
     let all = workspace_ids(state, 20);
@@ -412,15 +402,12 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         egui::pos2(x as f32, y as f32),
         egui::vec2(w as f32, h as f32),
     );
-    ui.painter().rect_filled(
-        strip,
-        CornerRadius::same(0),
-        Color32::from_rgba_unmultiplied(18, 18, 21, 238),
-    );
+    ui.painter()
+        .rect_filled(strip, CornerRadius::same(0), pal().surface);
     let edge = if x == 0 { strip.max.x } else { strip.min.x };
     ui.painter().line_segment(
         [egui::pos2(edge, strip.min.y), egui::pos2(edge, strip.max.y)],
-        Stroke::new(1.0, Color32::from_gray(0x2a)),
+        Stroke::new(1.0, pal().border),
     );
 
     let all = workspace_ids(state, 20);

@@ -24,11 +24,7 @@ pub struct OverviewState {
 fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
     let painter = ui.painter();
-    painter.rect_filled(
-        screen,
-        CornerRadius::same(0),
-        Color32::from_black_alpha(200),
-    );
+    painter.rect_filled(screen, CornerRadius::same(0), Palette::scrim(200));
     // Registrado antes que las tarjetas: un clic en ventana gana sobre el fondo.
     let backdrop = ui.interact(
         screen,
@@ -85,7 +81,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         painter.rect(
             card,
             CornerRadius::same(12),
-            Color32::from_rgba_unmultiplied(14, 14, 14, 240),
+            pal().card_fill,
             Stroke::new(
                 if *id == current { 2.0 } else { 1.0 },
                 if *id == current {

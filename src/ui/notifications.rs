@@ -46,8 +46,8 @@ pub(super) fn draw_notification_card(
     ui.painter().rect(
         rect,
         CornerRadius::same(14),
-        Color32::from_rgba_unmultiplied(10, 10, 10, 250),
-        Stroke::new(1.0, Color32::from_gray(0x33)),
+        pal().card_fill,
+        Stroke::new(1.0, pal().border),
         StrokeKind::Middle,
     );
     let inner = rect.shrink(10.0);

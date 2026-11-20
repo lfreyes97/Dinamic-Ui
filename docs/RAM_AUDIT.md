@@ -31,3 +31,13 @@ optimizaciones pendientes, no bloquean Fase 1 del plan de modularización.
 
 Volver a medir RSS (`/proc/PID/status`, `smaps`) y comparar con la línea base de arriba.
 Nota: el servidor de notificaciones no se probó (otro daemon tenía el nombre D-Bus).
+
+## Idea: componentes residentes vs. bajo demanda
+
+Hoy todos los componentes (barra, topbar, taskbar, dock, los cuatro overviews, menú, panel)
+permanecen en memoria, y por eso alternar entre ellos es casi instantáneo. Se puede descargar
+lo que no está visible (texturas de iconos y miniaturas, estado de componentes ocultos) para
+ahorrar RAM, a costa de unos milisegundos al volver a abrirlos. Mejor como interruptor de
+configuración (p. ej. `[memory] residency = "resident" | "on-demand"`) que como decisión fija.
+Se combina con el punto 5 (LRU de texturas). Medir en el R7 antes de decidir el valor por defecto.
+

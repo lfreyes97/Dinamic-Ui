@@ -348,6 +348,11 @@ impl Palette {
         opaque(self.surface)
     }
 
+    /// Un color con otro alfa (para brillos que dependen de una animación).
+    pub fn with_alpha(color: Color32, alpha: u8) -> Color32 {
+        Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
+    }
+
     /// Velo oscuro sobre una imagen (miniaturas, rótulos): no es color de tema.
     pub fn scrim(alpha: u8) -> Color32 {
         Color32::from_black_alpha(alpha)

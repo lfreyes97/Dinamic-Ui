@@ -76,12 +76,13 @@ Compatibilidad: `name = "bathory"` sigue funcionando (alias de `scheme`), igual 
 - [x] Capa 1: esquemas incluidos, carga desde archivo, overrides de slot (`theme.rs`, con tests).
 - [x] Capa 2: `Palette` con 22 tokens; los seis históricos se derivan del esquema.
 - [x] Guarda de contraste y corrección opcional.
-- [x] **`panel` y `wallpaper` migrados**: sin colores fijos. Los 13 `P_*` y los grises sueltos
-      pasaron a tokens; `battery_tone` usa `info`/`danger`/`warn`/`ok`.
-- [x] `just lint-colors` (parte de `just ci`): impide que `panel.rs`, `wallpaper.rs` y `mod.rs`
-      vuelvan a pintar con literales.
-- [ ] Pendientes de migrar (literales `Color32::from_*` restantes): `overview_collection` (15), `topbar` (9), `menu` (8), `dock` (7), `taskbar` (5), `bar` (3), `notifications` (2), `overview` (2).
-      Al migrar un archivo, añadirlo a `lint-colors`.
+- [x] **Toda la UI migrada**: ya no hay `Color32::from_*` fuera de `theme.rs` (`panel`, `wallpaper`,
+      `bar`, `topbar`, `taskbar`, `dock`, `menu`, `notifications`, `overview` y `overview_collection`).
+      Los 13 `P_*` y los grises sueltos pasaron a tokens; `battery_tone` usa
+      `info`/`danger`/`warn`/`ok`; el azul del botón de inicio del taskbar es `info`.
+- [x] `just lint-colors` (parte de `just ci`) falla si reaparece un literal fuera de `theme.rs`.
+      `Color32::BLACK/WHITE/TRANSPARENT` se permiten (datos del usuario, como las muestras
+      de color del wallpaper).
 - [ ] Capa 3: radios, espaciados, tipografía y movimiento centralizados.
 
 ### Cómo se usan los tokens
@@ -100,6 +101,10 @@ en `ui::draw`) y los helpers la leen con `pal()` en vez de recibirla por paráme
 | `P_TABBAR`, gris `16` | `pal().inset` |
 | grises `33`/`44` | `pal().faint` |
 | velos sobre miniaturas | `Palette::scrim(a)` / `Palette::sheen(a)` |
+| tarjetas flotantes casi negras (`10,10,10`…) | `pal().card_fill` |
+| barras y píldoras (`18,18,21`…) | `pal().surface` |
+| fondos al pasar el cursor (`1c`, `1e`, `18`) | `pal().hover` |
+| acento translúcido | `palette.accent_soft` / `Palette::with_alpha(c, a)` |
 
 ### Cambios visibles
 

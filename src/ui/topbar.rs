@@ -38,8 +38,8 @@ fn dropdown_card(ui: &egui::Ui, rect: egui::Rect) {
     ui.painter().rect(
         rect,
         CornerRadius::same(14),
-        Color32::from_rgba_unmultiplied(32, 32, 36, 252),
-        Stroke::new(1.0, Color32::from_gray(0x2a)),
+        Palette::with_alpha(pal().raised, 252),
+        Stroke::new(1.0, pal().border),
         StrokeKind::Middle,
     );
 }
@@ -52,17 +52,14 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
     let screen = ui.max_rect();
     let h = state.shared.config.topbar.height as f32;
     let bar = egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), h));
-    ui.painter().rect_filled(
-        bar,
-        CornerRadius::same(0),
-        Color32::from_rgba_unmultiplied(20, 20, 23, 240),
-    );
+    ui.painter()
+        .rect_filled(bar, CornerRadius::same(0), palette.surface);
     ui.painter().line_segment(
         [
             egui::pos2(bar.min.x, bar.max.y),
             egui::pos2(bar.max.x, bar.max.y),
         ],
-        Stroke::new(1.0, Color32::from_gray(0x28)),
+        Stroke::new(1.0, palette.border),
     );
 
     let cy = bar.center().y;
@@ -178,7 +175,7 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
         egui::pos2(status.min.x + 50.0, cy),
         ic::BATTERY_HIGH,
         ICON_SM,
-        Color32::from_rgb(0x8b, 0xe0, 0x9b),
+        battery_tone(state.shared.battery.percent, state.shared.battery.charging),
     );
     text_at(
         ui,
@@ -229,7 +226,7 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
                 if on {
                     palette.accent.gamma_multiply(0.16)
                 } else {
-                    Color32::from_gray(0x1e)
+                    palette.badge
                 },
             );
             let resp = ui.interact(
@@ -284,7 +281,7 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
                     egui::vec2(card.width() - 24.0, 5.0),
                 ),
                 value as f32 / 100.0,
-                Color32::from_gray(0x30),
+                palette.track,
                 fill,
             );
             y += 36.0;
@@ -331,7 +328,7 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
                 egui::Align2::CENTER_CENTER,
                 *wd,
                 TEXT_CAPTION,
-                Color32::from_gray(0x66),
+                palette.dim,
             );
         }
         let today = now.day();
@@ -370,7 +367,7 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
                 day.to_string(),
                 TEXT_CAPTION,
                 if selected || day == today {
-                    Color32::from_gray(17)
+                    palette.solid()
                 } else {
                     palette.text
                 },

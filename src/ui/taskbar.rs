@@ -128,8 +128,8 @@ pub(super) fn draw_taskbar(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     ui.painter().rect(
         bar,
         CornerRadius::same(0),
-        Color32::from_rgba_unmultiplied(18, 18, 21, 232),
-        Stroke::new(1.0, Color32::from_gray(0x2a)),
+        palette.surface,
+        Stroke::new(1.0, palette.border),
         StrokeKind::Middle,
     );
 
@@ -168,7 +168,7 @@ pub(super) fn draw_taskbar(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         cursor += ITEM + GAP;
         let response = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
         let color = if glyph == ic::SQUARES_FOUR {
-            Color32::from_rgb(0x7f, 0xc8, 0xff)
+            palette.info
         } else {
             palette.text
         };
@@ -224,12 +224,7 @@ pub(super) fn draw_taskbar(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
             rect,
             CornerRadius::same(9),
             if active {
-                Color32::from_rgba_unmultiplied(
-                    palette.accent.r(),
-                    palette.accent.g(),
-                    palette.accent.b(),
-                    42,
-                )
+                palette.accent_soft
             } else if response.is_pointer_button_down_on() {
                 palette.badge
             } else {
@@ -318,7 +313,7 @@ pub(super) fn draw_taskbar(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
                 glyph,
                 icon_font(15.0),
                 if glyph == ic::BATTERY_HIGH {
-                    Color32::from_rgb(0x8b, 0xe0, 0x9b)
+                    battery_tone(state.shared.battery.percent, state.shared.battery.charging)
                 } else {
                     palette.text
                 },

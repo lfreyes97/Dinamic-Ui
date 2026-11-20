@@ -91,8 +91,8 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
     ui.painter().rect(
         dock,
         CornerRadius::same(16),
-        Color32::from_rgba_unmultiplied(10, 10, 10, 245),
-        Stroke::new(1.0, Color32::from_gray(0x33)),
+        pal().card_fill,
+        Stroke::new(1.0, pal().border),
         StrokeKind::Middle,
     );
 
@@ -111,11 +111,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             .snapshot
             .window_class
             .eq_ignore_ascii_case(name);
-        let color = if active {
-            Color32::from_gray(17)
-        } else {
-            palette.text
-        };
+        let color = if active { pal().solid() } else { palette.text };
         let mut response = ui.interact(
             rect,
             ui.scope_id().with(("dock-item", i)),
@@ -130,7 +126,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
         } else if running {
             palette.badge
         } else {
-            Color32::from_gray(0x18)
+            pal().hover
         };
         ui.painter().rect_filled(rect, CornerRadius::same(12), fill);
 
@@ -160,11 +156,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             ui.painter().circle_filled(
                 egui::pos2(x, rect.max.y - 2.0),
                 1.6,
-                if active {
-                    Color32::from_gray(17)
-                } else {
-                    palette.muted
-                },
+                if active { pal().solid() } else { palette.muted },
             );
         }
 
@@ -226,8 +218,8 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             ui.painter().rect(
                 menu,
                 CornerRadius::same(12),
-                Color32::from_rgba_unmultiplied(12, 12, 12, 250),
-                Stroke::new(1.0, Color32::from_gray(0x3a)),
+                pal().card_fill,
+                Stroke::new(1.0, pal().border),
                 StrokeKind::Middle,
             );
             text_at(
