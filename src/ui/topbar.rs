@@ -188,6 +188,21 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
     let screen = ui.max_rect();
     let h = bar_height(state);
     let bar = egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), h));
+
+    // Con un desplegable abierto, un clic fuera lo cierra. El fondo se registra antes que todo lo
+    // demás: los botones y las tarjetas, registrados después, ganan sobre él.
+    if state.topbar.quick_open || state.topbar.calendar_open {
+        let outside = ui.interact(
+            screen,
+            ui.scope_id().with("tb-outside"),
+            egui::Sense::click(),
+        );
+        if outside.clicked() {
+            state.topbar.quick_open = false;
+            state.topbar.calendar_open = false;
+        }
+    }
+
     ui.painter()
         .rect_filled(bar, CornerRadius::same(0), palette.surface);
     ui.painter().line_segment(
@@ -424,6 +439,12 @@ fn status_tile(
 fn draw_quick(ui: &mut egui::Ui, state: &UiState, palette: Palette) {
     let card = quick_card(state, ui.max_rect().width());
     dropdown_card(ui, card);
+    // Absorbe el clic en las zonas sin widget: no cuenta como «clic fuera».
+    ui.interact(
+        card,
+        ui.scope_id().with("tb-quick-card"),
+        egui::Sense::click(),
+    );
     text_at(
         ui,
         egui::pos2(card.min.x + 16.0, card.min.y + 17.0),
@@ -608,6 +629,11 @@ fn month_button(ui: &mut egui::Ui, rect: egui::Rect, glyph: &str, id: &'static s
 fn draw_calendar(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let card = calendar_card(state, ui.max_rect().width());
     dropdown_card(ui, card);
+    ui.interact(
+        card,
+        ui.scope_id().with("tb-calendar-card"),
+        egui::Sense::click(),
+    );
     let (year, month) = viewed_month(state);
     let (offset, days, _) = calendar_grid(year, month);
     let today = Local::now().date_naive();
@@ -917,6 +943,21 @@ mod tests {
         assert_eq!(shift_month(2026, 1, -1), (2025, 12));
         assert_eq!(shift_month(2026, 3, -15), (2024, 12));
         assert_eq!(shift_month(2026, 12, 25), (2029, 1));
+    }
+
+    #[test]
+    fn an_open_popover_captures_the_whole_screen_so_outside_clicks_close_it() {
+        let full = (0, 0, 1366, 768);
+        let mut state = UiState::new();
+        state.topbar.enabled = true;
+        let closed = crate::ui::input_rects(&state, 1366, 768);
+        assert!(!closed.contains(&full), "cerrado: solo la franja");
+        assert!(closed.contains(&topbar_rect(&state, 1366)));
+        state.topbar.calendar_open = true;
+        assert!(crate::ui::input_rects(&state, 1366, 768).contains(&full));
+        state.topbar.calendar_open = false;
+        state.topbar.quick_open = true;
+        assert!(crate::ui::input_rects(&state, 1366, 768).contains(&full));
     }
 
     #[test]

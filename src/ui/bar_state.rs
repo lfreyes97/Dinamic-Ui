@@ -26,6 +26,9 @@ pub struct BarState {
     /// Otro componente (el topbar) ocupa el borde superior: la barra no se dibuja ni reclama
     /// entrada, pero el panel sigue disponible. Lo fija ese componente en cada frame.
     pub suppressed: bool,
+    /// Hay un desplegable abierto bajo el borde superior (calendario, resumen del sistema…):
+    /// el aviso emergente de notificaciones se aparta para no solaparse. Lo fija el topbar.
+    pub popover_open: bool,
     /// Última distribución de teclado vista, para aplicar el preset solo al cambiar.
     pub last_layout: Option<String>,
 }

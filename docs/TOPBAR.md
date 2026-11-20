@@ -3,6 +3,9 @@
 Franja superior a todo el ancho (feature `topbar`, comando `--topbar`, `[topbar] enabled/height`).
 Código: `src/ui/topbar.rs`.
 
+**Estado: terminado en lo que se puede cerrar sin ejecutar el shell.** Lo que queda (acciones del
+sistema y fusión con `bar`) está en «Fuera de alcance» y depende de pruebas en el R7.
+
 ## Qué hay
 
 | Zona | Contenido | Al hacer clic |
@@ -31,22 +34,27 @@ Código: `src/ui/topbar.rs`.
 - **Geometría de una sola fuente**: `quick_rect` y `calendar_rect` los usan tanto el dibujo como el
   `input_region`, así no pueden desincronizarse.
 - Los botones se resaltan al pasar el cursor y mientras su desplegable está abierto.
+- **Los desplegables se cierran al pulsar fuera** (o con `Esc`): mientras hay uno abierto, toda la
+  pantalla recibe el clic, como en un menú; las tarjetas absorben el clic en sus zonas sin widget
+  para que no cuente como «fuera». El primer clic fuera solo cierra, no llega a la ventana de debajo.
+- **El aviso emergente de una notificación nueva espera** mientras hay un desplegable abierto
+  (`BarState::popover_open`); no se pierde: sigue en la lista del calendario.
 - **Datos bajo demanda:** el hilo de `sysinfo` solo consulta si algún componente lo pide
   (`Component::wants_system`): la barra expandida, el panel abierto o el topbar visible.
 
-## Pendiente
+## Fuera de alcance (depende de probar en el R7)
 
-- [ ] **Acciones** (activar/desactivar wifi y bluetooth, subir volumen y brillo): hay que lanzar
-      comandos del sistema (`nmcli`, `bluetoothctl`, `wpctl`, `brightnessctl`…). Se dejó en solo
-      lectura hasta poder comprobar en el R7 qué herramientas hay y cómo responden.
+- [ ] **Acciones del resumen del sistema** (activar/desactivar wifi y bluetooth, subir volumen y
+      brillo): hay que lanzar comandos del sistema (`nmcli`, `bluetoothctl`, `wpctl`,
+      `brightnessctl`…). Se dejó en solo lectura hasta comprobar qué herramientas hay y cómo
+      responden; ejecutarlas desde aquí cambiaría el wifi o el volumen de la máquina real.
 - [ ] **Topbar como estado de `bar`** (versión completa de lo acordado en
-      `docs/WIDGETS_PLAN.md`): hoy sigue siendo un componente aparte que suprime a la barra. Falta
-      que sea un estado más de la misma máquina (con `bar.max_state`) y que el calendario y las
-      notificaciones estén también en los estados compacto y notch.
-- [ ] El aviso emergente de una notificación nueva (`NotificationCard`) se dibuja bajo el centro de
-      la barra y se solapa con el calendario si está abierto. Habría que ocultarlo mientras tanto.
-- [ ] Las notificaciones solo se pueden cerrar o vaciar: no hay acción de «abrir» (el servicio no
-      guarda a qué app activar).
-- [ ] `Avión` y `Nocturno` se quitaron del resumen porque no había dato real que mostrar.
-- [ ] Verificación en el R7 de la interacción (clics, hover) y de la altura frente a otras
-      pantallas: `[topbar] height` es un valor fijo (24–48 px), no una fracción de la pantalla.
+      `docs/WIDGETS_PLAN.md`): hoy es un componente aparte que suprime a la barra. Falta que sea un
+      estado más de la misma máquina (con `bar.max_state`) y que el calendario y las notificaciones
+      estén también en los estados compacto y notch.
+- [ ] **Abrir una notificación:** solo se pueden cerrar o vaciar; el servicio no guarda a qué app
+      activar.
+- [ ] `[topbar] height` es un valor fijo (24–48 px, 34 por defecto), no una fracción de la
+      pantalla: una barra de estado tiene un grosor «natural» y no se escala como las franjas.
+- [ ] Verificación en el R7 de lo que la vista previa no cubre: clics, hover, el cierre al pulsar
+      fuera y el primer clic que solo cierra.

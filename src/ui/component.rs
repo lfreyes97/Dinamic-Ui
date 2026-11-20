@@ -335,6 +335,11 @@ impl Component for NotificationCard {
     }
 
     fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, ctx: DrawCtx, palette: Palette) {
+        // Con un desplegable abierto bajo el borde superior, el aviso espera (no se pierde:
+        // sigue en la lista de notificaciones del calendario).
+        if state.bar.popover_open {
+            return;
+        }
         notifications::draw_notification(ui, state, palette, ctx.panel_t);
     }
 
@@ -345,7 +350,7 @@ impl Component for NotificationCard {
         _screen_h: i32,
     ) -> Vec<(i32, i32, i32, i32)> {
         let panel_t = crate::smootherstep(state.bar.panel_progress);
-        if panel_t >= 0.5 || state.notifications.notification.is_none() {
+        if panel_t >= 0.5 || state.bar.popover_open || state.notifications.notification.is_none() {
             return Vec::new();
         }
         let r = notification_card(screen_w as f32);
@@ -517,10 +522,16 @@ impl Component for Topbar {
         &self,
         state: &UiState,
         screen_w: i32,
-        _screen_h: i32,
+        screen_h: i32,
     ) -> Vec<(i32, i32, i32, i32)> {
         if !state.topbar.enabled {
             return Vec::new();
+        }
+        // Con un desplegable abierto, toda la pantalla recibe el clic: así se cierra al pulsar
+        // fuera, como un menú. (Sin esto el clic iría a la ventana de debajo y el desplegable
+        // se quedaría abierto.)
+        if state.topbar.quick_open || state.topbar.calendar_open {
+            return vec![(0, 0, screen_w, screen_h)];
         }
         let mut rects = vec![topbar::topbar_rect(state, screen_w)];
         // Las mismas funciones que usa el dibujo: no pueden desincronizarse.
@@ -553,6 +564,8 @@ impl Component for Topbar {
     fn update(&mut self, state: &mut UiState, _ctx: &UpdateCtx) -> bool {
         // Mientras el topbar está activo, la barra (notch/isla) cede el borde superior.
         state.bar.suppressed = state.topbar.enabled;
+        state.bar.popover_open =
+            state.topbar.enabled && (state.topbar.quick_open || state.topbar.calendar_open);
         false
     }
 
