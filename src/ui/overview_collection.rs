@@ -1,42 +1,32 @@
-//! Vistas adicionales del overview: Actividades y franjas acoplables.
-//! Se incluyen desde `overview.rs` para mantener el módulo original intacto.
+//! Vistas del overview que no son la rejilla: Actividades y las franjas acoplables.
 
-use super::overview::OverviewKind;
+use super::overview::{
+    self, activity_tiles, current_ws, pointer_moved, strip_ids, OverviewKind, ACTIVITY_COLS,
+};
+use super::overview_model as model;
 use super::*;
 use crate::config::Side;
 
-/// Workspaces con ventanas, más el actual (hasta `max`).
-pub(super) fn workspace_ids(state: &UiState, max: usize) -> Vec<u32> {
-    let mut ids = state.shared.snapshot.occupied.clone();
-    let current = state.shared.snapshot.workspace.parse::<u32>().unwrap_or(1);
-    if !ids.contains(&current) {
-        ids.push(current);
-    }
-    ids.sort_unstable();
-    ids.dedup();
-    ids.truncate(max);
-    if ids.is_empty() {
-        ids.push(1);
-    }
-    ids
-}
-
-/// Rect de la franja horizontal o vertical.
+/// Rect de la franja horizontal o vertical. Con `progress < 1` se desliza fuera de pantalla
+/// hacia el borde en el que está acoplada.
 pub fn strip_rect(state: &UiState, screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
+    let hidden = 1.0 - crate::smootherstep(state.overview.progress);
+    let slide = |size: i32| (hidden * size as f32).round() as i32;
     match state.overview.kind {
         OverviewKind::StripH => match state.shared.config.overview.strip_h_side {
-            Side::Bottom => (0, screen_h - 68, screen_w, 68),
-            _ => (0, 0, screen_w, 68),
+            Side::Bottom => (0, screen_h - 68 + slide(68), screen_w, 68),
+            _ => (0, -slide(68), screen_w, 68),
         },
         OverviewKind::StripV => match state.shared.config.overview.strip_v_side {
-            Side::Left => (0, 0, 78, screen_h),
-            _ => (screen_w - 78, 0, 78, screen_h),
+            Side::Left => (-slide(78), 0, 78, screen_h),
+            _ => (screen_w - 78 + slide(78), 0, 78, screen_h),
         },
         _ => (0, 0, screen_w, screen_h),
     }
 }
 
-fn search_pill(ui: &egui::Ui, screen: egui::Rect, placeholder: &str) {
+/// Píldora de búsqueda: muestra lo que se escribe (el teclado lo recoge `overview::handle_key`).
+fn search_pill(ui: &egui::Ui, screen: egui::Rect, query: &str, placeholder: &str) {
     let r = egui::Rect::from_center_size(
         egui::pos2(screen.center().x, screen.min.y + 30.0),
         egui::vec2(380.0, 34.0),
@@ -45,7 +35,14 @@ fn search_pill(ui: &egui::Ui, screen: egui::Rect, placeholder: &str) {
         r,
         CornerRadius::same(17),
         Palette::with_alpha(pal().solid(), 250),
-        Stroke::new(1.0, pal().border),
+        Stroke::new(
+            1.0,
+            if query.is_empty() {
+                pal().border
+            } else {
+                pal().accent
+            },
+        ),
         StrokeKind::Middle,
     );
     icon_at(
@@ -55,45 +52,22 @@ fn search_pill(ui: &egui::Ui, screen: egui::Rect, placeholder: &str) {
         ICON_MD,
         pal().muted,
     );
+    let (text, color) = if query.is_empty() {
+        (placeholder.to_string(), pal().dim)
+    } else {
+        (format!("{query}|"), pal().text)
+    };
     text_at(
         ui,
         egui::pos2(r.min.x + 30.0, r.center().y),
         egui::Align2::LEFT_CENTER,
-        placeholder,
+        text,
         TEXT_BODY,
-        pal().dim,
-    );
-    text_at(
-        ui,
-        egui::pos2(r.max.x - 14.0, r.center().y),
-        egui::Align2::RIGHT_CENTER,
-        "ESC",
-        TEXT_CAPTION,
-        pal().muted,
+        color,
     );
 }
 
-fn app_names(state: &UiState) -> Vec<String> {
-    let mut out: Vec<String> = state.shared.config.dock.pinned.clone();
-    for c in &state.shared.clients {
-        let key = c.class.clone();
-        if !out.iter().any(|n| n.eq_ignore_ascii_case(&key)) {
-            out.push(key);
-        }
-    }
-    for fixed in ["firefox", "code", "kitty", "files", "spotify", "settings"] {
-        if out.len() >= 12 {
-            break;
-        }
-        if !out.iter().any(|n| n.eq_ignore_ascii_case(fixed)) {
-            out.push(fixed.to_string());
-        }
-    }
-    out.truncate(12);
-    out
-}
-
-/// Overview de actividades: apps + tira de ventanas.
+/// Overview de actividades: buscador, apps instaladas y tira de ventanas abiertas.
 pub(super) fn draw_activities(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
     ui.painter()
@@ -106,131 +80,206 @@ pub(super) fn draw_activities(ui: &mut egui::Ui, state: &mut UiState, palette: P
     if backdrop.clicked() {
         state.overview.overview = false;
     }
-    search_pill(ui, screen, "Busca aplicaciones…");
 
-    let apps = app_names(state);
-    let cols = 6usize.min(apps.len().max(1));
-    let cw = 86.0;
-    let total_w = cols as f32 * cw;
-    let origin = egui::pos2(screen.center().x - total_w / 2.0, screen.min.y + 80.0);
-    for (i, name) in apps.iter().enumerate() {
-        let col = i % cols;
-        let row = i / cols;
-        let c = egui::pos2(
-            origin.x + col as f32 * cw + cw / 2.0,
-            origin.y + row as f32 * 78.0 + 23.0,
+    let query = state.overview.query.clone();
+    search_pill(ui, screen, &query, "Busca aplicaciones…");
+
+    let tiles = activity_tiles(state);
+    state.overview.selected = state.overview.selected.min(tiles.len().saturating_sub(1));
+    let moved = pointer_moved(ui);
+
+    if tiles.is_empty() {
+        let message = if query.is_empty() {
+            "No hay aplicaciones".to_string()
+        } else {
+            format!("Sin resultados para «{query}»")
+        };
+        text_at(
+            ui,
+            egui::pos2(screen.center().x, screen.min.y + 120.0),
+            egui::Align2::CENTER_CENTER,
+            message,
+            TEXT_BODY,
+            palette.muted,
         );
-        let box_rect = egui::Rect::from_center_size(c, egui::vec2(46.0, 46.0));
+    }
+
+    let cols = ACTIVITY_COLS.min(tiles.len().max(1));
+    let cw = 96.0;
+    let row_h = 84.0;
+    let total_w = cols as f32 * cw;
+    let origin = egui::pos2(screen.center().x - total_w / 2.0, screen.min.y + 84.0);
+    for (i, tile) in tiles.iter().enumerate() {
+        let c = egui::pos2(
+            origin.x + (i % cols) as f32 * cw + cw / 2.0,
+            origin.y + (i / cols) as f32 * row_h + 25.0,
+        );
+        let cell = egui::Rect::from_center_size(
+            egui::pos2(c.x, c.y + 8.0),
+            egui::vec2(cw - 6.0, row_h - 4.0),
+        );
         let resp = ui.interact(
-            box_rect,
-            ui.scope_id().with(("ov-app", i)),
+            cell,
+            ui.scope_id().with(("ov-app", &tile.id)),
             egui::Sense::click(),
         );
-        ui.painter()
-            .rect_filled(box_rect, CornerRadius::same(12), pal().hover);
-        if let Some(texture) = state.shared.icon(ui.ctx(), name) {
+        if resp.hovered() && moved {
+            state.overview.selected = i;
+        }
+        let selected = state.overview.selected == i;
+        let box_rect = egui::Rect::from_center_size(c, egui::vec2(48.0, 48.0));
+        ui.painter().rect(
+            box_rect,
+            CornerRadius::same(12),
+            if selected {
+                palette.accent_soft
+            } else {
+                palette.hover
+            },
+            Stroke::new(
+                if selected { 1.5 } else { 0.0 },
+                if selected {
+                    palette.accent
+                } else {
+                    egui::Color32::TRANSPARENT
+                },
+            ),
+            StrokeKind::Middle,
+        );
+        if let Some(texture) = state.shared.icon(ui.ctx(), &tile.id) {
             egui::Image::new(egui::load::SizedTexture::new(
                 texture.id(),
-                egui::vec2(22.0, 22.0),
+                egui::vec2(26.0, 26.0),
             ))
-            .paint_at(ui, egui::Rect::from_center_size(c, egui::vec2(22.0, 22.0)));
+            .paint_at(ui, egui::Rect::from_center_size(c, egui::vec2(26.0, 26.0)));
         } else {
-            let glyph = if name.to_lowercase().contains("code") {
-                ic::CODE
-            } else if name.to_lowercase().contains("kitty") || name.to_lowercase().contains("term")
-            {
-                ic::TERMINAL
-            } else if name.to_lowercase().contains("spotify") {
-                ic::MUSIC_NOTES
-            } else if name.to_lowercase().contains("file") {
-                ic::FOLDER
-            } else if name.to_lowercase().contains("setting")
-                || name.to_lowercase().contains("gear")
-            {
-                ic::GEAR
-            } else {
-                ic::APP_WINDOW
-            };
-            icon_at(ui, c, glyph, ICON_LG, palette.text);
+            icon_at(ui, c, dock_icon(&tile.name), ICON_LG, palette.text);
         }
-        if resp.hovered() {
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        // Un punto por ventana abierta (hasta tres).
+        let dots = tile.windows.len().min(3);
+        for k in 0..dots {
+            let dx = (k as f32 - (dots as f32 - 1.0) / 2.0) * 6.0;
+            ui.painter().circle_filled(
+                egui::pos2(c.x + dx, box_rect.max.y - 5.0),
+                1.8,
+                palette.accent,
+            );
         }
         text_at(
             ui,
-            egui::pos2(c.x, c.y + 34.0),
+            egui::pos2(c.x, c.y + 38.0),
             egui::Align2::CENTER_CENTER,
-            truncate(name, 11),
+            truncate(&tile.name, 12),
             TEXT_CAPTION,
-            palette.muted,
-        );
-        if resp.clicked() {
-            if let Some(win) = state
-                .shared
-                .clients
-                .iter()
-                .find(|w| w.class.eq_ignore_ascii_case(name))
-            {
-                state.shared.overview_focus = Some(win.address.clone());
+            if selected {
+                palette.text
             } else {
-                state.shared.pending_spawns.push(vec![name.clone()]);
-            }
+                palette.muted
+            },
+        );
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+        if resp.clicked() {
+            overview::run_tile(state, tile);
         }
     }
 
-    // Tira de ventanas abiertas.
-    let clients: Vec<_> = state.shared.clients.iter().take(5).collect();
-    let fw = 92.0;
-    let film_w = clients.len() as f32 * (fw + 8.0) - 8.0;
-    let film_y = screen.max.y - 74.0;
-    for (i, win) in clients.iter().enumerate() {
+    // Tira de ventanas abiertas: tantas como caben.
+    let active = state.shared.snapshot.window_address.clone();
+    let fw = 104.0;
+    let capacity = (((screen.width() - 120.0) / (fw + 8.0)).floor() as usize).clamp(1, 12);
+    let windows: Vec<crate::ipc::ClientInfo> = state
+        .shared
+        .clients
+        .iter()
+        .filter(|c| c.mapped)
+        .take(capacity)
+        .cloned()
+        .collect();
+    let film_w = windows.len() as f32 * (fw + 8.0) - 8.0;
+    let film_y = screen.max.y - 78.0;
+    for (i, win) in windows.iter().enumerate() {
         let r = egui::Rect::from_min_size(
             egui::pos2(
                 screen.center().x - film_w / 2.0 + i as f32 * (fw + 8.0),
                 film_y,
             ),
-            egui::vec2(fw, 48.0),
+            egui::vec2(fw, 52.0),
         );
-        let resp = ui.interact(r, ui.scope_id().with(("ov-film", i)), egui::Sense::click());
+        let resp = ui.interact(
+            r,
+            ui.scope_id().with(("ov-film", &win.address)),
+            egui::Sense::click(),
+        );
+        let is_active = win.address == active;
         ui.painter().rect(
             r,
             CornerRadius::same(7),
-            Palette::with_alpha(pal().hover, 250),
+            if resp.hovered() {
+                palette.pressed
+            } else {
+                Palette::with_alpha(palette.hover, 250)
+            },
             Stroke::new(
-                1.0,
-                if win.address == state.shared.snapshot.window_address {
+                if is_active { 1.5 } else { 1.0 },
+                if is_active {
                     palette.accent
+                } else if resp.hovered() {
+                    palette.muted
                 } else {
                     palette.border
                 },
             ),
             StrokeKind::Middle,
         );
-        ui.painter().rect_filled(
-            egui::Rect::from_min_size(
-                r.min + egui::vec2(8.0, 7.0),
-                egui::vec2(r.width() - 16.0, 22.0),
-            ),
-            CornerRadius::same(3),
-            palette.badge,
+        let icon_center = egui::pos2(r.min.x + 17.0, r.min.y + 18.0);
+        if let Some(texture) = state.shared.icon(ui.ctx(), &win.class) {
+            egui::Image::new(egui::load::SizedTexture::new(
+                texture.id(),
+                egui::vec2(18.0, 18.0),
+            ))
+            .paint_at(
+                ui,
+                egui::Rect::from_center_size(icon_center, egui::vec2(18.0, 18.0)),
+            );
+        } else {
+            icon_at(
+                ui,
+                icon_center,
+                dock_icon(&win.class),
+                ICON_SM,
+                palette.text,
+            );
+        }
+        text_at(
+            ui,
+            egui::pos2(r.min.x + 32.0, r.min.y + 18.0),
+            egui::Align2::LEFT_CENTER,
+            truncate(&win.class, 11),
+            TEXT_CAPTION,
+            palette.text,
         );
         text_at(
             ui,
-            r.min + egui::vec2(7.0, 38.0),
+            r.min + egui::vec2(8.0, 38.0),
             egui::Align2::LEFT_CENTER,
-            truncate(&win.title, 14),
+            truncate(&win.title, 16),
             TEXT_CAPTION,
             palette.muted,
         );
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
         if resp.clicked() {
             state.shared.overview_focus = Some(win.address.clone());
         }
     }
     text_at(
         ui,
-        egui::pos2(screen.center().x, screen.max.y - 14.0),
+        egui::pos2(screen.center().x, screen.max.y - 16.0),
         egui::Align2::CENTER_CENTER,
-        "↵ lanza   ·   Esc cierra",
+        "Escribe para buscar  ·  ←→↑↓ navega  ·  ↵ abre o enfoca  ·  Esc limpia / cierra",
         TEXT_CAPTION,
         palette.muted,
     );
@@ -238,71 +287,102 @@ pub(super) fn draw_activities(ui: &mut egui::Ui, state: &mut UiState, palette: P
 
 fn nav_button(ui: &mut egui::Ui, rect: egui::Rect, glyph: &str, id: &'static str) -> bool {
     let resp = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
-    ui.painter()
-        .rect_filled(rect, CornerRadius::same(6), pal().hover);
+    ui.painter().rect_filled(
+        rect,
+        CornerRadius::same(6),
+        if resp.hovered() {
+            pal().pressed
+        } else {
+            pal().hover
+        },
+    );
     icon_at(ui, rect.center(), glyph, ICON_SM, pal().muted);
     resp.clicked()
 }
 
-/// Miniatura de workspace compartida por las franjas.
+/// Miniatura de workspace compartida por las franjas. `index` es su posición en la lista
+/// completa de workspaces (para la selección del teclado).
 fn thumb(
     ui: &mut egui::Ui,
     state: &mut UiState,
     rect: egui::Rect,
     id: u32,
+    index: usize,
     palette: Palette,
-    vertical: bool,
 ) {
-    let current = state.shared.snapshot.workspace.parse::<u32>().unwrap_or(1);
-    let active = id == current;
-    ui.painter().rect(
-        rect,
-        CornerRadius::same(6),
-        pal().hover,
-        Stroke::new(
-            if active { 2.0 } else { 1.0 },
-            if active {
-                palette.accent
-            } else {
-                palette.border
-            },
-        ),
-        StrokeKind::Middle,
-    );
-    let content = rect.shrink2(egui::vec2(6.0, 12.0));
-    let screen_w = ui.max_rect().width().max(1.0);
-    let screen_h = ui.max_rect().height().max(1.0);
-    for win in state
-        .shared
-        .clients
-        .iter()
-        .filter(|c| c.workspace == id as i32)
-    {
-        let x = content.min.x + win.x as f32 / screen_w * content.width();
-        let y = content.min.y + win.y as f32 / screen_h * content.height();
-        let w = (win.w as f32 / screen_w * content.width()).max(4.0);
-        let h = (win.h as f32 / screen_h * content.height()).max(4.0);
-        let r = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, h)).intersect(content);
-        ui.painter()
-            .rect_filled(r, CornerRadius::same(2), palette.badge);
-    }
-    let label = format!("{id}");
-    text_at(
-        ui,
-        rect.min + egui::vec2(5.0, rect.height() - 5.0),
-        egui::Align2::LEFT_CENTER,
-        label,
-        TEXT_CAPTION,
-        if active {
-            palette.accent
-        } else {
-            palette.muted
-        },
-    );
+    let active_ws = id == current_ws(state);
     let resp = ui.interact(
         rect,
         ui.scope_id().with(("ov-strip-ws", id)),
         egui::Sense::click(),
+    );
+    if resp.hovered() && pointer_moved(ui) {
+        state.overview.selected = index;
+    }
+    let selected = state.overview.selected == index;
+    let (width, color) = if active_ws {
+        (2.0, palette.accent)
+    } else if selected {
+        (2.0, palette.text)
+    } else if resp.hovered() {
+        (1.0, palette.muted)
+    } else {
+        (1.0, palette.border)
+    };
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(6),
+        if selected || resp.hovered() {
+            palette.pressed
+        } else {
+            palette.hover
+        },
+        Stroke::new(width, color),
+        StrokeKind::Middle,
+    );
+    let content = rect.shrink2(egui::vec2(6.0, 12.0));
+    let monitor = ui.max_rect().size();
+    let active_address = state.shared.snapshot.window_address.clone();
+    let windows: Vec<crate::ipc::ClientInfo> = state
+        .shared
+        .clients
+        .iter()
+        .filter(|c| c.mapped && c.workspace == id as i32)
+        .cloned()
+        .collect();
+    for j in model::paint_order(&windows, &active_address) {
+        let win = &windows[j];
+        let r = model::window_rect(win, monitor, content, 4.0);
+        if r.width() <= 0.0 || r.height() <= 0.0 {
+            continue;
+        }
+        let is_active = win.address == active_address;
+        ui.painter().rect(
+            r,
+            CornerRadius::same(2),
+            palette.badge,
+            Stroke::new(
+                if is_active { 1.0 } else { 0.0 },
+                if is_active {
+                    palette.accent
+                } else {
+                    egui::Color32::TRANSPARENT
+                },
+            ),
+            StrokeKind::Middle,
+        );
+    }
+    text_at(
+        ui,
+        rect.min + egui::vec2(5.0, rect.height() - 5.0),
+        egui::Align2::LEFT_CENTER,
+        format!("{id}"),
+        TEXT_CAPTION,
+        if active_ws {
+            palette.accent
+        } else {
+            palette.muted
+        },
     );
     if resp.hovered() {
         ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
@@ -311,7 +391,6 @@ fn thumb(
         state.shared.overview_workspace = Some(id);
         state.overview.overview = false;
     }
-    let _ = vertical;
 }
 
 /// Franja horizontal de workspaces (arriba o abajo).
@@ -324,19 +403,23 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     );
     ui.painter()
         .rect_filled(strip, CornerRadius::same(0), pal().surface);
+    let at_top = state.shared.config.overview.strip_h_side != Side::Bottom;
+    let edge = if at_top { strip.max.y } else { strip.min.y };
     ui.painter().line_segment(
-        [
-            egui::pos2(strip.min.x, if y == 0 { strip.max.y } else { strip.min.y }),
-            egui::pos2(strip.max.x, if y == 0 { strip.max.y } else { strip.min.y }),
-        ],
+        [egui::pos2(strip.min.x, edge), egui::pos2(strip.max.x, edge)],
         Stroke::new(1.0, pal().border),
     );
 
-    let all = workspace_ids(state, 20);
+    let all = strip_ids(state);
     let offset = state.overview.strip_offset.min(all.len().saturating_sub(1));
-    let ids: Vec<u32> = all.iter().skip(offset).take(5).copied().collect();
+    let visible = all
+        .iter()
+        .skip(offset)
+        .take(5)
+        .copied()
+        .collect::<Vec<u32>>();
     let tw = 86.0;
-    let total = ids.len() as f32 * (tw + 6.0) - 6.0;
+    let total = visible.len() as f32 * (tw + 6.0) - 6.0;
     let start = strip.center().x - total / 2.0;
     if nav_button(
         ui,
@@ -349,7 +432,7 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     ) {
         state.overview.strip_offset = state.overview.strip_offset.saturating_sub(1);
     }
-    for (i, id) in ids.iter().enumerate() {
+    for (i, id) in visible.iter().enumerate() {
         thumb(
             ui,
             state,
@@ -358,8 +441,8 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
                 egui::vec2(tw, 46.0),
             ),
             *id,
+            offset + i,
             palette,
-            false,
         );
     }
     if nav_button(
@@ -371,7 +454,9 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         ic::CARET_RIGHT,
         "ov-h-next",
     ) {
-        state.overview.strip_offset += 1;
+        // No avanzar más allá del último grupo visible.
+        let max_offset = all.len().saturating_sub(5);
+        state.overview.strip_offset = (state.overview.strip_offset + 1).min(max_offset);
     }
     let expand = egui::Rect::from_center_size(
         egui::pos2(strip.max.x - 34.0, strip.center().y),
@@ -387,10 +472,14 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         expand.center(),
         ic::SQUARES_FOUR,
         ICON_MD,
-        palette.muted,
+        if resp.hovered() {
+            palette.text
+        } else {
+            palette.muted
+        },
     );
     if resp.clicked() {
-        state.overview.kind = OverviewKind::Workspaces;
+        overview::open(state, OverviewKind::Workspaces);
     }
 }
 
@@ -404,17 +493,23 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     );
     ui.painter()
         .rect_filled(strip, CornerRadius::same(0), pal().surface);
-    let edge = if x == 0 { strip.max.x } else { strip.min.x };
+    let at_left = state.shared.config.overview.strip_v_side == Side::Left;
+    let edge = if at_left { strip.max.x } else { strip.min.x };
     ui.painter().line_segment(
         [egui::pos2(edge, strip.min.y), egui::pos2(edge, strip.max.y)],
         Stroke::new(1.0, pal().border),
     );
 
-    let all = workspace_ids(state, 20);
+    let all = strip_ids(state);
     let offset = state.overview.strip_offset.min(all.len().saturating_sub(1));
-    let ids: Vec<u32> = all.iter().skip(offset).take(6).copied().collect();
+    let visible = all
+        .iter()
+        .skip(offset)
+        .take(6)
+        .copied()
+        .collect::<Vec<u32>>();
     let th = 34.0;
-    let total = ids.len() as f32 * (th + 6.0) - 6.0;
+    let total = visible.len() as f32 * (th + 6.0) - 6.0;
     let start = strip.center().y - total / 2.0;
     if nav_button(
         ui,
@@ -422,12 +517,12 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
             egui::pos2(strip.center().x, start - 18.0),
             egui::vec2(20.0, 20.0),
         ),
-        ic::CARET_LEFT,
+        ic::CARET_UP,
         "ov-v-prev",
     ) {
         state.overview.strip_offset = state.overview.strip_offset.saturating_sub(1);
     }
-    for (i, id) in ids.iter().enumerate() {
+    for (i, id) in visible.iter().enumerate() {
         thumb(
             ui,
             state,
@@ -436,8 +531,8 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
                 egui::vec2(56.0, th),
             ),
             *id,
+            offset + i,
             palette,
-            true,
         );
     }
     if nav_button(
@@ -446,10 +541,11 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
             egui::pos2(strip.center().x, start + total + 18.0),
             egui::vec2(20.0, 20.0),
         ),
-        ic::CARET_RIGHT,
+        ic::CARET_DOWN,
         "ov-v-next",
     ) {
-        state.overview.strip_offset += 1;
+        let max_offset = all.len().saturating_sub(6);
+        state.overview.strip_offset = (state.overview.strip_offset + 1).min(max_offset);
     }
     let expand = egui::Rect::from_center_size(
         egui::pos2(strip.center().x, strip.max.y - 22.0),
@@ -465,9 +561,13 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         expand.center(),
         ic::SQUARES_FOUR,
         ICON_MD,
-        palette.muted,
+        if resp.hovered() {
+            palette.text
+        } else {
+            palette.muted
+        },
     );
     if resp.clicked() {
-        state.overview.kind = OverviewKind::Workspaces;
+        overview::open(state, OverviewKind::Workspaces);
     }
 }

@@ -7,7 +7,7 @@ Basado en `command-menu-mockup.html`. Se abre con `dinamic-ui --menu` /
 
 | Modo | Datos | Acción |
 |---|---|---|
-| Apps (1) | `.desktop` del sistema + usuario | `Exec=` limpio → spawn |
+| Apps (1) | `.desktop` del sistema + usuario (`src/desktop.rs`) | `Exec=` sin códigos de campo, respetando comillas → spawn |
 | Archivos (2) | `~/Pictures`, `~/Documents`, `~/Downloads` (config `[menu] file_dirs`) | `xdg-open` |
 | Workspaces (3) | `j/workspaces` occupados | `dispatch hl.dsp.focus({ workspace })` |
 | Comandos (4) | acciones del shell | panel, overview, reload, compact, quit |
@@ -22,7 +22,8 @@ Basado en `command-menu-mockup.html`. Se abre con `dinamic-ui --menu` /
 
 ## Pendiente
 
-- [ ] Iconos reales en los resultados (reutilizar `appicons.rs`).
+- [x] Iconos reales en los resultados: se resuelven por el `id` del `.desktop` (siempre presente
+      en el mapa de iconos). *Sin verificar en pantalla.*
 - [ ] Destacar solo coincidencias estrictas (el score de subsecuencia es muy laxo).
 - [ ] Archivos recientes de `recently-used.xbel` y orden por uso.
 - [ ] Animación de entrada del palette.

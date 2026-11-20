@@ -30,6 +30,8 @@ mod notifications;
 mod overview;
 #[cfg(feature = "overview")]
 mod overview_collection;
+#[cfg(feature = "overview")]
+mod overview_model;
 #[cfg(feature = "bar")]
 pub mod panel;
 #[cfg(feature = "taskbar")]

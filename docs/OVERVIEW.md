@@ -40,3 +40,45 @@ y clic para enfocar. Es un **modo** más del shell, no una ventana aparte.
 ### Fase 4 — Pulido
 
 - Hot corner, animación de entrada (escala + fade), indicadores de monitor.
+
+## Estado actual (ronda de mejora de overviews)
+
+Cuatro vistas sobre un mismo estado (`OverviewState`): **Workspaces** (rejilla), **Actividades**,
+**franja horizontal** y **franja vertical**. La lógica vive en `ui/overview_model.rs` (pura, con
+tests); el dibujo en `overview.rs` y `overview_collection.rs`. Comandos: `overview`,
+`overview-activities`, `overview-strip-h`, `overview-strip-v`. **El mismo comando abre y cierra**
+(antes solo la rejilla alternaba); con otra vista abierta, cambia a esa.
+
+| | Workspaces | Actividades | Franjas |
+|---|---|---|---|
+| Modal (teclado en exclusiva) | sí | sí | no (no le quita el teclado a la app de debajo) |
+| Búsqueda al escribir | filtra ventanas (atenúa las que no coinciden) | filtra apps instaladas | — |
+| `←→↑↓`, `Tab` | mueve la selección | mueve la selección | avanza/retrocede |
+| `↵` | cambia de workspace (con búsqueda: enfoca la primera coincidencia) | enfoca o lanza | cambia de workspace |
+| `1`–`9` | salta al workspace (sin búsqueda) | — | salta al workspace |
+| `Esc` | limpia la búsqueda y, si no hay, cierra | ídem | cierra |
+
+- **Fundido** de entrada y salida (franjas: además se deslizan desde su borde). Mientras se
+  desvanece al cerrar no recibe clics.
+- **Actividades usa las apps reales** (`.desktop`, leídas al abrir y soltadas al cerrar), no una
+  lista fija. Primero las abiertas, luego las ancladas (`[dock] pinned`) y el resto por nombre;
+  con búsqueda, por puntuación (prefijo > inicio de palabra > contiene > id > comentario).
+  Con varias ventanas de una app, `↵` va ciclando entre ellas. Una ventana sin `.desktop` aparece
+  igualmente (se enfoca, no se lanza).
+- La ventana activa se pinta encima si se solapan; las tarjetas vacías lo indican.
+- El lanzamiento respeta las comillas del `Exec` (`desktop::split_exec`).
+- Las entradas `.desktop` se leen en un solo sitio (`src/desktop.rs`: solo el grupo
+  `[Desktop Entry]`, códigos de campo fuera) y las comparten iconos, command menu y overview.
+
+### Pendiente
+
+- [ ] **Cerrar una ventana desde el overview** (clic central o botón): hay que traducir
+      `closewindow` a la API Lua de Hyprland en `ipc.rs::dispatch` y verificarlo; no se añadió sin
+      poder probarlo.
+- [ ] **Varios monitores**: `ClientInfo` no trae el monitor, así que las ventanas de otro monitor
+      se escalan con el tamaño del actual.
+- [ ] Arrastrar una ventana a otro workspace.
+- [ ] Miniaturas en vivo (Fase 3 de arriba) y hot corner.
+- [ ] Verificación visual en el R7 (el fundido, el deslizamiento de las franjas y el atenuado de
+      la búsqueda no se han visto en pantalla).
+

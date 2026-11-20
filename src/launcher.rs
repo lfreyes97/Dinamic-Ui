@@ -2,10 +2,7 @@
 //!
 //! Una sola fuente de verdad; la UI solo filtra y ejecuta acciones.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MenuMode {
@@ -99,59 +96,21 @@ pub fn filter(entries: &[Entry], query: &str) -> Vec<Entry> {
 
 /// Apps de los `.desktop` del sistema y del usuario.
 pub fn apps() -> Vec<Entry> {
-    let mut dirs = vec![PathBuf::from("/usr/share/applications")];
-    if let Some(home) = std::env::var_os("HOME") {
-        dirs.push(PathBuf::from(home).join(".local/share/applications"));
-    }
-    let mut out = Vec::new();
-    for dir in dirs {
-        let Ok(entries) = fs::read_dir(dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("desktop") {
-                continue;
-            }
-            let Ok(text) = fs::read_to_string(&path) else {
-                continue;
-            };
-            let field = |key: &str| -> Option<String> {
-                text.lines()
-                    .find_map(|l| l.strip_prefix(key)?.strip_prefix('=')?.trim().into())
-                    .map(str::to_string)
-            };
-            if field("NoDisplay").as_deref() == Some("true")
-                || field("Hidden").as_deref() == Some("true")
-            {
-                continue;
-            }
-            let Some(name) = field("Name") else { continue };
-            let Some(exec) = field("Exec") else { continue };
-            let exec = exec
-                .replace("%f", "")
-                .replace("%F", "")
-                .replace("%u", "")
-                .replace("%U", "")
-                .trim()
-                .to_string();
-            if exec.is_empty() || exec.starts_with("sh -c") {
-                continue;
-            }
-            let icon = field("Icon").unwrap_or_default();
-            let icon_key = if Path::new(&icon).is_absolute() {
-                name.to_lowercase()
+    let mut out: Vec<Entry> = crate::desktop::scan()
+        .into_iter()
+        .filter(|app| app.launchable())
+        .map(|app| Entry {
+            subtitle: if app.comment.is_empty() {
+                "Aplicación".into()
             } else {
-                icon.to_lowercase()
-            };
-            out.push(Entry {
-                subtitle: field("Comment").unwrap_or_else(|| "Aplicación".into()),
-                title: name,
-                icon_key,
-                action: EntryAction::Launch(exec),
-            });
-        }
-    }
+                app.comment
+            },
+            title: app.name,
+            // El `id` siempre está en el mapa de iconos (el nombre del icono solo a veces).
+            icon_key: app.id,
+            action: EntryAction::Launch(app.exec),
+        })
+        .collect();
     out.sort_by(|a, b| a.title.cmp(&b.title));
     out.dedup_by(|a, b| a.title == b.title);
     out

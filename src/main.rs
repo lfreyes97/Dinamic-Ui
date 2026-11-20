@@ -16,6 +16,8 @@
 mod appicons;
 mod config;
 mod control;
+#[cfg(feature = "icons")]
+mod desktop;
 mod gfx;
 mod ipc;
 #[cfg(feature = "command-menu")]

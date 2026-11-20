@@ -35,42 +35,14 @@ impl AppIcons {
     }
 
     fn scan_desktop_files(&mut self) {
-        let mut dirs = vec![PathBuf::from("/usr/share/applications")];
-        if let Some(home) = std::env::var_os("HOME") {
-            dirs.push(PathBuf::from(home).join(".local/share/applications"));
-        }
-        for dir in dirs {
-            let Ok(entries) = std::fs::read_dir(dir) else {
+        // También las entradas ocultas: una ventana abierta puede venir de una.
+        for app in crate::desktop::scan() {
+            if app.icon.is_empty() {
                 continue;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("desktop") {
-                    continue;
-                }
-                let Ok(text) = std::fs::read_to_string(&path) else {
-                    continue;
-                };
-                let mut icon = None;
-                let mut classes = vec![path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or_default()
-                    .to_lowercase()];
-                for line in text.lines() {
-                    if let Some(v) = line.strip_prefix("Icon=") {
-                        icon = Some(v.trim().to_string());
-                    } else if let Some(v) = line.strip_prefix("StartupWMClass=") {
-                        classes.push(v.trim().to_lowercase());
-                    }
-                }
-                if let Some(icon) = icon {
-                    for class in classes {
-                        if !class.is_empty() {
-                            self.names.entry(class).or_insert_with(|| icon.clone());
-                        }
-                    }
-                }
+            }
+            let classes = std::iter::once(app.id.clone()).chain(app.wm_class.clone());
+            for class in classes.filter(|c| !c.is_empty()) {
+                self.names.entry(class).or_insert_with(|| app.icon.clone());
             }
         }
     }

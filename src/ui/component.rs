@@ -681,9 +681,15 @@ impl Component for Overview {
     }
 
     fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, _ctx: DrawCtx, palette: Palette) {
-        if state.overview.overview {
-            overview::draw_overview(ui, state, palette);
+        if !state.overview.visible() {
+            return;
         }
+        // Fundido de entrada y salida. El menú se dibuja después: hay que restaurar la opacidad.
+        let fade = crate::smootherstep(state.overview.progress);
+        let previous = ui.opacity();
+        ui.set_opacity(previous * fade);
+        overview::draw_overview(ui, state, palette);
+        ui.set_opacity(previous);
     }
 
     fn input_rects(
@@ -706,8 +712,21 @@ impl Component for Overview {
         }
     }
 
-    fn update(&mut self, state: &mut UiState, _ctx: &UpdateCtx) -> bool {
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
         let mut dirty = false;
+        // Animación de entrada/salida; al terminar de cerrar se sueltan la búsqueda y las apps.
+        let ov = &mut state.overview;
+        let before = ov.progress;
+        ov.progress = approach(
+            ov.progress,
+            if ov.overview { 1.0 } else { 0.0 },
+            ctx.dt * 7.0,
+        );
+        if !ov.overview && ov.progress <= 0.0 && !ov.apps.is_empty() {
+            ov.apps = Vec::new();
+            ov.query.clear();
+        }
+        dirty |= (ov.progress - before).abs() > 0.0005;
         if let Some(address) = state.shared.overview_focus.take() {
             state
                 .shared
@@ -728,29 +747,29 @@ impl Component for Overview {
     }
 
     fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
-        if key == Keysym::Escape && state.overview.overview {
-            state.overview.overview = false;
-            return true;
-        }
-        false
+        overview::handle_key(state, key)
+    }
+
+    /// Las vistas modales (rejilla y actividades) toman el teclado; las franjas no, para no
+    /// quitárselo a la app que hay debajo.
+    fn wants_keyboard(&self, state: &UiState) -> bool {
+        state.overview.overview && state.overview.kind.is_modal()
     }
 
     fn on_command(&mut self, command: &str, state: &mut UiState) -> bool {
         use super::overview::OverviewKind;
-        let (kind, toggle) = match command {
-            "overview" => (OverviewKind::Workspaces, true),
-            "overview-activities" => (OverviewKind::Activities, false),
-            "overview-strip-h" => (OverviewKind::StripH, false),
-            "overview-strip-v" => (OverviewKind::StripV, false),
+        let kind = match command {
+            "overview" => OverviewKind::Workspaces,
+            "overview-activities" => OverviewKind::Activities,
+            "overview-strip-h" => OverviewKind::StripH,
+            "overview-strip-v" => OverviewKind::StripV,
             _ => return false,
         };
-        let ov = &mut state.overview;
-        if toggle && ov.overview && ov.kind == kind {
-            ov.overview = false;
+        // El mismo atajo abre y cierra; con otra vista abierta, cambia a esta.
+        if state.overview.overview && state.overview.kind == kind {
+            state.overview.overview = false;
         } else {
-            ov.kind = kind;
-            ov.overview = true;
-            state.bar.show_panel = false;
+            overview::open(state, kind);
         }
         true
     }
@@ -810,7 +829,7 @@ impl Component for CommandMenu {
         };
         match action {
             EntryAction::Launch(command) => {
-                let argv: Vec<String> = command.split_whitespace().map(String::from).collect();
+                let argv = crate::desktop::split_exec(&command);
                 state.shared.pending_spawns.push(argv);
             }
             EntryAction::OpenFile(path) => state
