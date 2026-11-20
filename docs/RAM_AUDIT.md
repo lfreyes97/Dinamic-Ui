@@ -1,0 +1,24 @@
+# Auditoría de RAM (2026-11-20) — pendiente para 2026-11-21
+
+Medido con `target/release/dinamic-ui`: RSS ~131 MB, de los cuales 22 MB son anónimos
+(heap/texturas) y 108 MB son librerías de GPU mapeadas (nvidia gpucomp 30, gallium 26,
+LLVM 26, nvidia eglcore 7, vulkan_radeon 5).
+
+## Tareas, por prioridad
+
+1. [ ] `src/gfx.rs:41` — `Backends::all()` → `Backends::VULKAN`, y `PowerPreference::LowPower`
+       en `RequestAdapterOptions` (hoy `Default`). Verificar qué adaptador se elige. (~40–80 MB)
+2. [ ] `Cargo.toml` perfil release: `codegen-units = 1`, `strip = true`, `panic = "abort"`. (~3–5 MB)
+3. [ ] `MALLOC_ARENA_MAX=2` (servicio o `hyprland/dinamic-ui.conf`) o allocator `mimalloc`. (~2–5 MB)
+4. [ ] `src/gfx.rs:99` — `PresentMode::Fifo` y `desired_maximum_frame_latency: 1`. (pocos MB)
+5. [ ] LRU con tope (~64) para `thumb_textures` (`ui.rs:151`) y `app_icon_textures` (`ui.rs:189`);
+       soltar miniaturas al cerrar la pestaña Wallpaper.
+6. [ ] `src/thumbs.rs:121` — decodificar JPEG reducido (`JpegDecoder::scale`) y pedir solo las
+       miniaturas visibles (`ui.rs:2665` las pide todas).
+7. [ ] Opcional: quitar `default_fonts` de egui (~1–3 MB), con fallback si falta Inter.
+8. [ ] Opcional: `appicons::scan_desktop_files` lazy.
+
+## Después
+
+Volver a medir RSS (`/proc/PID/status`, `smaps`) y comparar con la línea base de arriba.
+Nota: el servidor de notificaciones no se probó (otro daemon tenía el nombre D-Bus).

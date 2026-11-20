@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dinamic UI — Topbar GNOME-like (pantalla completa)</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0b;
+    --panel: rgba(24, 24, 27, .94);
+    --panel-soft: rgba(38, 38, 42, .96);
+    --border: rgba(255,255,255,.09);
+    --text: #e6e6e8;
+    --muted: #9a9aa2;
+    --faint: #62626a;
+    --accent: #dd9999;
+    --accent-soft: rgba(221,153,153,.16);
+    --green: #8be09b;
+    --blue: #7fc8ff;
+    --track: rgba(255,255,255,.10);
+  }
+
+  html, body { height: 100%; margin: 0; }
+  body {
+    overflow: hidden; color: var(--text);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(ellipse 60% 55% at 20% 5%, rgba(221,153,153,.18), transparent 62%),
+      radial-gradient(ellipse 55% 50% at 88% 92%, rgba(127,200,255,.14), transparent 62%),
+      linear-gradient(160deg, #1a1d26 0%, #111319 55%, #0b0c0f 100%);
+  }
+  .desktop { position: fixed; inset: 0; }
+  .desktop::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size: 26px 26px; opacity: .38;
+  }
+
+  /* ── Ventanas de contexto ─────────────────────────────── */
+  .win {
+    position: absolute; border-radius: 10px; overflow: hidden;
+    background: rgba(28,29,34,.92); border: 1px solid var(--border);
+    box-shadow: 0 30px 70px rgba(0,0,0,.5);
+  }
+  .win .titlebar { height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 13px; background: rgba(255,255,255,.035); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+  .win .titlebar .dots { display: flex; gap: 6px; }
+  .win .titlebar .dots i { width: 7px; height: 7px; border-radius: 50%; background: #4b4b51; }
+  .win .titlebar .dots i:first-child { background: var(--accent); }
+  .win .body { padding: 20px; display: grid; gap: 10px; }
+  .win .body .l { height: 8px; border-radius: 4px; background: rgba(255,255,255,.07); }
+  .win .body .l.s { width: 62%; } .win .body .l.m { width: 83%; }
+  .win.ff { left: 12%; top: 15%; width: 46%; height: 55%; }
+  .win.term { left: 51%; top: 31%; width: 38%; height: 49%; opacity: .93; }
+  body.no-app .win.ff { opacity: .55; }
+
+  /* ── Topbar ───────────────────────────────────────────── */
+  .topbar {
+    position: fixed; z-index: 30; left: 0; right: 0; top: 0; height: 34px;
+    display: flex; align-items: center; padding: 0 14px;
+    background: var(--panel);
+    -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+    border-bottom: 1px solid var(--border); font-size: 11.5px;
+  }
+  .tb-left, .tb-right { flex: 1; display: flex; align-items: center; gap: 4px; }
+  .tb-right { justify-content: flex-end; }
+  .tb-center { display: flex; align-items: center; gap: 7px; }
+  .activities, .clock, .status, .app-menu {
+    display: inline-flex; align-items: center; gap: 7px; height: 26px;
+    padding: 0 10px; border: 0; border-radius: 13px; background: transparent;
+    color: var(--text); font: inherit; cursor: pointer; transition: background .15s;
+  }
+  .activities:hover, .clock:hover, .status:hover, .app-menu:hover { background: rgba(255,255,255,.08); }
+  .activities svg { width: 13px; height: 13px; color: var(--muted); }
+  .app-menu { color: var(--muted); font-size: 11px; }
+  .app-menu svg { width: 13px; height: 13px; flex: none; }
+  .app-menu b { color: var(--text); font-weight: 600; }
+  body.no-app .app-menu { opacity: .4; }
+  .clock .date { color: var(--muted); font-size: 11px; }
+  .clock .time { color: var(--text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .status { gap: 2px; padding: 0 8px; }
+  .status svg { width: 15px; height: 15px; }
+  .status svg.charge { color: var(--green); }
+  .status .pct { font-size: 10px; color: var(--muted); margin-left: 3px; font-variant-numeric: tabular-nums; }
+  .status .chev { width: 10px; height: 10px; color: var(--faint); margin-left: 3px; transition: transform .2s; }
+  body.qs-open .status .chev { transform: rotate(180deg); }
+
+  /* ── Desplegables ─────────────────────────────────────── */
+  .dropdown {
+    position: fixed; z-index: 40; top: 42px; right: 12px; width: 292px;
+    background: var(--panel-soft);
+    -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.6); padding: 12px;
+    opacity: 0; transform: translateY(-8px) scale(.98); pointer-events: none;
+    transition: opacity .16s, transform .16s;
+  }
+  .dropdown.center { right: auto; left: 50%; margin-left: -155px; width: 310px; }
+  body.qs-open .dropdown.qs, body.cal-open .dropdown.cal { opacity: 1; transform: none; pointer-events: auto; }
+
+  .qs-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 2px 10px; }
+  .qs-head b { font-size: 11.5px; font-weight: 600; }
+  .qs-head span { font-size: 10px; color: var(--muted); }
+  .toggles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+  .tog {
+    display: flex; align-items: center; gap: 8px; padding: 8px 9px;
+    border-radius: 9px; background: rgba(255,255,255,.045); border: 1px solid transparent;
+    font: inherit; font-size: 10.5px; color: var(--muted); cursor: pointer; transition: background .15s, color .15s;
+  }
+  .tog svg { width: 14px; height: 14px; flex: none; }
+  .tog:hover { background: rgba(255,255,255,.09); }
+  .tog.on { background: var(--accent-soft); border-color: rgba(221,153,153,.28); color: var(--text); }
+  .tog.on svg { color: var(--accent); }
+  .slider { margin-top: 12px; padding: 0 2px; }
+  .slider .slabel { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+  .slider .slabel b { color: var(--text); font-weight: 500; }
+  .rail { height: 6px; border-radius: 3px; background: var(--track); cursor: pointer; overflow: hidden; }
+  .rail i { display: block; height: 100%; background: var(--text); border-radius: 3px; transition: width .1s; }
+  .rail.accent i { background: var(--accent); }
+  .qs-actions { display: flex; gap: 7px; margin-top: 13px; }
+  .qs-actions button {
+    flex: 1; height: 30px; border-radius: 9px; border: 1px solid var(--border);
+    background: rgba(255,255,255,.045); color: var(--muted); font: inherit; font-size: 10px;
+    display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;
+  }
+  .qs-actions button svg { width: 13px; height: 13px; }
+  .qs-actions button:hover { background: rgba(255,255,255,.09); color: var(--text); }
+
+  .cal-head { display: flex; justify-content: space-between; align-items: center; margin: 2px 2px 10px; font-size: 11.5px; font-weight: 600; }
+  .cal-head span { color: var(--muted); font-weight: 400; font-size: 10px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-grid .wd { text-align: center; font-size: 9px; color: var(--faint); padding-bottom: 5px; }
+  .cal-grid .d { aspect-ratio: 1; display: grid; place-items: center; border-radius: 7px; font-size: 10px; color: var(--muted); }
+  .cal-grid .d.out { color: #3f3f45; }
+  .cal-grid .d.today { background: var(--accent); color: #1a1010; font-weight: 700; }
+  .cal-grid .d.event { position: relative; }
+  .cal-grid .d.event::after { content: ""; position: absolute; bottom: 4px; width: 3px; height: 3px; border-radius: 50%; background: var(--accent); }
+  .notif-title { margin: 14px 2px 7px; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); }
+  .notif { display: flex; gap: 9px; padding: 9px; border-radius: 9px; background: rgba(255,255,255,.04); border: 1px solid var(--border); }
+  .notif .ni { width: 26px; height: 26px; flex: none; border-radius: 7px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .notif .ni svg { width: 14px; height: 14px; }
+  .notif b { font-size: 10.5px; font-weight: 600; }
+  .notif p { margin: 3px 0 0; font-size: 9.5px; color: var(--muted); line-height: 1.4; }
+
+  /* ── Controles de iteración ───────────────────────────── */
+  .controls {
+    position: fixed; z-index: 60; left: 16px; top: 52px; width: 252px;
+    background: rgba(16,16,19,.92); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.5);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    transition: opacity .2s;
+  }
+  .controls.hidden { opacity: 0; pointer-events: none; }
+  .controls h1 { margin: 0 0 3px; font-size: 13px; font-weight: 600; }
+  .controls .sub { margin: 0 0 13px; font-size: 10px; color: var(--faint); line-height: 1.5; }
+  .controls .group { margin-bottom: 12px; }
+  .controls .gt { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); margin-bottom: 7px; }
+  .row { display: flex; gap: 5px; }
+  .toggle, .mini-btn {
+    flex: 1; font: inherit; font-size: 10px; color: var(--muted); cursor: pointer;
+    background: rgba(255,255,255,.045); border: 1px solid var(--border);
+    border-radius: 7px; padding: 7px 5px; transition: background .15s, color .15s;
+  }
+  .toggle:hover, .mini-btn:hover { background: rgba(255,255,255,.09); color: var(--text); }
+  .toggle.on { background: var(--accent-soft); color: var(--accent); border-color: rgba(221,153,153,.35); }
+  .controls .foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 9px; color: var(--faint); line-height: 1.5; }
+  .show-controls {
+    position: fixed; z-index: 60; left: 16px; top: 52px; opacity: 0; pointer-events: none;
+    font: inherit; font-size: 10px; color: var(--muted); cursor: pointer;
+    background: rgba(16,16,19,.9); border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px;
+    transition: opacity .2s;
+  }
+  body.controls-off .show-controls { opacity: 1; pointer-events: auto; }
+  .corner-hint { position: fixed; right: 18px; bottom: 14px; z-index: 5; font-size: 9.5px; color: rgba(255,255,255,.22); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="10" y="3" width="4" height="4" rx="1"/><rect x="17" y="3" width="4" height="4" rx="1"/><rect x="3" y="10" width="4" height="4" rx="1"/><rect x="10" y="10" width="4" height="4" rx="1"/><rect x="17" y="10" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><rect x="10" y="17" width="4" height="4" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M2.5 8.5a15 15 0 0 1 19 0M5.6 12a10 10 0 0 1 12.8 0M8.8 15.4a5 5 0 0 1 6.4 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h3l4-3.5v13L7 15H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/></symbol>
+  <symbol id="i-bat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="7" width="17" height="10" rx="2"/><path d="M21.5 10.5v3"/><rect x="4.5" y="9" width="11" height="6" rx="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-bt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10-5 4V3l5 4L7 17"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2.5c.8 0 1.4.7 1.4 1.5v7.2l7.1 4.1v2l-7.1-2.1v4.2l2.3 1.7v1.5L12 20.6l-3.7 1v-1.5l2.3-1.7v-4.2l-7.1 2.1v-2l7.1-4.1V4c0-.8.6-1.5 1.4-1.5z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.3M12 18.9v2.3M4.6 7.5l2 1.1M17.4 15.4l2 1.1M4.6 16.5l2-1.1M17.4 8.6l2-1.1"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v9"/><path d="M7.5 6.3a7.5 7.5 0 1 0 9 0"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 19a2 2 0 0 0 4 0"/></symbol>
+</svg>
+
+<div class="desktop">
+  <div class="win ff">
+    <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div> Firefox — Dinamic UI</div>
+    <div class="body"><div class="l m"></div><div class="l"></div><div class="l s"></div><div class="l"></div></div>
+  </div>
+  <div class="win term">
+    <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div> kitty — ~/Dinamic-Ui</div>
+    <div class="body"><div class="l s"></div><div class="l m"></div><div class="l"></div></div>
+  </div>
+
+  <div class="topbar">
+    <div class="tb-left">
+      <button class="activities" id="activities"><svg><use href="#i-grid"/></svg> Actividades</button>
+      <div class="app-menu"><svg><use href="#i-grid"/></svg> <b id="app-name">Firefox</b></div>
+    </div>
+    <div class="tb-center">
+      <button class="clock" id="clock"><span class="date">mié 20 nov</span><span class="time">10:42</span></button>
+    </div>
+    <div class="tb-right">
+      <button class="status" id="status">
+        <svg><use href="#i-wifi"/></svg>
+        <svg><use href="#i-vol"/></svg>
+        <svg class="charge"><use href="#i-bat"/></svg>
+        <span class="pct" id="pct">87%</span>
+        <svg class="chev"><use href="#i-chev"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Ajustes rápidos -->
+  <div class="dropdown qs">
+    <div class="qs-head"><b>Ajustes rápidos</b><span id="bat-sub">87% · 3h 12m</span></div>
+    <div class="toggles">
+      <button class="tog on"><svg><use href="#i-wifi"/></svg> Wi-Fi</button>
+      <button class="tog on"><svg><use href="#i-bt"/></svg> Bluetooth</button>
+      <button class="tog"><svg><use href="#i-plane"/></svg> Avión</button>
+      <button class="tog"><svg><use href="#i-moon"/></svg> Nocturno</button>
+    </div>
+    <div class="slider">
+      <div class="slabel"><span>Volumen</span><b id="vol-label">64%</b></div>
+      <div class="rail accent" id="vol-rail"><i style="width:64%"></i></div>
+    </div>
+    <div class="slider">
+      <div class="slabel"><span>Brillo</span><b id="bri-label">80%</b></div>
+      <div class="rail" id="bri-rail"><i style="width:80%"></i></div>
+    </div>
+    <div class="qs-actions">
+      <button><svg><use href="#i-gear"/></svg> Ajustes</button>
+      <button><svg><use href="#i-lock"/></svg> Bloquear</button>
+      <button><svg><use href="#i-power"/></svg> Salir</button>
+    </div>
+  </div>
+
+  <!-- Calendario -->
+  <div class="dropdown cal center">
+    <div class="cal-head">Noviembre 2026 <span>hoy, 20</span></div>
+    <div class="cal-grid" id="cal-grid">
+      <div class="wd">L</div><div class="wd">M</div><div class="wd">X</div><div class="wd">J</div><div class="wd">V</div><div class="wd">S</div><div class="wd">D</div>
+      <div class="d out">26</div><div class="d out">27</div><div class="d out">28</div><div class="d out">29</div><div class="d out">30</div><div class="d out">31</div><div class="d">1</div>
+      <div class="d">2</div><div class="d event">3</div><div class="d">4</div><div class="d">5</div><div class="d">6</div><div class="d">7</div><div class="d">8</div>
+      <div class="d">9</div><div class="d">10</div><div class="d event">11</div><div class="d">12</div><div class="d">13</div><div class="d">14</div><div class="d">15</div>
+      <div class="d">16</div><div class="d">17</div><div class="d">18</div><div class="d">19</div><div class="d today">20</div><div class="d">21</div><div class="d">22</div>
+      <div class="d">23</div><div class="d event">24</div><div class="d">25</div><div class="d">26</div><div class="d">27</div><div class="d">28</div><div class="d">29</div>
+      <div class="d">30</div>
+    </div>
+    <div class="notif-title">Notificaciones</div>
+    <div class="notif">
+      <div class="ni"><svg><use href="#i-bell"/></svg></div>
+      <div><b>Recordatorio</b><p>Revisión de Diseño · 11:30</p></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <h1>Topbar · GNOME-like</h1>
+    <p class="sub">Maqueta a pantalla completa de 34 px. Abre los desplegables desde la barra o desde aquí.</p>
+
+    <div class="group">
+      <div class="gt">Desplegables</div>
+      <div class="row">
+        <button class="toggle" id="btn-qs">Ajustes rápidos</button>
+        <button class="toggle" id="btn-cal">Calendario</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gt">App enfocada</div>
+      <div class="row">
+        <button class="toggle on" id="btn-app">Firefox</button>
+        <button class="mini-btn" id="btn-hide">Ocultar</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gt">Estado del sistema</div>
+      <div class="row">
+        <button class="toggle on" id="btn-bat">Batería 87%</button>
+      </div>
+    </div>
+
+    <div class="group" style="margin-bottom:0">
+      <div class="row"><button class="mini-btn" id="btn-controls">Ocultar controles</button></div>
+    </div>
+    <div class="foot">Clic en el reloj abre el calendario; clic en los iconos de estado abre los ajustes rápidos. Las barras y los interruptores son interactivos.</div>
+  </div>
+
+  <button class="show-controls" id="show-controls">Mostrar controles</button>
+  <div class="corner-hint">1920 × 1080 · Dinamic UI</div>
+</div>
+
+<script>
+  const body = document.body;
+
+  function setDropdown(which) {
+    body.classList.remove('qs-open', 'cal-open');
+    body.classList.add(which + '-open');
+    document.getElementById('btn-qs').classList.toggle('on', which === 'qs');
+    document.getElementById('btn-cal').classList.toggle('on', which === 'cal');
+  }
+  function closeDropdowns() {
+    body.classList.remove('qs-open', 'cal-open');
+    document.getElementById('btn-qs').classList.remove('on');
+    document.getElementById('btn-cal').classList.remove('on');
+  }
+
+  document.getElementById('status').addEventListener('click', function () {
+    if (body.classList.contains('qs-open')) closeDropdowns(); else setDropdown('qs');
+  });
+  document.getElementById('clock').addEventListener('click', function () {
+    if (body.classList.contains('cal-open')) closeDropdowns(); else setDropdown('cal');
+  });
+  document.getElementById('btn-qs').addEventListener('click', function () {
+    if (body.classList.contains('qs-open')) closeDropdowns(); else setDropdown('qs');
+  });
+  document.getElementById('btn-cal').addEventListener('click', function () {
+    if (body.classList.contains('cal-open')) closeDropdowns(); else setDropdown('cal');
+  });
+  document.getElementById('activities').addEventListener('click', function () {
+    closeDropdowns();
+    this.style.background = 'rgba(255,255,255,.1)';
+    setTimeout(() => this.style.background = '', 180);
+  });
+
+  // Clic fuera cierra los desplegables.
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.dropdown, .topbar, .controls')) closeDropdowns();
+  });
+
+  // Interruptores
+  document.querySelectorAll('.tog').forEach(function (b) {
+    b.addEventListener('click', function () { b.classList.toggle('on'); });
+  });
+
+  // Sliders
+  [['vol-rail','vol-label'], ['bri-rail','bri-label']].forEach(function (pair) {
+    const rail = document.getElementById(pair[0]);
+    const label = document.getElementById(pair[1]);
+    rail.addEventListener('click', function (e) {
+      const rect = rail.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(100, Math.round((e.clientX - rect.left) / rect.width * 100)));
+      rail.querySelector('i').style.width = pct + '%';
+      label.textContent = pct + '%';
+    });
+  });
+
+  // App enfocada
+  document.getElementById('btn-app').addEventListener('click', function () {
+    const off = body.classList.toggle('no-app');
+    this.textContent = off ? 'Sin app' : 'Firefox';
+    document.getElementById('app-name').textContent = off ? 'Escritorio' : 'Firefox';
+    this.classList.toggle('on', !off);
+  });
+  document.getElementById('btn-hide').addEventListener('click', function () {
+    body.classList.add('no-app');
+    document.getElementById('btn-app').classList.remove('on');
+    document.getElementById('btn-app').textContent = 'Sin app';
+    document.getElementById('app-name').textContent = 'Escritorio';
+  });
+
+  // Batería
+  document.getElementById('btn-bat').addEventListener('click', function () {
+    const on = this.classList.toggle('on');
+    document.querySelector('.status .charge').style.color = on ? 'var(--green)' : 'var(--muted)';
+    document.getElementById('pct').textContent = on ? '87%' : '—';
+    document.getElementById('bat-sub').textContent = on ? '87% · 3h 12m' : 'Sin batería';
+  });
+
+  // Días del calendario
+  document.querySelectorAll('#cal-grid .d:not(.out)').forEach(function (d) {
+    d.addEventListener('click', function () {
+      document.querySelectorAll('#cal-grid .d').forEach(function (x) { x.classList.remove('today'); });
+      d.classList.add('today');
+    });
+  });
+
+  // Controles
+  document.getElementById('btn-controls').addEventListener('click', function () {
+    document.querySelector('.controls').classList.add('hidden');
+    body.classList.add('controls-off');
+  });
+  document.getElementById('show-controls').addEventListener('click', function () {
+    document.querySelector('.controls').classList.remove('hidden');
+    body.classList.remove('controls-off');
+  });
+</script>
+</body>
+</html>

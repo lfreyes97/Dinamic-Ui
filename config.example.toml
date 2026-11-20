@@ -1,0 +1,51 @@
+# Copiar a ~/.config/dinamic-ui/config.toml
+# Recargar en caliente: dinamic-ui --reload
+
+[theme]
+name = "black-metal"        # o "bathory"
+# surface = "121212"
+# border = "303030"
+# badge = "242424"
+# text = "c1c1c1"
+# muted = "999999"
+# accent = "dd9999"
+
+[sizes]
+bar_h = 32                  # 24..48
+panel_h = 360               # 80..480
+island_w = 260
+bar_w = 640                 # se amplía sola si los workspaces no caben
+
+[workspaces]
+count = 10                  # 4..20
+
+[notifications]
+ttl_secs = 6                # tiempo que la notificación queda en la isla
+
+# Carpeta de imágenes de la pestaña Wallpaper (por defecto ~/Pictures/Unsplash,
+# o ~/Pictures si no existe). Se aplican con `awww img`.
+# [wallpapers]
+# dir = "~/Pictures/Unsplash"
+
+# Reloj mundial de la pestaña Clock (opcional; sin esta sección se muestran
+# Bogotá, Madrid y Tokio). Desplazamiento fijo en horas respecto a UTC;
+# dst = "eu" suma 1 h durante el horario de verano europeo.
+# [[clock.cities]]
+# name = "Bogotá"
+# utc_offset = -5
+#
+# [[clock.cities]]
+# name = "Madrid"
+# utc_offset = 1
+# dst = "eu"
+#
+# [[clock.cities]]
+# name = "Tokio"
+# utc_offset = 9
+
+# Dock inferior con autohide: aparece al llevar el cursor al borde de abajo.
+# `pinned` son comandos (o class de Hyprland); si no hay ventana abierta se lanzan.
+[dock]
+enabled = true
+pinned = ["firefox", "code", "kitty"]
+

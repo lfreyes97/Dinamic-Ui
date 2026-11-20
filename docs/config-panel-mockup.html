@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dinamic UI — Panel de configuración (hipotético)</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0b;
+    --panel: rgba(18,18,21,.94);
+    --panel-2: rgba(28,28,32,.9);
+    --side: #101012;
+    --border: rgba(255,255,255,.09);
+    --text: #e6e6e8;
+    --muted: #92929a;
+    --faint: #5e5e66;
+    --accent: #dd9999;
+    --accent-soft: rgba(221,153,153,.16);
+    --green: #8be09b;
+    --blue: #7fc8ff;
+    --amber: #f5c26b;
+    --track: rgba(255,255,255,.09);
+  }
+
+  html, body { height: 100%; margin: 0; }
+  body {
+    overflow: hidden; color: var(--text);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(ellipse 60% 55% at 18% 6%, rgba(221,153,153,.16), transparent 62%),
+      radial-gradient(ellipse 55% 50% at 88% 92%, rgba(127,200,255,.12), transparent 62%),
+      linear-gradient(160deg, #191c24 0%, #111319 55%, #0b0c0f 100%);
+  }
+  .ghost-win { position:fixed; left:7%; top:15%; width:74%; height:70%; border-radius:12px; background:rgba(30,31,36,.35); opacity:.28; filter:blur(2px); }
+
+  /* ── Ventana de ajustes ───────────────────────────────── */
+  .app {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(1200px, 96vw); height: min(780px, 92vh);
+    display: grid; grid-template-columns: 224px 1fr;
+    grid-template-rows: 38px 1fr 52px;
+    background: var(--panel); border: 1px solid rgba(255,255,255,.11);
+    border-radius: 18px; overflow: hidden;
+    box-shadow: 0 40px 100px rgba(0,0,0,.7);
+    -webkit-backdrop-filter: blur(26px); backdrop-filter: blur(26px);
+  }
+
+  /* Barra de título falsa */
+  .titlebar {
+    grid-column: 1 / -1; height: 38px; display: flex; align-items: center;
+    padding: 0 14px; gap: 9px; border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,.025);
+  }
+  .titlebar .dots { display:flex; gap:6px; }
+  .titlebar .dots i { width:8px; height:8px; border-radius:50%; background:#4a4a50; }
+  .titlebar .dots i:first-child { background:var(--accent); }
+  .titlebar .name { font-size:11px; color:var(--muted); }
+  .titlebar .name b { color:var(--text); font-weight:600; }
+  .titlebar .spacer { flex:1; }
+  .titlebar .mini { font-size:9.5px; color:var(--muted); border:1px solid var(--border); border-radius:6px; padding:3px 8px; }
+
+  /* ── Sidebar ──────────────────────────────────────────── */
+  .side { grid-column: 1; grid-row: 2; background: var(--side); border-right: 1px solid var(--border); padding: 16px 12px; display:flex; flex-direction:column; min-height:0; }
+  .brand { display:flex; align-items:center; gap:10px; padding: 2px 8px 14px; }
+  .brand .logo { width:28px; height:28px; border-radius:8px; background:var(--accent-soft); border:1px solid rgba(221,153,153,.3); display:grid; place-items:center; color:var(--accent); }
+  .brand .logo svg { width:15px; height:15px; }
+  .brand b { font-size:12px; font-weight:600; display:block; }
+  .brand span { font-size:9px; color:var(--faint); }
+  .search { display:flex; align-items:center; gap:7px; margin:0 4px 13px; padding:7px 9px; border-radius:8px; background:rgba(255,255,255,.04); border:1px solid var(--border); }
+  .search svg { width:12px; height:12px; color:var(--faint); }
+  .search input { flex:1; min-width:0; background:transparent; border:0; outline:0; color:var(--text); font:inherit; font-size:10.5px; }
+  .search input::placeholder { color:var(--faint); }
+  .nav-label { font-size:8.5px; letter-spacing:1.2px; text-transform:uppercase; color:var(--faint); padding:8px 10px 5px; }
+  .nav-item {
+    display:flex; align-items:center; gap:9px; width:100%; padding:9px 10px; margin-bottom:2px;
+    border:0; border-radius:8px; background:transparent; color:var(--muted);
+    font:inherit; font-size:11px; cursor:pointer; text-align:left; transition:.14s;
+  }
+  .nav-item svg { width:14px; height:14px; flex:none; }
+  .nav-item:hover { background:rgba(255,255,255,.05); color:var(--text); }
+  .nav-item.on { background:var(--accent-soft); color:var(--accent); }
+  .nav-item .badge { margin-left:auto; font-size:8px; color:var(--faint); border:1px solid var(--border); border-radius:5px; padding:1px 5px; }
+  .side-foot { margin-top:auto; padding:12px 8px 2px; border-top:1px solid var(--border); font-size:9px; color:var(--faint); line-height:1.6; }
+
+  /* ── Contenido ────────────────────────────────────────── */
+  .content { grid-column: 2; grid-row: 2; display:grid; grid-template-columns: 1fr 292px; min-width:0; min-height:0; }
+  .main { padding: 24px 26px 18px; overflow-y:auto; min-width:0; }
+  .main::-webkit-scrollbar, .code::-webkit-scrollbar { width:6px; }
+  .main::-webkit-scrollbar-thumb, .code::-webkit-scrollbar-thumb { background:rgba(255,255,255,.13); border-radius:3px; }
+  .head { margin-bottom:18px; }
+  .head h1 { margin:0 0 5px; font-size:17px; font-weight:600; letter-spacing:-.3px; }
+  .head p { margin:0; font-size:10.5px; color:var(--muted); line-height:1.5; }
+  .view { display:none; }
+  .view.on { display:block; }
+
+  .card { background:rgba(255,255,255,.028); border:1px solid var(--border); border-radius:12px; padding:15px 16px; margin-bottom:12px; }
+  .card > .ct { font-size:9px; letter-spacing:1.2px; text-transform:uppercase; color:var(--faint); margin-bottom:13px; }
+  .row { display:flex; align-items:center; gap:14px; padding:9px 0; border-bottom:1px solid rgba(255,255,255,.045); }
+  .row:last-child { border-bottom:0; }
+  .row .info { flex:1; min-width:0; }
+  .row .info b { display:block; font-size:11.5px; font-weight:500; }
+  .row .info span { display:block; margin-top:3px; font-size:9.5px; color:var(--muted); line-height:1.4; }
+  .row .ctrl { flex:none; display:flex; align-items:center; gap:8px; }
+
+  /* Controles */
+  .seg { display:flex; gap:3px; background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:8px; padding:3px; }
+  .seg button { font:inherit; font-size:10px; color:var(--muted); background:transparent; border:0; border-radius:6px; padding:6px 10px; cursor:pointer; transition:.14s; }
+  .seg button:hover { color:var(--text); }
+  .seg button.on { background:var(--accent-soft); color:var(--accent); }
+  .switch { position:relative; width:34px; height:19px; border-radius:11px; background:var(--track); border:1px solid var(--border); cursor:pointer; transition:.18s; flex:none; }
+  .switch::after { content:""; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:var(--muted); transition:.18s; }
+  .switch.on { background:var(--accent-soft); border-color:rgba(221,153,153,.35); }
+  .switch.on::after { left:17px; background:var(--accent); }
+  .slider { display:flex; align-items:center; gap:9px; }
+  .slider input { width:112px; accent-color:var(--accent); height:4px; cursor:pointer; }
+  .slider .num { font-size:10.5px; color:var(--text); width:44px; text-align:right; font-variant-numeric:tabular-nums; }
+  .stepper { display:flex; align-items:center; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .stepper button { width:26px; height:26px; border:0; background:rgba(255,255,255,.05); color:var(--muted); font:inherit; font-size:14px; cursor:pointer; }
+  .stepper button:hover { background:rgba(255,255,255,.1); color:var(--text); }
+  .stepper span { width:36px; text-align:center; font-size:11px; font-variant-numeric:tabular-nums; }
+  .field { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:7px; padding:7px 9px; color:var(--text); font:inherit; font-size:10.5px; outline:0; }
+  .field:focus { border-color:rgba(221,153,153,.5); }
+  .swatches { display:flex; gap:7px; flex-wrap:wrap; }
+  .sw { width:25px; height:25px; border-radius:7px; border:2px solid transparent; cursor:pointer; outline:1px solid var(--border); }
+  .sw.on { border-color:var(--text); outline:2px solid var(--accent); }
+  .cards { display:grid; grid-template-columns:repeat(2,1fr); gap:9px; }
+  .pick { border:1px solid var(--border); border-radius:11px; padding:12px; cursor:pointer; background:rgba(255,255,255,.025); transition:.14s; }
+  .pick:hover { background:rgba(255,255,255,.06); }
+  .pick.on { border-color:rgba(221,153,153,.55); background:var(--accent-soft); }
+  .pick .pt { font-size:11px; font-weight:600; display:flex; align-items:center; gap:7px; }
+  .pick .pt .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); }
+  .pick.on .pt .dot { background:var(--accent); }
+  .pick .pd { font-size:9.5px; color:var(--muted); margin-top:5px; line-height:1.4; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:7px; border:1px solid var(--border); background:rgba(255,255,255,.04); color:var(--muted); font-size:10px; }
+  .chip.on { color:var(--accent); border-color:rgba(221,153,153,.3); background:var(--accent-soft); }
+  .chip .x { cursor:pointer; color:var(--faint); font-size:12px; line-height:1; }
+  .chip .x:hover { color:var(--accent); }
+  .name-list { display:flex; flex-direction:column; gap:7px; }
+  .name-row { display:flex; align-items:center; gap:9px; }
+  .name-row .n { width:22px; height:22px; border-radius:6px; background:var(--accent-soft); color:var(--accent); display:grid; place-items:center; font-size:10px; font-weight:600; }
+  .name-row input { flex:1; }
+  .keyrow { display:grid; grid-template-columns:1fr 130px; gap:12px; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.045); font-size:10.5px; }
+  .keyrow:last-child { border:0; }
+  .keyrow kbd { font:inherit; font-size:10px; text-align:center; color:var(--text); background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:6px; padding:6px 4px; cursor:pointer; }
+  .keyrow kbd:hover { border-color:var(--accent); }
+
+  /* Vista config.toml */
+  .code { background:#0d0d0f; border:1px solid var(--border); border-radius:10px; padding:13px 14px; font:11px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color:var(--muted); white-space:pre; overflow:auto; max-height:430px; }
+  .code .k { color:var(--blue); } .code .s { color:var(--amber); } .code .n { color:var(--green); } .code .c { color:#4d4d55; }
+  .note { font-size:9.5px; color:var(--faint); line-height:1.6; margin-top:9px; }
+  .note code { color:var(--muted); background:rgba(255,255,255,.05); padding:1px 5px; border-radius:4px; }
+
+  /* ── Panel lateral de vista previa ────────────────────── */
+  .preview { border-left:1px solid var(--border); padding:24px 18px; background:rgba(255,255,255,.015); display:flex; flex-direction:column; gap:14px; min-height:0; overflow-y:auto; }
+  .preview .pt { font-size:9px; letter-spacing:1.2px; text-transform:uppercase; color:var(--faint); }
+  .mini {
+    position:relative; height:180px; border-radius:11px; overflow:hidden;
+    border:1px solid var(--border);
+    background: radial-gradient(ellipse 70% 60% at 25% 10%, rgba(221,153,153,.16), transparent 60%), linear-gradient(160deg,#1a1d26,#0d0e12);
+  }
+  .mini .w { position:absolute; left:22%; top:32%; width:56%; height:46%; border-radius:6px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.09); }
+  .mini .bar-el { position:absolute; background:rgba(16,16,19,.9); border-color:rgba(255,255,255,.1); }
+  .mini .bar-el.bot { left:0; right:0; bottom:0; height:15px; border-top:1px solid rgba(255,255,255,.1); display:flex; align-items:center; justify-content:center; gap:5px; }
+  .mini .bar-el.top { left:0; right:0; top:0; height:12px; border-bottom:1px solid rgba(255,255,255,.1); }
+  .mini .bar-el.left { left:0; top:0; bottom:0; width:17px; border-right:1px solid rgba(255,255,255,.1); }
+  .mini .bar-el.right { right:0; top:0; bottom:0; width:17px; border-left:1px solid rgba(255,255,255,.1); }
+  .mini .dot { width:7px; height:7px; border-radius:3px; background:rgba(255,255,255,.18); }
+  .mini .dot.ac { background:var(--accent); }
+  .mini .isl { position:absolute; left:50%; top:0; transform:translateX(-50%); height:9px; border-radius:0 0 6px 6px; background:rgba(16,16,19,.92); border:1px solid rgba(255,255,255,.1); border-top:0; }
+  .summary { display:grid; gap:7px; }
+  .sum-row { display:flex; justify-content:space-between; font-size:10px; }
+  .sum-row span { color:var(--muted); }
+  .sum-row b { font-weight:500; }
+  .sum-row b.ac { color:var(--accent); }
+
+  /* ── Pie de la ventana ────────────────────────────────── */
+  .footbar {
+    grid-column: 1 / -1; grid-row: 3; height: 52px; border-top:1px solid var(--border);
+    display:flex; align-items:center; gap:10px; padding:0 18px; background:rgba(255,255,255,.015);
+  }
+  .status { font-size:10px; color:var(--muted); display:flex; align-items:center; gap:7px; }
+  .status .d { width:7px; height:7px; border-radius:50%; background:var(--amber); }
+  .status.saved .d { background:var(--green); }
+  .footbar .spacer { flex:1; }
+  .btn { font:inherit; font-size:10.5px; cursor:pointer; padding:8px 13px; border-radius:8px; border:1px solid var(--border); background:rgba(255,255,255,.04); color:var(--muted); transition:.14s; }
+  .btn:hover { background:rgba(255,255,255,.09); color:var(--text); }
+  .btn.primary { background:var(--accent-soft); color:var(--accent); border-color:rgba(221,153,153,.35); }
+
+  @media (max-width: 1000px) { .content { grid-template-columns:1fr; } .preview { display:none; } }
+</style>
+</head>
+<body>
+
+<div class="ghost-win"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-logo" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.4 4.4"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a9 9 0 0 0 0 18h1.5a2 2 0 0 0 1.6-3.2 1.8 1.8 0 0 1 1.4-2.8H18a3 3 0 0 0 3-3A9 9 0 0 0 12 3z"/><circle cx="7.5" cy="11" r="1" fill="currentColor"/><circle cx="10" cy="7" r="1" fill="currentColor"/><circle cx="15" cy="7.5" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-bar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="9" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="14" width="8" height="7" rx="1.5"/></symbol>
+  <symbol id="i-squares" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 19a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-dock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="14" width="18" height="7" rx="2"/><circle cx="7" cy="17.5" r="1"/><circle cx="12" cy="17.5" r="1"/><circle cx="17" cy="17.5" r="1"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="4"/><path d="m11 11 9 9-2 2-2-2-2 2-2-2-2-2 2-2"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m8 6-5 6 5 6M16 6l5 6-5 6M14 4l-4 16"/></symbol>
+</svg>
+
+<div class="app">
+  <div class="titlebar">
+    <div class="dots"><i></i><i></i><i></i></div>
+    <div class="name"><b>Dinamic UI</b> · Ajustes</div>
+    <div class="spacer"></div>
+    <div class="mini">v0.1.0 · Hyprland</div>
+  </div>
+
+  <aside class="side">
+    <div class="brand"><div class="logo"><svg><use href="#i-logo"/></svg></div><div><b>Dinamic UI</b><span>configuración del shell</span></div></div>
+    <label class="search"><svg><use href="#i-search"/></svg><input placeholder="Buscar ajuste…" id="search"></label>
+
+    <div class="nav-label">Apariencia y vistas</div>
+    <button class="nav-item on" data-view="theme"><svg><use href="#i-palette"/></svg> Tema y colores</button>
+    <button class="nav-item" data-view="bars"><svg><use href="#i-bar"/></svg> Barras</button>
+    <button class="nav-item" data-view="overviews"><svg><use href="#i-grid"/></svg> Overviews</button>
+    <button class="nav-item" data-view="dashboard"><svg><use href="#i-dash"/></svg> Dashboard <span class="badge">nuevo</span></button>
+    <div class="nav-label">Comportamiento</div>
+    <button class="nav-item" data-view="workspaces"><svg><use href="#i-squares"/></svg> Workspaces</button>
+    <button class="nav-item" data-view="notifications"><svg><use href="#i-bell"/></svg> Notificaciones</button>
+    <button class="nav-item" data-view="dock"><svg><use href="#i-dock"/></svg> Dock</button>
+    <button class="nav-item" data-view="keys"><svg><use href="#i-key"/></svg> Atajos</button>
+    <div class="nav-label">Sistema</div>
+    <button class="nav-item" data-view="toml"><svg><use href="#i-code"/></svg> config.toml</button>
+
+    <div class="side-foot">Los cambios se escriben en<br><code>~/.config/dinamic-ui/config.toml</code><br>y se aplican con <code>--reload</code>.</div>
+  </aside>
+
+  <div class="content">
+  <main class="main">
+    <div class="head"><h1 id="view-title">Tema y colores</h1><p id="view-desc">Paleta base16 y overrides. El acento tiñe isla, barra, overviews y dashboard.</p></div>
+
+    <!-- TEMA -->
+    <section class="view on" data-panel="theme">
+      <div class="card"><div class="ct">Paleta base</div>
+        <div class="cards" data-group="theme.name">
+          <div class="pick on" data-value="black-metal"><div class="pt"><i class="dot"></i> Black Metal</div><div class="pd">Gris neutro con acento rosado. Default.</div></div>
+          <div class="pick" data-value="bathory"><div class="pt"><i class="dot"></i> Bathory</div><div class="pd">Tono cálido, acento mostaza.</div></div>
+        </div>
+      </div>
+      <div class="card"><div class="ct">Color de acento</div>
+        <div class="swatches" data-group="theme.accent">
+          <div class="sw on" data-value="dd9999" style="background:#dd9999"></div>
+          <div class="sw" data-value="f5c26b" style="background:#f5c26b"></div>
+          <div class="sw" data-value="8be09b" style="background:#8be09b"></div>
+          <div class="sw" data-value="7fc8ff" style="background:#7fc8ff"></div>
+          <div class="sw" data-value="c792ea" style="background:#c792ea"></div>
+          <div class="sw" data-value="e06c75" style="background:#e06c75"></div>
+        </div>
+        <p class="note">Se refleja en el indicador de app activa, bordes del overview y anillos del dashboard.</p>
+      </div>
+      <div class="card"><div class="ct">Overrides (RRGGBB, opcional)</div>
+        <div class="row"><div class="info"><b>Surface</b><span>Fondo de la isla y tarjetas.</span></div><div class="ctrl"><input class="field" data-bind="theme.surface" value="121212" size="8"></div></div>
+        <div class="row"><div class="info"><b>Borde</b><span>Trazo de 1 px.</span></div><div class="ctrl"><input class="field" data-bind="theme.border" value="303030" size="8"></div></div>
+        <div class="row"><div class="info"><b>Texto</b><span>Color principal.</span></div><div class="ctrl"><input class="field" data-bind="theme.text" value="c1c1c1" size="8"></div></div>
+      </div>
+    </section>
+
+    <!-- BARRAS -->
+    <section class="view" data-panel="bars">
+      <div class="card"><div class="ct">Taskbar (estilo Windows)</div>
+        <div class="row"><div class="info"><b>Activa</b><span>Muestra la barra en lugar de la isla.</span></div><div class="ctrl"><div class="switch" data-toggle="shell.taskbar.enabled"></div></div></div>
+        <div class="row"><div class="info"><b>Lado</b><span>Ancla de la barra.</span></div><div class="ctrl"><div class="seg" data-group="shell.taskbar.side">
+          <button data-value="bottom" class="on">Abajo</button><button data-value="top">Arriba</button><button data-value="left">Izq.</button><button data-value="right">Der.</button>
+        </div></div></div>
+        <div class="row"><div class="info"><b>Grosor</b><span>Alto o ancho según orientación.</span></div><div class="ctrl"><div class="slider"><input type="range" min="40" max="72" data-bind="shell.taskbar.size" value="48"><span class="num" data-val-for="shell.taskbar.size">48 px</span></div></div></div>
+        <div class="row"><div class="info"><b>Autohide</b><span>Aparece al acercar el cursor al borde.</span></div><div class="ctrl"><div class="switch on" data-toggle="shell.taskbar.autohide"></div></div></div>
+      </div>
+      <div class="card"><div class="ct">Topbar (estilo GNOME)</div>
+        <div class="row"><div class="info"><b>Activa</b><span>Barra superior de 34 px.</span></div><div class="ctrl"><div class="switch" data-toggle="shell.topbar.enabled"></div></div></div>
+        <div class="row"><div class="info"><b>Altura</b><span>24..48 px.</span></div><div class="ctrl"><div class="slider"><input type="range" min="24" max="48" data-bind="shell.topbar.height" value="34"><span class="num" data-val-for="shell.topbar.height">34 px</span></div></div></div>
+        <div class="row"><div class="info"><b>Elementos</b><span>Zonas visibles.</span></div><div class="ctrl"><div class="chips" data-group="shell.topbar.elements">
+          <span class="chip on" data-value="activities">Actividades</span><span class="chip on" data-value="clock">Reloj</span><span class="chip on" data-value="status">Estado</span><span class="chip" data-value="appmenu">App</span>
+        </div></div></div>
+      </div>
+      <div class="card"><div class="ct">Isla / barra original</div>
+        <div class="row"><div class="info"><b>Ancho isla / barra</b><span>Tamaños de la píldora.</span></div><div class="ctrl"><input class="field" data-bind="sizes.island_w" value="260" size="4"> <span class="muted">/</span> <input class="field" data-bind="sizes.bar_w" value="640" size="4"></div></div>
+        <div class="row"><div class="info"><b>Alto de barra</b><span>24..48 px.</span></div><div class="ctrl"><div class="slider"><input type="range" min="24" max="48" data-bind="sizes.bar_h" value="32"><span class="num" data-val-for="sizes.bar_h">32 px</span></div></div></div>
+      </div>
+    </section>
+
+    <!-- OVERVIEWS -->
+    <section class="view" data-panel="overviews">
+      <div class="card"><div class="ct">Estilo por defecto</div>
+        <div class="cards" data-group="shell.overview.style">
+          <div class="pick on" data-value="workspaces"><div class="pt"><i class="dot"></i> Workspaces</div><div class="pd">Rejilla a pantalla completa.</div></div>
+          <div class="pick" data-value="activities"><div class="pt"><i class="dot"></i> Actividades</div><div class="pd">Apps + filmstrip de ventanas.</div></div>
+          <div class="pick" data-value="strip-h"><div class="pt"><i class="dot"></i> Franja horizontal</div><div class="pd">68 px, arriba o abajo.</div></div>
+          <div class="pick" data-value="strip-v"><div class="pt"><i class="dot"></i> Franja vertical</div><div class="pd">78 px, izquierda o derecha.</div></div>
+        </div>
+      </div>
+      <div class="card"><div class="ct">Acoples de franjas</div>
+        <div class="row"><div class="info"><b>Franja horizontal</b><span>Lado preferido.</span></div><div class="ctrl"><div class="seg" data-group="shell.overview.strip_h_side"><button data-value="top" class="on">Arriba</button><button data-value="bottom">Abajo</button></div></div></div>
+        <div class="row"><div class="info"><b>Franja vertical</b><span>Lado preferido.</span></div><div class="ctrl"><div class="seg" data-group="shell.overview.strip_v_side"><button data-value="left">Izq.</button><button data-value="right" class="on">Der.</button></div></div></div>
+        <div class="row"><div class="info"><b>Animación de entrada</b><span>Escala + fade.</span></div><div class="ctrl"><div class="switch on" data-toggle="shell.overview.animation"></div></div></div>
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section class="view" data-panel="dashboard">
+      <div class="card"><div class="ct">Diseño</div>
+        <div class="cards" data-group="shell.dashboard.style">
+          <div class="pick" data-value="center"><div class="pt"><i class="dot"></i> Centro de control</div><div class="pd">Tarjeta central densa.</div></div>
+          <div class="pick on" data-value="bento"><div class="pt"><i class="dot"></i> Bento grid</div><div class="pd">Mosaicos de distintos tamaños.</div></div>
+          <div class="pick" data-value="widgets"><div class="pt"><i class="dot"></i> Widgets flotantes</div><div class="pd">Cristal sobre el escritorio.</div></div>
+          <div class="pick" data-value="sidebar"><div class="pt"><i class="dot"></i> Sidebar</div><div class="pd">Columna acoplable.</div></div>
+        </div>
+      </div>
+      <div class="card"><div class="ct">Widgets visibles</div>
+        <div class="chips" data-group="shell.dashboard.widgets">
+          <span class="chip on" data-value="system">Sistema</span><span class="chip on" data-value="weather">Clima</span>
+          <span class="chip on" data-value="workspaces">Workspaces</span><span class="chip on" data-value="media">Música</span>
+          <span class="chip on" data-value="calendar">Calendario</span><span class="chip" data-value="processes">Procesos</span>
+          <span class="chip" data-value="network">Red</span><span class="chip on" data-value="quick">Rápido</span>
+        </div>
+        <p class="note">El orden de los widgets se decide en el archivo de configuración; esta vista es solo selector de visibilidad.</p>
+      </div>
+    </section>
+
+    <!-- WORKSPACES -->
+    <section class="view" data-panel="workspaces">
+      <div class="card"><div class="ct">General</div>
+        <div class="row"><div class="info"><b>Número de workspaces</b><span>4..20. Se refleja en isla, barra y overviews.</span></div><div class="ctrl"><div class="stepper"><button data-step="workspaces.count" data-d="-1">−</button><span data-val-for="workspaces.count">10</span><button data-step="workspaces.count" data-d="1">+</button></div></div></div>
+        <div class="row"><div class="info"><b>Nombres</b><span>Etiquetas opcionales.</span></div><div class="ctrl"><div class="switch on" data-toggle="workspaces.labels"></div></div></div>
+      </div>
+      <div class="card"><div class="ct">Etiquetas</div>
+        <div class="name-list" id="names"></div>
+      </div>
+    </section>
+
+    <!-- NOTIFICACIONES -->
+    <section class="view" data-panel="notifications">
+      <div class="card"><div class="ct">Comportamiento</div>
+        <div class="row"><div class="info"><b>Tiempo de vida</b><span>Segundos que la tarjeta queda en la isla.</span></div><div class="ctrl"><div class="slider"><input type="range" min="2" max="20" data-bind="notifications.ttl_secs" value="6"><span class="num" data-val-for="notifications.ttl_secs">6 s</span></div></div></div>
+        <div class="row"><div class="info"><b>No molestar</b><span>Silencia las notificaciones entrantes.</span></div><div class="ctrl"><div class="switch" data-toggle="notifications.dnd"></div></div></div>
+        <div class="row"><div class="info"><b>Posición</b><span>Ancla de la tarjeta.</span></div><div class="ctrl"><div class="seg" data-group="notifications.position"><button data-value="top">Arriba</button><button data-value="bottom" class="on">Abajo</button><button data-value="corner">Esquina</button></div></div></div>
+      </div>
+      <div class="card"><div class="ct">Servidor freedesktop</div>
+        <div class="row"><div class="info"><b>Nombre bienvenido</b><span>org.freedesktop.Notifications</span></div><div class="ctrl"><span class="pill-ok" style="font-size:10px;color:var(--green)">● Activo</span></div></div>
+      </div>
+    </section>
+
+    <!-- DOCK -->
+    <section class="view" data-panel="dock">
+      <div class="card"><div class="ct">Dock inferior</div>
+        <div class="row"><div class="info"><b>Activado</b><span>Autohide al borde inferior.</span></div><div class="ctrl"><div class="switch on" data-toggle="dock.enabled"></div></div></div>
+        <div class="row"><div class="info"><b>Zona de detección</b><span>Píxeles desde el borde.</span></div><div class="ctrl"><div class="slider"><input type="range" min="8" max="48" data-bind="dock.hotzone" value="24"><span class="num" data-val-for="dock.hotzone">24 px</span></div></div></div>
+      </div>
+      <div class="card"><div class="ct">Apps fijadas</div>
+        <div class="chips" id="pinned"></div>
+        <div style="display:flex;gap:8px;margin-top:12px"><input class="field" id="new-pin" placeholder="nombre de app…" style="flex:1"><button class="btn" id="add-pin">Añadir</button></div>
+      </div>
+    </section>
+
+    <!-- ATAJOS -->
+    <section class="view" data-panel="keys">
+      <div class="card"><div class="ct">Keybinds (Hyprland)</div>
+        <div class="keyrow"><span>Alternar isla / barra</span><kbd data-key="keys.toggle">SUPER + I</kbd></div>
+        <div class="keyrow"><span>Panel de control</span><kbd data-key="keys.panel">SUPER + P</kbd></div>
+        <div class="keyrow"><span>Overview</span><kbd data-key="keys.overview">SUPER + O</kbd></div>
+        <div class="keyrow"><span>Taskbar</span><kbd data-key="keys.taskbar">SUPER + T</kbd></div>
+        <div class="keyrow"><span>Topbar</span><kbd data-key="keys.topbar">SUPER + B</kbd></div>
+        <div class="keyrow"><span>Dashboard</span><kbd data-key="keys.dashboard">SUPER + D</kbd></div>
+        <div class="keyrow"><span>Recargar configuración</span><kbd data-key="keys.reload">SUPER + SHIFT + R</kbd></div>
+        <p class="note">Clic en una tecla para grabar un nuevo atajo. Se escriben en <code>hyprland/dinamic-ui.conf</code>.</p>
+      </div>
+    </section>
+
+    <!-- TOML -->
+    <section class="view" data-panel="toml">
+      <div class="card"><div class="ct">Archivo generado · config.toml</div>
+        <pre class="code" id="toml"></pre>
+        <p class="note">Los cambios de esta ventana se reflejan aquí al instante. <code>--reload</code> vuelve a leer el archivo sin reiniciar el shell.</p>
+      </div>
+    </section>
+  </main>
+
+  <aside class="preview">
+    <div class="pt">Vista previa</div>
+    <div class="mini" id="mini">
+      <div class="w"></div>
+      <div class="isl" id="mini-island"></div>
+    </div>
+    <div class="pt">Resumen</div>
+    <div class="summary" id="summary"></div>
+    <p class="note">La vista previa es esquemática: muestra la posición y el color de acento, no las miniaturas reales de ventanas.</p>
+  </aside>
+  </div>
+
+  <div class="footbar">
+    <div class="status" id="status"><i class="d"></i><span>Cambios sin guardar</span></div>
+    <div class="spacer"></div>
+    <button class="btn" id="reset">Restablecer</button>
+    <button class="btn" id="apply">Aplicar</button>
+    <button class="btn primary" id="save">Guardar y recargar</button>
+  </div>
+</div>
+
+<script>
+  // ── Estado hipotético ───────────────────────────────────
+  const defaults = {
+    theme: { name:'black-metal', accent:'dd9999', surface:'121212', border:'303030', text:'c1c1c1' },
+    sizes: { bar_h:32, panel_h:360, island_w:260, bar_w:640 },
+    workspaces: { count:10, labels:true, names:['Principal','Desarrollo','Navegación','Música','Lectura','—'] },
+    notifications: { ttl_secs:6, dnd:false, position:'bottom' },
+    dock: { enabled:true, hotzone:24, pinned:['firefox','code','kitty'] },
+    shell: {
+      taskbar: { enabled:false, side:'bottom', size:48, autohide:true },
+      topbar: { enabled:false, height:34, elements:['activities','clock','status'] },
+      overview: { style:'workspaces', strip_h_side:'top', strip_v_side:'right', animation:true },
+      dashboard: { style:'bento', widgets:['system','weather','workspaces','media','calendar','quick'] }
+    },
+    keys: { toggle:'SUPER + I', panel:'SUPER + P', overview:'SUPER + O', taskbar:'SUPER + T', topbar:'SUPER + B', dashboard:'SUPER + D', reload:'SUPER + SHIFT + R' }
+  };
+  let cfg = JSON.parse(JSON.stringify(defaults));
+
+  const titles = {
+    theme:['Tema y colores','Paleta base16 y overrides. El acento tiñe isla, barra, overviews y dashboard.'],
+    bars:['Barras','Taskbar acoplable a cuatro lados, topbar GNOME-like y tamaños de la isla original.'],
+    overviews:['Overviews','Cuatro modos de visión general: dos a pantalla completa y dos franjas acoplables.'],
+    dashboard:['Dashboard','Distribución y widgets del panel de información.'],
+    workspaces:['Workspaces','Cantidad y etiquetas de los escritorios virtuales.'],
+    notifications:['Notificaciones','Servidor freedesktop, tiempo de vida y posición de la tarjeta.'],
+    dock:['Dock','Apps fijadas y zona de activación del autohide.'],
+    keys:['Atajos','Comandos del socket/CLI enlazados en Hyprland.'],
+    toml:['config.toml','Vista en vivo del archivo que se escribiría al guardar.']
+  };
+
+  function get(path){ return path.split('.').reduce((o,k)=>o && o[k], cfg); }
+  function set(path,val){ const p=path.split('.'); let o=cfg; while(p.length>1){ o=o[p.shift()]; } o[p[0]]=val; }
+  function dirty(){ const s=document.getElementById('status'); s.classList.remove('saved'); s.querySelector('span').textContent='Cambios sin guardar'; }
+  function saved(msg){ const s=document.getElementById('status'); s.classList.add('saved'); s.querySelector('span').textContent=msg; }
+
+  function fmt(key,val){
+    if(typeof val==='boolean') return val?'true':'false';
+    if(typeof val==='number') return String(val);
+    if(Array.isArray(val)) return '['+val.map(v=>'"'+v+'"').join(', ')+']';
+    return '"'+val+'"';
+  }
+  function lines(){
+    const L=[];
+    L.push('# Dinamic UI · generado por el panel de ajustes');
+    L.push('');
+    const sec=(name,obj)=>{
+      L.push('['+name+']');
+      for(const [k,v] of Object.entries(obj)){
+        if(v && typeof v==='object' && !Array.isArray(v)) continue;
+        L.push(k+' = '+fmt(k,v));
+      }
+      L.push('');
+    };
+    sec('theme',cfg.theme); sec('sizes',cfg.sizes); sec('workspaces',cfg.workspaces);
+    sec('notifications',cfg.notifications); sec('dock',cfg.dock);
+    L.push('[shell.taskbar]'); L.push('enabled = '+fmt('',cfg.shell.taskbar.enabled)); L.push('side = "'+cfg.shell.taskbar.side+'"'); L.push('size = '+cfg.shell.taskbar.size); L.push('autohide = '+fmt('',cfg.shell.taskbar.autohide)); L.push('');
+    L.push('[shell.topbar]'); L.push('enabled = '+fmt('',cfg.shell.topbar.enabled)); L.push('height = '+cfg.shell.topbar.height); L.push('elements = ['+cfg.shell.topbar.elements.map(v=>'"'+v+'"').join(', ')+']'); L.push('');
+    L.push('[shell.overview]'); L.push('style = "'+cfg.shell.overview.style+'"'); L.push('strip_h_side = "'+cfg.shell.overview.strip_h_side+'"'); L.push('strip_v_side = "'+cfg.shell.overview.strip_v_side+'"'); L.push('animation = '+fmt('',cfg.shell.overview.animation)); L.push('');
+    L.push('[shell.dashboard]'); L.push('style = "'+cfg.shell.dashboard.style+'"'); L.push('widgets = ['+cfg.shell.dashboard.widgets.map(v=>'"'+v+'"').join(', ')+']'); L.push('');
+    L.push('[keys]'); for(const [k,v] of Object.entries(cfg.keys)) L.push(k+' = "'+v+'"');
+    return L;
+  }
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function hl(line){
+    if(line.startsWith('#')) return '<span class="c">'+esc(line)+'</span>';
+    if(line.startsWith('[')) return '<span class="k">'+esc(line)+'</span>';
+    const i=line.indexOf('=');
+    if(i<0) return esc(line);
+    const key=esc(line.slice(0,i));
+    let val=esc(line.slice(i+1).trim());
+    if(/^".*"$/.test(val)) val='<span class="s">'+val+'</span>';
+    else if(/^(true|false|\d+)$/.test(val)) val='<span class="n">'+val+'</span>';
+    return '<span class="k">'+key+'</span> = '+val;
+  }
+  function renderToml(){ document.getElementById('toml').innerHTML=lines().map(hl).join('\n'); }
+
+  function renderPreview(){
+    const mini=document.getElementById('mini');
+    mini.querySelectorAll('.bar-el, .isl').forEach(e=>e.remove());
+    const t=cfg.shell.taskbar, top=cfg.shell.topbar;
+    if(t.enabled){
+      const el=document.createElement('div'); el.className='bar-el '+t.side;
+      if(t.side==='bottom'||t.side==='top') el.innerHTML='<i class="dot ac"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i>';
+      else el.innerHTML='<i class="dot ac"></i><i class="dot"></i><i class="dot"></i>';
+      mini.appendChild(el);
+    } else if(top.enabled){
+      const el=document.createElement('div'); el.className='bar-el top'; mini.appendChild(el);
+    } else {
+      const el=document.createElement('div'); el.className='isl'; el.style.width=(cfg.sizes.island_w/5)+'px'; mini.appendChild(el);
+    }
+    document.documentElement.style.setProperty('--accent','#'+cfg.theme.accent);
+    document.getElementById('summary').innerHTML=[
+      ['Tema',cfg.theme.name],['Acento','#'+cfg.theme.accent],
+      ['Taskbar',t.enabled?t.side+' · '+t.size+'px':'off'],
+      ['Topbar',top.enabled?top.height+'px':'off'],
+      ['Overview',cfg.shell.overview.style],
+      ['Dashboard',cfg.shell.dashboard.style],
+      ['Workspaces',cfg.workspaces.count],
+      ['Notif. TTL',cfg.notifications.ttl_secs+' s']
+    ].map(([k,v])=>'<div class="sum-row"><span>'+k+'</span><b class="ac">'+v+'</b></div>').join('');
+  }
+
+  function syncLabels(){
+    document.querySelectorAll('[data-val-for]').forEach(function(el){
+      const key=el.dataset.valFor, v=get(key);
+      el.textContent = key.endsWith('ttl_secs')?v+' s' : key.includes('_h')||key.includes('height')||key.includes('size')||key==='dock.hotzone'?v+' px' : v;
+    });
+    document.querySelectorAll('[data-group]').forEach(function(g){
+      const v=get(g.dataset.group);
+      g.querySelectorAll('[data-value]').forEach(function(b){
+        const val=b.dataset.value;
+        b.classList.toggle('on', Array.isArray(v)?v.includes(val):String(v)===val);
+      });
+    });
+    document.querySelectorAll('[data-toggle]').forEach(function(b){ b.classList.toggle('on',!!get(b.dataset.toggle)); });
+    document.querySelectorAll('[data-bind]').forEach(function(b){ if(b.type==='range'||b.tagName==='INPUT') b.value=get(b.dataset.bind); });
+  }
+  function renderLists(){
+    document.getElementById('names').innerHTML=cfg.workspaces.names.map((n,i)=>
+      '<div class="name-row"><span class="n">'+(i+1)+'</span><input class="field" data-name="'+i+'" value="'+n.replace(/"/g,'&quot;')+'"></div>').join('');
+    document.querySelectorAll('[data-name]').forEach(function(inp){
+      inp.addEventListener('input',function(){ cfg.workspaces.names[+inp.dataset.name]=inp.value; changed(); });
+    });
+    document.getElementById('pinned').innerHTML=cfg.dock.pinned.map((p,i)=>
+      '<span class="chip">'+p+'<i class="x" data-unpin="'+i+'">×</i></span>').join('');
+    document.querySelectorAll('[data-unpin]').forEach(function(x){
+      x.addEventListener('click',function(){ cfg.dock.pinned.splice(+x.dataset.unpin,1); renderLists(); changed(); });
+    });
+  }
+  function changed(){ dirty(); renderToml(); renderPreview(); syncLabels(); }
+
+  // ── Navegación ──────────────────────────────────────────
+  document.querySelectorAll('[data-view]').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b));
+      document.querySelectorAll('[data-panel]').forEach(x=>x.classList.toggle('on',x.dataset.panel===b.dataset.view));
+      document.getElementById('view-title').textContent=titles[b.dataset.view][0];
+      document.getElementById('view-desc').textContent=titles[b.dataset.view][1];
+      document.querySelector('.main').scrollTop=0;
+    });
+  });
+  document.getElementById('search').addEventListener('input',function(){
+    const q=this.value.toLowerCase().trim();
+    document.querySelectorAll('[data-view]').forEach(function(b){
+      b.style.display = !q || b.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+
+  // ── Controles ───────────────────────────────────────────
+  document.querySelectorAll('[data-group] [data-value]').forEach(function(b){
+    b.addEventListener('click',function(){
+      const group=b.closest('[data-group]'), path=group.dataset.group, val=b.dataset.value, cur=get(path);
+      if(Array.isArray(cur)){
+        const i=cur.indexOf(val); if(i>=0) cur.splice(i,1); else cur.push(val);
+      } else {
+        set(path,val);
+        if(path==='theme.name') set('theme.accent', val==='bathory'?'f5c26b':'dd9999');
+      }
+      changed();
+    });
+  });
+  document.querySelectorAll('[data-toggle]').forEach(function(b){
+    b.addEventListener('click',function(){ set(b.dataset.toggle,!get(b.dataset.toggle)); changed(); });
+  });
+  document.querySelectorAll('[data-bind]').forEach(function(b){
+    b.addEventListener('input',function(){
+      const v=b.type==='range'?Number(b.value):b.value;
+      set(b.dataset.bind,v); changed();
+    });
+  });
+  document.querySelectorAll('[data-step]').forEach(function(b){
+    b.addEventListener('click',function(){
+      const k=b.dataset.step, v=Math.max(4,Math.min(20,get(k)+Number(b.dataset.d)));
+      set(k,v); changed();
+    });
+  });
+  document.querySelectorAll('[data-key]').forEach(function(k){
+    k.addEventListener('click',function(){ k.textContent='Pulsa teclas…'; setTimeout(()=>{ set(k.dataset.key,'SUPER + ?'); k.textContent='SUPER + ?'; changed(); },450); });
+  });
+  document.getElementById('add-pin').addEventListener('click',function(){
+    const i=document.getElementById('new-pin');
+    if(i.value.trim()){ cfg.dock.pinned.push(i.value.trim()); i.value=''; renderLists(); changed(); }
+  });
+
+  document.getElementById('reset').addEventListener('click',function(){ cfg=JSON.parse(JSON.stringify(defaults)); renderLists(); syncLabels(); changed(); });
+  document.getElementById('apply').addEventListener('click',function(){ saved('Aplicado · --reload'); });
+  document.getElementById('save').addEventListener('click',function(){ saved('Guardado en ~/.config/dinamic-ui/config.toml'); });
+
+  // ── Init ────────────────────────────────────────────────
+  renderLists(); syncLabels(); renderToml(); renderPreview(); saved('Configuración cargada');
+</script>
+</body>
+</html>

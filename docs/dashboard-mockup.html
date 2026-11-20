@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dinamic UI — Propuestas de dashboard</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0b;
+    --panel: rgba(18, 18, 21, .88);
+    --panel-2: rgba(28, 28, 32, .92);
+    --border: rgba(255,255,255,.09);
+    --text: #e6e6e8;
+    --muted: #92929a;
+    --faint: #5e5e66;
+    --accent: #dd9999;
+    --accent-soft: rgba(221,153,153,.16);
+    --green: #8be09b;
+    --blue: #7fc8ff;
+    --amber: #f5c26b;
+    --track: rgba(255,255,255,.09);
+  }
+
+  html, body { height: 100%; margin: 0; }
+  body {
+    overflow: hidden; color: var(--text);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0b0c0f;
+  }
+
+  /* ── Selector de propuestas ───────────────────────────── */
+  .switcher {
+    position: fixed; z-index: 100; top: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 4px; padding: 5px;
+    background: rgba(14,14,17,.94); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.5);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  }
+  .switcher button {
+    font: inherit; font-size: 10.5px; color: var(--muted); cursor: pointer;
+    background: transparent; border: 0; border-radius: 8px; padding: 8px 13px;
+    transition: background .15s, color .15s;
+  }
+  .switcher button:hover { color: var(--text); background: rgba(255,255,255,.06); }
+  .switcher button.on { color: var(--accent); background: var(--accent-soft); }
+  .switcher .sep { width:1px; background:var(--border); margin:4px 2px; }
+  .switcher .extra { font-size: 10px; color: var(--faint); padding: 8px 10px; }
+
+  /* ── Escenarios ───────────────────────────────────────── */
+  .stage {
+    position: fixed; inset: 0; display: none;
+    background:
+      radial-gradient(ellipse 60% 55% at 18% 6%, rgba(221,153,153,.18), transparent 62%),
+      radial-gradient(ellipse 55% 50% at 88% 92%, rgba(127,200,255,.14), transparent 62%),
+      linear-gradient(160deg, #191c24 0%, #111319 55%, #0b0c0f 100%);
+  }
+  .stage.on { display: block; }
+  .stage::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(255,255,255,.045) 1px, transparent 1px);
+    background-size: 26px 26px; opacity: .35;
+  }
+  .ghost-win {
+    position: absolute; border-radius: 10px; border: 1px solid var(--border);
+    background: rgba(30,31,36,.55); box-shadow: 0 24px 60px rgba(0,0,0,.35);
+    opacity: .55;
+  }
+  .ghost-win .gt { height: 28px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:5px; padding:0 10px; }
+  .ghost-win .gt i { width:6px; height:6px; border-radius:50%; background:#58585e; }
+
+  /* ── Componentes compartidos ──────────────────────────── */
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px;
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    backdrop-filter: blur(22px) saturate(140%);
+    box-shadow: 0 18px 44px rgba(0,0,0,.35);
+    min-width: 0; min-height: 0; overflow: hidden;
+  }
+  .k { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); }
+  .muted { color: var(--muted); }
+  .title { font-size: 12px; font-weight: 600; }
+  .value { font-size: 26px; font-weight: 600; letter-spacing: -.6px; font-variant-numeric: tabular-nums; }
+  .value.sm { font-size: 17px; }
+  .unit { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .sec { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }
+  .sec .k { color: var(--muted); }
+  .hr { height: 1px; background: var(--border); margin: 13px 0; }
+  .bar { height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+  .bar.g i { background: var(--green); } .bar.b i { background: var(--blue); } .bar.a i { background: var(--amber); }
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 24px; margin-top: 8px; }
+  .spark i { flex: 1; background: var(--accent); opacity: .65; border-radius: 2px 2px 0 0; min-height: 2px; }
+  .spark.b i { background: var(--blue); }
+  .rowline { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 11px; }
+  .rowline .grow { flex: 1; min-width: 0; }
+  .ico { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 8px; background: rgba(255,255,255,.05); border: 1px solid var(--border); }
+  .ico svg { width: 14px; height: 14px; }
+  .ico.ff { color: #ff9d5c; } .ico.cd { color: var(--blue); } .ico.tm { color: var(--green); } .ico.ac { color: var(--accent); }
+  .toggle { font: inherit; font-size: 10px; color: var(--muted); cursor: pointer; background: rgba(255,255,255,.045); border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; transition: .15s; }
+  .toggle:hover { background: rgba(255,255,255,.09); color: var(--text); }
+  .toggle.on { background: var(--accent-soft); color: var(--accent); border-color: rgba(221,153,153,.3); }
+  .rail { height: 5px; border-radius: 3px; background: var(--track); cursor: pointer; overflow: hidden; }
+  .rail i { display: block; height: 100%; background: var(--text); border-radius: 3px; }
+  .rail.ac i { background: var(--accent); }
+  .ring { position: relative; width: 62px; height: 62px; flex: none; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(var(--accent) 0 62%, var(--track) 62% 100%); }
+  .ring::before { content:""; position:absolute; inset:6px; border-radius:50%; background:#161618; }
+  .ring span { position: relative; z-index: 1; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ring.g { background: conic-gradient(var(--green) 0 74%, var(--track) 74% 100%); }
+  .ring.b { background: conic-gradient(var(--blue) 0 41%, var(--track) 41% 100%); }
+  .ws-chip { display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--border); background: rgba(255,255,255,.035); font-size: 10.5px; color: var(--muted); cursor: pointer; }
+  .ws-chip.on { border-color: rgba(221,153,153,.5); background: var(--accent-soft); color: var(--text); }
+  .ws-chip b { font-size: 10px; color: var(--faint); font-weight: 500; }
+  .ws-chip.on b { color: var(--accent); }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal .wd { text-align:center; font-size:8.5px; color:var(--faint); padding-bottom:4px; }
+  .cal .d { aspect-ratio:1; display:grid; place-items:center; border-radius:6px; font-size:9.5px; color:var(--muted); }
+  .cal .d.out { color:#3f3f45; }
+  .cal .d.today { background:var(--accent); color:#1a1010; font-weight:700; }
+  .media-art { width: 58px; height: 58px; flex: none; border-radius: 10px; display:grid; place-items:center; background: linear-gradient(135deg, rgba(221,153,153,.35), rgba(127,200,255,.18)); color: var(--accent); }
+  .media-art svg { width: 24px; height: 24px; }
+  .ctrl-btn { width: 26px; height: 26px; display:grid; place-items:center; border-radius:8px; border:1px solid var(--border); background:rgba(255,255,255,.04); color:var(--muted); cursor:pointer; }
+  .ctrl-btn svg { width: 13px; height: 13px; }
+  .ctrl-btn:hover { color:var(--text); background:rgba(255,255,255,.09); }
+  .pill { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:20px; background:rgba(255,255,255,.05); border:1px solid var(--border); font-size:9px; color:var(--muted); }
+  .pill.g { color:var(--green); }
+
+  /* ══ A · Centro de control ══════════════════════════════ */
+  .stage-a .dash {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -48%);
+    width: min(1020px, 94vw); height: min(650px, 86vh);
+    display: grid; grid-template-columns: 1.12fr .88fr; gap: 14px; padding: 20px;
+    background: rgba(14,14,17,.9); border: 1px solid var(--border); border-radius: 22px;
+    -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+    box-shadow: 0 36px 90px rgba(0,0,0,.6);
+  }
+  .stage-a .col { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .stage-a .greet { padding: 6px 4px 2px; }
+  .stage-a .greet h2 { margin: 0 0 4px; font-size: 23px; font-weight: 600; letter-spacing: -.5px; }
+  .stage-a .greet p { margin: 0; font-size: 11px; color: var(--muted); }
+  .stage-a .greet .clock-big { font-size: 34px; font-weight: 600; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .stage-a .greet-row { display: flex; align-items: flex-end; justify-content: space-between; }
+  .stage-a .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .stage-a .metric .top { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+  .stage-a .metric .top b { font-size: 15px; font-weight: 600; }
+  .stage-a .processes { flex: 1; }
+  .stage-a .right-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; min-height: 0; }
+  .stage-a .right-grid .span2 { grid-column: 1 / -1; }
+  .stage-a .ws-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .stage-a .quick { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .stage-a .media-row { display: flex; align-items: center; gap: 11px; }
+  .stage-a .media-row .grow { flex:1; min-width:0; }
+  .stage-a .media-row .name { font-size: 11.5px; font-weight: 600; }
+  .stage-a .media-row .sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .stage-a .media-controls { display:flex; gap:6px; margin-top:10px; }
+  .stage-a .media-controls .bar { flex:1; align-self:center; }
+
+  /* ══ B · Bento ══════════════════════════════════════════ */
+  .stage-b .bento {
+    position: absolute; inset: 7% 5% 6%;
+    display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr);
+    gap: 13px;
+  }
+  .stage-b .t-weather { grid-column: 1 / 3; grid-row: 1 / 3; }
+  .stage-b .t-system  { grid-column: 3 / 5; grid-row: 1; }
+  .stage-b .t-ws      { grid-column: 3 / 5; grid-row: 2; }
+  .stage-b .t-media   { grid-column: 1; grid-row: 3; }
+  .stage-b .t-cal     { grid-column: 2; grid-row: 3; }
+  .stage-b .t-net     { grid-column: 3; grid-row: 3; }
+  .stage-b .t-quick   { grid-column: 4; grid-row: 3; }
+  .stage-b .weather-main { display:flex; align-items:center; gap:18px; margin-top:14px; }
+  .stage-b .weather-main svg { width: 58px; height: 58px; color: var(--amber); }
+  .stage-b .weather-main .temp { font-size: 52px; font-weight: 600; letter-spacing: -2px; line-height: 1; }
+  .stage-b .forecast { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:auto; padding-top:16px; }
+  .stage-b .forecast div { text-align:center; font-size:10px; color:var(--muted); }
+  .stage-b .forecast b { display:block; color:var(--text); font-size:12px; margin-bottom:4px; }
+  .stage-b .rings { display:flex; align-items:center; justify-content:space-around; height:100%; padding-top:4px; }
+  .stage-b .ring-wrap { text-align:center; font-size:9px; color:var(--muted); }
+  .stage-b .ring-wrap .ring { margin: 0 auto 6px; }
+  .stage-b .t-ws .ws-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .stage-b .t-media .media-art { width:46px; height:46px; }
+  .stage-b .t-quick .quick { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+  .stage-b .t-quick .rail { margin-top:8px; }
+
+  /* ══ C · Widgets flotantes ══════════════════════════════ */
+  .stage-c .widget { position: absolute; }
+  .stage-c .w-clock { left: 5%; top: 9%; width: 270px; padding: 20px; }
+  .stage-c .w-clock .big { font-size: 46px; font-weight: 600; letter-spacing:-2px; line-height:1; font-variant-numeric:tabular-nums; }
+  .stage-c .w-clock .temp { display:flex; align-items:center; gap:10px; margin-top:12px; font-size:13px; color:var(--muted); }
+  .stage-c .w-clock .temp svg { width:22px; height:22px; color:var(--amber); }
+  .stage-c .w-sys { right: 5%; top: 9%; width: 230px; }
+  .stage-c .w-sys .line { display:flex; align-items:center; gap:10px; padding:7px 0; }
+  .stage-c .w-sys .line .grow { flex:1; }
+  .stage-c .w-sys .line b { font-size:11px; font-weight:600; }
+  .stage-c .w-media { left: 5%; bottom: 8%; width: 290px; }
+  .stage-c .w-ws { left: 50%; bottom: 8%; transform:translateX(-50%); width: 360px; }
+  .stage-c .w-ws .ws-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+  .stage-c .w-ws .ws-chip { justify-content:center; padding:9px 4px; font-size:12px; font-weight:600; }
+  .stage-c .w-ws .ws-chip b { display:none; }
+  .stage-c .w-cal { right: 5%; bottom: 8%; width: 270px; }
+  .stage-c .widget { background: rgba(20,20,24,.72); border:1px solid rgba(255,255,255,.12); border-radius:18px; padding:15px; -webkit-backdrop-filter:blur(26px); backdrop-filter:blur(26px); box-shadow:0 20px 50px rgba(0,0,0,.4); }
+
+  /* ══ D · Sidebar ════════════════════════════════════════ */
+  .stage-d .sidebar {
+    position: absolute; top: 0; bottom: 0; width: 348px; padding: 18px 16px;
+    background: rgba(15,15,18,.92); border-left: 1px solid var(--border);
+    -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+    display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+  }
+  .stage-d[data-side="right"] .sidebar { right: 0; }
+  .stage-d[data-side="left"] .sidebar { left: 0; border-left: 0; border-right: 1px solid var(--border); }
+  .stage-d .side-head { display:flex; align-items:center; justify-content:space-between; padding:4px 2px; }
+  .stage-d .side-head .who { font-size:15px; font-weight:600; }
+  .stage-d .side-head .when { font-size:10px; color:var(--muted); }
+  .stage-d .side-card { background:rgba(255,255,255,.035); border:1px solid var(--border); border-radius:13px; padding:13px; }
+  .stage-d .rings { display:flex; justify-content:space-around; }
+  .stage-d .ring-wrap { text-align:center; font-size:9px; color:var(--muted); }
+  .stage-d .ring-wrap .ring { width:54px; height:54px; margin:0 auto 6px; }
+  .stage-d .ws-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .stage-d .quick { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+  .stage-d .side-toggle {
+    position:absolute; top:14px; z-index:5; font:inherit; font-size:10px; cursor:pointer;
+    color:var(--muted); background:rgba(16,16,19,.9); border:1px solid var(--border);
+    border-radius:8px; padding:8px 11px;
+  }
+  .stage-d[data-side="right"] .side-toggle { right: 364px; }
+  .stage-d[data-side="left"] .side-toggle { left: 364px; }
+  .stage-d .footnote { margin-top:auto; font-size:9px; color:var(--faint); text-align:center; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M2.5 8.5a15 15 0 0 1 19 0M5.6 12a10 10 0 0 1 12.8 0M8.8 15.4a5 5 0 0 1 6.4 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 9h3l4-3.5v13L7 15H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/></symbol>
+  <symbol id="i-bat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="7" width="17" height="10" rx="2"/><rect x="4.5" y="9" width="11" height="6" rx="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.3M12 18.9v2.3M4.6 7.5l2 1.1M17.4 15.4l2 1.1M4.6 16.5l2-1.1M17.4 8.6l2-1.1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 19a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14h2V5zm12 0v14L10 12z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24" fill="currentColor"><path d="M17 5v14h-2V5zM5 5v14l9-7z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M14 4l-4 16"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-firefox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12.5" r="8"/><path d="M4.5 9.5c4-3.2 10.5-2.2 13.4 2"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="10" y="3" width="4" height="4" rx="1"/><rect x="17" y="3" width="4" height="4" rx="1"/><rect x="3" y="10" width="4" height="4" rx="1"/><rect x="10" y="10" width="4" height="4" rx="1"/><rect x="17" y="10" width="4" height="4" rx="1"/><rect x="3" y="17" width="4" height="4" rx="1"/><rect x="10" y="17" width="4" height="4" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1"/></symbol>
+</svg>
+
+<div class="switcher">
+  <button data-proposal="a" class="on">A · Centro</button>
+  <button data-proposal="b">B · Bento</button>
+  <button data-proposal="c">C · Widgets</button>
+  <button data-proposal="d">D · Sidebar</button>
+  <span class="sep"></span>
+  <span class="extra">1920 × 1080</span>
+</div>
+
+<!-- ══ A ══════════════════════════════════════════════════ -->
+<section class="stage stage-a on" data-stage="a">
+  <div class="ghost-win" style="left:8%;top:14%;width:84%;height:74%"><div class="gt"><i></i><i></i><i></i></div></div>
+  <div class="dash">
+    <div class="col">
+      <div class="greet">
+        <div class="greet-row">
+          <div><h2>Buenos días, Luis</h2><p>miércoles, 20 de noviembre de 2026 · Bogotá</p></div>
+          <div class="clock-big">10:42</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sec"><span class="k">Sistema</span><span class="pill g">● Todo normal</span></div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="top"><b>38%</b><span class="unit">CPU</span></div>
+            <div class="bar"><i style="width:38%"></i></div>
+            <div class="spark"><i style="height:30%"></i><i style="height:52%"></i><i style="height:38%"></i><i style="height:70%"></i><i style="height:44%"></i><i style="height:60%"></i><i style="height:38%"></i><i style="height:48%"></i><i style="height:62%"></i><i style="height:35%"></i><i style="height:55%"></i><i style="height:42%"></i></div>
+          </div>
+          <div class="metric">
+            <div class="top"><b>6,2 GB</b><span class="unit">/ 16 GB</span></div>
+            <div class="bar b"><i style="width:39%"></i></div>
+            <div class="spark b"><i style="height:38%"></i><i style="height:40%"></i><i style="height:44%"></i><i style="height:42%"></i><i style="height:48%"></i><i style="height:50%"></i><i style="height:46%"></i><i style="height:52%"></i><i style="height:49%"></i><i style="height:55%"></i><i style="height:52%"></i><i style="height:56%"></i></div>
+          </div>
+          <div class="metric">
+            <div class="top"><b>214 GB</b><span class="unit">/ 512 GB</span></div>
+            <div class="bar a"><i style="width:42%"></i></div>
+            <div class="spark"><i style="height:42%"></i><i style="height:42%"></i><i style="height:43%"></i><i style="height:44%"></i><i style="height:44%"></i><i style="height:45%"></i><i style="height:45%"></i><i style="height:46%"></i><i style="height:46%"></i><i style="height:47%"></i><i style="height:47%"></i><i style="height:48%"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card processes">
+        <div class="sec"><span class="k">Procesos activos</span><span class="muted" style="font-size:10px">86 procesos</span></div>
+        <div class="rowline"><span class="ico ff"><svg><use href="#i-firefox"/></svg></span><span class="grow">firefox</span><span class="muted">1,8 GB</span><span class="muted" style="width:42px;text-align:right">31%</span></div>
+        <div class="rowline"><span class="ico cd"><svg><use href="#i-code"/></svg></span><span class="grow">code</span><span class="muted">920 MB</span><span class="muted" style="width:42px;text-align:right">16%</span></div>
+        <div class="rowline"><span class="ico tm"><svg><use href="#i-term"/></svg></span><span class="grow">kitty</span><span class="muted">180 MB</span><span class="muted" style="width:42px;text-align:right">4%</span></div>
+        <div class="rowline"><span class="ico ac"><svg><use href="#i-music"/></svg></span><span class="grow">spotify</span><span class="muted">412 MB</span><span class="muted" style="width:42px;text-align:right">8%</span></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="right-grid">
+        <div class="card span2">
+          <div class="sec"><span class="k">Workspaces</span><span class="muted" style="font-size:10px">10 configurados</span></div>
+          <div class="ws-grid">
+            <div class="ws-chip on"><b>1</b> Principal</div><div class="ws-chip"><b>2</b> Desarrollo</div><div class="ws-chip"><b>3</b> Navegación</div>
+            <div class="ws-chip"><b>4</b> Música</div><div class="ws-chip"><b>5</b> —</div><div class="ws-chip"><b>6</b> Lectura</div>
+          </div>
+        </div>
+
+        <div class="card span2">
+          <div class="sec"><span class="k">Reproduciendo</span><span class="pill">Spotify</span></div>
+          <div class="media-row">
+            <div class="media-art"><svg><use href="#i-music"/></svg></div>
+            <div class="grow"><div class="name">Weightless</div><div class="sub">Marconi Union · Ambient</div>
+              <div class="media-controls"><span class="ctrl-btn"><svg><use href="#i-prev"/></svg></span><span class="ctrl-btn"><svg><use href="#i-play"/></svg></span><span class="ctrl-btn"><svg><use href="#i-next"/></svg></span><div class="bar"><i style="width:37%"></i></div><span class="unit">1:48</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec"><span class="k">Red</span><svg style="width:14px;height:14px;color:var(--green)"><use href="#i-wifi"/></svg></div>
+          <div class="value sm">Casa_5G</div>
+          <div class="muted" style="font-size:10px;margin-top:5px">↓ 12,4 MB/s &nbsp; ↑ 1,2 MB/s</div>
+        </div>
+
+        <div class="card">
+          <div class="sec"><span class="k">Acciones rápidas</span></div>
+          <div class="quick"><button class="toggle on">Wi-Fi</button><button class="toggle on">Bluetooth</button><button class="toggle">Avión</button><button class="toggle on">Nocturno</button></div>
+          <div style="margin-top:10px"><div class="muted" style="font-size:9px;margin-bottom:5px">Volumen · 64%</div><div class="rail ac"><i style="width:64%"></i></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ B ══════════════════════════════════════════════════ -->
+<section class="stage stage-b" data-stage="b">
+  <div class="bento">
+    <div class="card t-weather">
+      <div class="sec"><span class="k">Clima · Bogotá</span><span class="pill g">Despejado</span></div>
+      <div class="weather-main">
+        <svg><use href="#i-sun"/></svg>
+        <div><div class="temp">21°</div><div class="muted" style="font-size:11px">Sensación 20° · H 58%</div></div>
+      </div>
+      <div class="forecast">
+        <div><b>Jue</b>22° ☀</div><div><b>Vie</b>20° ☁</div><div><b>Sáb</b>19° ☂</div><div><b>Dom</b>21° ☀</div>
+      </div>
+    </div>
+
+    <div class="card t-system">
+      <div class="sec"><span class="k">Sistema</span><span class="muted" style="font-size:10px">uptime 4d 12h</span></div>
+      <div class="rings">
+        <div class="ring-wrap"><div class="ring"><span>38%</span></div>CPU</div>
+        <div class="ring-wrap"><div class="ring b"><span>39%</span></div>RAM</div>
+        <div class="ring-wrap"><div class="ring g"><span>42%</span></div>Disco</div>
+      </div>
+    </div>
+
+    <div class="card t-ws">
+      <div class="sec"><span class="k">Workspaces</span><span class="muted" style="font-size:10px">6 activos</span></div>
+      <div class="ws-grid">
+        <div class="ws-chip on"><b>1</b> Principal</div><div class="ws-chip"><b>2</b> Desarrollo</div><div class="ws-chip"><b>3</b> Navegación</div>
+        <div class="ws-chip"><b>4</b> Música</div><div class="ws-chip"><b>6</b> Lectura</div><div class="ws-chip"><b>7</b> —</div>
+      </div>
+    </div>
+
+    <div class="card t-media">
+      <div class="sec"><span class="k">Música</span></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <div class="media-art"><svg><use href="#i-music"/></svg></div>
+        <div style="min-width:0"><div class="title">Weightless</div><div class="muted" style="font-size:10px">Marconi Union</div></div>
+      </div>
+      <div class="bar" style="margin-top:12px"><i style="width:37%"></i></div>
+      <div style="display:flex;gap:6px;margin-top:10px"><span class="ctrl-btn"><svg><use href="#i-prev"/></svg></span><span class="ctrl-btn"><svg><use href="#i-play"/></svg></span><span class="ctrl-btn"><svg><use href="#i-next"/></svg></span></div>
+    </div>
+
+    <div class="card t-cal">
+      <div class="sec"><span class="k">Noviembre</span><span class="muted" style="font-size:10px">hoy 20</span></div>
+      <div class="cal" id="cal-b">
+        <div class="wd">L</div><div class="wd">M</div><div class="wd">X</div><div class="wd">J</div><div class="wd">V</div><div class="wd">S</div><div class="wd">D</div>
+        <div class="d out">26</div><div class="d out">27</div><div class="d out">28</div><div class="d out">29</div><div class="d out">30</div><div class="d out">31</div><div class="d">1</div>
+        <div class="d">2</div><div class="d">3</div><div class="d">4</div><div class="d">5</div><div class="d">6</div><div class="d">7</div><div class="d">8</div>
+        <div class="d">9</div><div class="d">10</div><div class="d">11</div><div class="d">12</div><div class="d">13</div><div class="d">14</div><div class="d">15</div>
+        <div class="d">16</div><div class="d">17</div><div class="d">18</div><div class="d">19</div><div class="d today">20</div><div class="d">21</div><div class="d">22</div>
+        <div class="d">23</div><div class="d">24</div><div class="d">25</div><div class="d">26</div><div class="d">27</div><div class="d">28</div><div class="d">29</div>
+      </div>
+    </div>
+
+    <div class="card t-net">
+      <div class="sec"><span class="k">Red</span><svg style="width:14px;height:14px;color:var(--green)"><use href="#i-wifi"/></svg></div>
+      <div class="value sm">Casa_5G</div>
+      <div class="muted" style="font-size:10px;margin:5px 0 9px">↓ 12,4 &nbsp; ↑ 1,2 MB/s</div>
+      <div class="bar b"><i style="width:68%"></i></div>
+    </div>
+
+    <div class="card t-quick">
+      <div class="sec"><span class="k">Rápido</span></div>
+      <div class="quick"><button class="toggle on">Wi-Fi</button><button class="toggle on">BT</button><button class="toggle">Avión</button><button class="toggle on">🌙</button></div>
+      <div class="rail ac" style="margin-top:10px"><i style="width:64%"></i></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ C ══════════════════════════════════════════════════ -->
+<section class="stage stage-c" data-stage="c">
+  <div class="ghost-win" style="left:32%;top:22%;width:44%;height:50%"><div class="gt"><i></i><i></i><i></i></div></div>
+
+  <div class="widget w-clock">
+    <div class="k">Bogotá · mié 20 nov</div>
+    <div class="big">10:42</div>
+    <div class="temp"><svg><use href="#i-sun"/></svg><span>21° despejado</span></div>
+  </div>
+
+  <div class="widget w-sys">
+    <div class="sec"><span class="k">Sistema</span><span class="pill g">OK</span></div>
+    <div class="line"><span class="ico"><svg><use href="#i-gear"/></svg></span><span class="grow"><b>CPU</b><div class="bar" style="margin-top:5px"><i style="width:38%"></i></div></span><span class="muted" style="font-size:10px">38%</span></div>
+    <div class="line"><span class="ico"><svg><use href="#i-grid"/></svg></span><span class="grow"><b>RAM</b><div class="bar b" style="margin-top:5px"><i style="width:39%"></i></div></span><span class="muted" style="font-size:10px">6,2 G</span></div>
+    <div class="line"><span class="ico"><svg><use href="#i-wifi"/></svg></span><span class="grow"><b>Red</b><div class="bar g" style="margin-top:5px"><i style="width:68%"></i></div></span><span class="muted" style="font-size:10px">12 MB/s</span></div>
+  </div>
+
+  <div class="widget w-media">
+    <div class="sec"><span class="k">Spotify</span><span class="pill">Reproduciendo</span></div>
+    <div style="display:flex;gap:10px;align-items:center"><div class="media-art"><svg><use href="#i-music"/></svg></div><div><div class="title">Weightless</div><div class="muted" style="font-size:10px">Marconi Union</div></div></div>
+    <div class="bar" style="margin-top:10px"><i style="width:37%"></i></div>
+  </div>
+
+  <div class="widget w-ws">
+    <div class="sec"><span class="k">Workspaces</span><span class="muted" style="font-size:10px">Super + 1…10</span></div>
+    <div class="ws-grid">
+      <div class="ws-chip on"><b>1</b>1</div><div class="ws-chip"><b>2</b>2</div><div class="ws-chip"><b>3</b>3</div>
+      <div class="ws-chip"><b>4</b>4</div><div class="ws-chip"><b>5</b>5</div><div class="ws-chip"><b>6</b>6</div>
+    </div>
+  </div>
+
+  <div class="widget w-cal">
+    <div class="sec"><span class="k">Noviembre</span><span class="muted" style="font-size:10px">hoy 20</span></div>
+    <div class="cal" id="cal-c">
+      <div class="wd">L</div><div class="wd">M</div><div class="wd">X</div><div class="wd">J</div><div class="wd">V</div><div class="wd">S</div><div class="wd">D</div>
+      <div class="d out">26</div><div class="d out">27</div><div class="d out">28</div><div class="d out">29</div><div class="d out">30</div><div class="d out">31</div><div class="d">1</div>
+      <div class="d">2</div><div class="d">3</div><div class="d">4</div><div class="d">5</div><div class="d">6</div><div class="d">7</div><div class="d">8</div>
+      <div class="d">9</div><div class="d">10</div><div class="d">11</div><div class="d">12</div><div class="d">13</div><div class="d">14</div><div class="d">15</div>
+      <div class="d">16</div><div class="d">17</div><div class="d">18</div><div class="d">19</div><div class="d today">20</div><div class="d">21</div><div class="d">22</div>
+      <div class="d">23</div><div class="d">24</div><div class="d">25</div><div class="d">26</div><div class="d">27</div><div class="d">28</div><div class="d">29</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ D ══════════════════════════════════════════════════ -->
+<section class="stage stage-d" data-stage="d" data-side="right">
+  <div class="ghost-win" style="left:12%;top:22%;width:52%;height:54%"><div class="gt"><i></i><i></i><i></i></div></div>
+  <button class="side-toggle" id="side-toggle">Mover a la izquierda</button>
+  <aside class="sidebar">
+    <div class="side-head"><div><div class="who">Buenos días, Luis</div><div class="when">mié 20 nov · 10:42</div></div><span class="pill g">OK</span></div>
+
+    <div class="side-card">
+      <div class="sec"><span class="k">Sistema</span><span class="muted" style="font-size:10px">4d 12h</span></div>
+      <div class="rings">
+        <div class="ring-wrap"><div class="ring"><span>38%</span></div>CPU</div>
+        <div class="ring-wrap"><div class="ring b"><span>39%</span></div>RAM</div>
+        <div class="ring-wrap"><div class="ring g"><span>42%</span></div>Disco</div>
+      </div>
+    </div>
+
+    <div class="side-card">
+      <div class="sec"><span class="k">Workspaces</span></div>
+      <div class="ws-grid">
+        <div class="ws-chip on"><b>1</b>1</div><div class="ws-chip"><b>2</b>2</div><div class="ws-chip"><b>3</b>3</div>
+        <div class="ws-chip"><b>4</b>4</div><div class="ws-chip"><b>5</b>5</div><div class="ws-chip"><b>6</b>6</div>
+      </div>
+    </div>
+
+    <div class="side-card">
+      <div class="sec"><span class="k">Red</span><svg style="width:14px;height:14px;color:var(--green)"><use href="#i-wifi"/></svg></div>
+      <div class="value sm">Casa_5G</div>
+      <div class="muted" style="font-size:10px;margin:5px 0 8px">↓ 12,4 MB/s &nbsp; ↑ 1,2 MB/s</div>
+      <div class="bar b"><i style="width:68%"></i></div>
+    </div>
+
+    <div class="side-card">
+      <div class="sec"><span class="k">Reproduciendo</span></div>
+      <div style="display:flex;gap:10px;align-items:center"><div class="media-art" style="width:44px;height:44px"><svg><use href="#i-music"/></svg></div><div><div class="title" style="font-size:11px">Weightless</div><div class="muted" style="font-size:10px">Marconi Union</div></div></div>
+      <div class="bar" style="margin-top:10px"><i style="width:37%"></i></div>
+    </div>
+
+    <div class="side-card">
+      <div class="sec"><span class="k">Acciones rápidas</span></div>
+      <div class="quick"><button class="toggle on">Wi-Fi</button><button class="toggle on">BT</button><button class="toggle">Avión</button><button class="toggle on">🌙</button></div>
+    </div>
+
+    <div class="footnote">Dashboard acoplable · mismo surface, input region dinámico</div>
+  </aside>
+</section>
+
+<script>
+  // ── Conmutar propuestas ─────────────────────────────────
+  document.querySelectorAll('[data-proposal]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('[data-proposal]').forEach(function (b) { b.classList.toggle('on', b === btn); });
+      document.querySelectorAll('[data-stage]').forEach(function (s) { s.classList.toggle('on', s.dataset.stage === btn.dataset.proposal); });
+    });
+  });
+
+  // ── Interacciones genéricas ─────────────────────────────
+  document.querySelectorAll('.toggle').forEach(function (b) {
+    b.addEventListener('click', function () { b.classList.toggle('on'); });
+  });
+  document.querySelectorAll('.ws-chip').forEach(function (b) {
+    b.addEventListener('click', function () {
+      b.closest('.ws-grid').querySelectorAll('.ws-chip').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+    });
+  });
+  ['cal-b', 'cal-c'].forEach(function (id) {
+    document.querySelectorAll('#' + id + ' .d:not(.out)').forEach(function (d) {
+      d.addEventListener('click', function () {
+        d.parentElement.querySelectorAll('.d').forEach(function (x) { x.classList.remove('today'); });
+        d.classList.add('today');
+      });
+    });
+  });
+
+  // ── Sidebar acoplable ───────────────────────────────────
+  document.getElementById('side-toggle').addEventListener('click', function () {
+    const stage = document.querySelector('.stage-d');
+    const left = stage.dataset.side === 'left';
+    stage.dataset.side = left ? 'right' : 'left';
+    this.textContent = left ? 'Mover a la izquierda' : 'Mover a la derecha';
+  });
+</script>
+</body>
+</html>

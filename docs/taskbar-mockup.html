@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dinamic UI — Taskbar Windows-like (pantalla completa)</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0b;
+    --panel: rgba(20, 20, 23, .86);
+    --border: rgba(255,255,255,.09);
+    --text: #e6e6e8;
+    --muted: #8b8b93;
+    --faint: #5c5c63;
+    --accent: #dd9999;
+    --accent-soft: rgba(221,153,153,.16);
+    --blue: #7fc8ff;
+    --green: #8be09b;
+    --amber: #f5c26b;
+  }
+
+  html, body { height: 100%; margin: 0; }
+  body {
+    overflow: hidden;
+    color: var(--text);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(ellipse 60% 55% at 22% 8%, rgba(221,153,153,.18), transparent 62%),
+      radial-gradient(ellipse 55% 50% at 88% 90%, rgba(127,200,255,.14), transparent 62%),
+      linear-gradient(160deg, #1a1d26 0%, #111319 55%, #0b0c0f 100%);
+  }
+  .desktop { position: fixed; inset: 0; }
+  .desktop::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size: 26px 26px; opacity: .38;
+  }
+
+  /* ── Ventanas de contexto ─────────────────────────────── */
+  .windows { position: absolute; inset: 0; transition: transform .3s; }
+  body[data-side="left"] .windows { transform: translateX(42px); }
+  body[data-side="right"] .windows { transform: translateX(-42px); }
+
+  .win {
+    position: absolute; border-radius: 10px; overflow: hidden;
+    background: rgba(28,29,34,.92); border: 1px solid var(--border);
+    box-shadow: 0 30px 70px rgba(0,0,0,.5);
+  }
+  .win .titlebar {
+    height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 13px;
+    background: rgba(255,255,255,.035); border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--muted);
+  }
+  .win .titlebar .dots { display: flex; gap: 6px; }
+  .win .titlebar .dots i { width: 7px; height: 7px; border-radius: 50%; background: #4b4b51; }
+  .win .titlebar .dots i:first-child { background: var(--accent); }
+  .win .body { padding: 20px; display: grid; gap: 10px; }
+  .win .body .l { height: 8px; border-radius: 4px; background: rgba(255,255,255,.07); }
+  .win .body .l.s { width: 62%; } .win .body .l.m { width: 83%; }
+  .win.ff { left: 12%; top: 14%; width: 46%; height: 56%; }
+  .win.term { left: 51%; top: 30%; width: 38%; height: 50%; opacity: .93; }
+
+  /* ── Taskbar ──────────────────────────────────────────── */
+  .taskbar {
+    position: fixed; z-index: 20;
+    background: var(--panel);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    backdrop-filter: blur(24px) saturate(150%);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s;
+  }
+  body[data-side="bottom"] .taskbar { left:0; right:0; bottom:0; height:48px; border-top:1px solid var(--border); }
+  body[data-side="top"]    .taskbar { left:0; right:0; top:0; height:48px; border-bottom:1px solid var(--border); }
+  body[data-side="left"]   .taskbar { top:0; bottom:0; left:0; width:56px; flex-direction:column; border-right:1px solid var(--border); }
+  body[data-side="right"]  .taskbar { top:0; bottom:0; right:0; width:56px; flex-direction:column; border-left:1px solid var(--border); }
+
+  body.autohide:not(.peek)[data-side="bottom"] .taskbar { transform: translateY(110%); opacity: 0; }
+  body.autohide:not(.peek)[data-side="top"]    .taskbar { transform: translateY(-110%); opacity: 0; }
+  body.autohide:not(.peek)[data-side="left"]   .taskbar { transform: translateX(-110%); opacity: 0; }
+  body.autohide:not(.peek)[data-side="right"]  .taskbar { transform: translateX(110%); opacity: 0; }
+
+  .center { display: flex; align-items: center; gap: 3px; }
+  body[data-side="left"] .center, body[data-side="right"] .center { flex-direction: column; }
+
+  .ico {
+    position: relative; width: 40px; height: 40px; flex: none;
+    display: grid; place-items: center; border: 0; border-radius: 8px;
+    background: transparent; color: var(--text); cursor: pointer;
+    transition: background .15s, transform .15s;
+  }
+  .ico svg { width: 22px; height: 22px; }
+  .ico:hover { background: rgba(255,255,255,.08); transform: translateY(-2px); }
+  body[data-side="left"] .ico:hover, body[data-side="right"] .ico:hover { transform: scale(1.07); }
+  .ico.active { background: var(--accent-soft); color: var(--accent); }
+  .ico.active::after {
+    content: ""; position: absolute; width: 16px; height: 3px; border-radius: 2px;
+    background: var(--accent); bottom: -3px; left: 50%; transform: translateX(-50%);
+  }
+  body[data-side="top"] .ico.active::after { bottom: auto; top: -3px; }
+  body[data-side="left"] .ico.active::after, body[data-side="right"] .ico.active::after {
+    width: 3px; height: 16px; top: 50%; bottom: 50%; left: -4px; transform: translateY(50%);
+  }
+  body[data-side="right"] .ico.active::after { left: auto; right: -4px; }
+  .ico .running { position: absolute; bottom: -3px; width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
+  body[data-side="left"] .ico .running, body[data-side="right"] .ico .running { bottom: 50%; left: -3px; transform: translateY(50%); }
+  body[data-side="right"] .ico .running { left: auto; right: -3px; }
+  .ico.active .running { display: none; }
+  .sep { width: 1px; height: 24px; background: var(--border); margin: 0 7px; }
+  body[data-side="left"] .sep, body[data-side="right"] .sep { width: 24px; height: 1px; margin: 7px 0; }
+  .start svg { color: var(--blue); }
+
+  /* Bandeja */
+  .tray { position: fixed; z-index: 21; display: flex; align-items: center; gap: 2px; transition: transform .28s; }
+  body[data-side="bottom"] .tray { right: 14px; bottom: 0; height: 48px; }
+  body[data-side="top"]    .tray { right: 14px; top: 0; height: 48px; }
+  body[data-side="left"]   .tray { left: 0; bottom: 6px; width: 56px; flex-direction: column; }
+  body[data-side="right"]  .tray { right: 0; bottom: 6px; width: 56px; flex-direction: column; }
+  body.autohide:not(.peek)[data-side="bottom"] .tray { transform: translateY(110%); }
+  body.autohide:not(.peek)[data-side="top"]    .tray { transform: translateY(-110%); }
+  body.autohide:not(.peek)[data-side="left"]   .tray { transform: translateX(-110%); }
+  body.autohide:not(.peek)[data-side="right"]  .tray { transform: translateX(110%); }
+  .tray .ico { width: 32px; height: 38px; }
+  .tray .ico svg { width: 17px; height: 17px; }
+  .tray .clock { padding: 0 9px; font-size: 12px; line-height: 1.3; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tray .clock small { display: block; color: var(--muted); font-size: 10px; }
+  body[data-side="left"] .tray .clock, body[data-side="right"] .tray .clock { padding: 6px 0; }
+  body[data-side="left"] .tray .clock small, body[data-side="right"] .tray .clock small { display: none; }
+  .charge { color: var(--green); }
+  .notif-dot { position: absolute; top: 6px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  body.hide-notif .notif-dot { display: none; }
+
+  /* ── Controles de iteración ───────────────────────────── */
+  .controls {
+    position: fixed; z-index: 60; left: 16px; top: 16px; width: 252px;
+    background: rgba(16,16,19,.92); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.5);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    transition: top .3s, left .3s, opacity .2s;
+  }
+  body[data-side="top"] .controls { top: 64px; }
+  body[data-side="left"] .controls { left: 72px; }
+  .controls.hidden { opacity: 0; pointer-events: none; transform: scale(.96); }
+  .controls h1 { margin: 0 0 3px; font-size: 13px; font-weight: 600; }
+  .controls .sub { margin: 0 0 13px; font-size: 10px; color: var(--faint); line-height: 1.5; }
+  .controls .group { margin-bottom: 12px; }
+  .controls .gt { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); margin-bottom: 7px; }
+  .sides { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .sides button, .toggle, .mini-btn {
+    font: inherit; font-size: 10px; color: var(--muted); cursor: pointer;
+    background: rgba(255,255,255,.045); border: 1px solid var(--border);
+    border-radius: 7px; padding: 7px 5px; transition: background .15s, color .15s, border-color .15s;
+  }
+  .sides button:hover, .toggle:hover, .mini-btn:hover { background: rgba(255,255,255,.09); color: var(--text); }
+  .sides button.on, .toggle.on { background: var(--accent-soft); color: var(--accent); border-color: rgba(221,153,153,.35); }
+  .row { display: flex; gap: 5px; }
+  .row .toggle, .row .mini-btn { flex: 1; }
+  .controls .foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 9px; color: var(--faint); line-height: 1.5; }
+  .show-controls {
+    position: fixed; z-index: 60; left: 16px; top: 16px; opacity: 0; pointer-events: none;
+    font: inherit; font-size: 10px; color: var(--muted); cursor: pointer;
+    background: rgba(16,16,19,.9); border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px;
+    transition: opacity .2s;
+  }
+  body.controls-off .show-controls { opacity: 1; pointer-events: auto; }
+  .corner-hint { position: fixed; right: 18px; bottom: 14px; z-index: 5; font-size: 9.5px; color: rgba(255,255,255,.22); }
+</style>
+</head>
+<body data-side="bottom">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-win" viewBox="0 0 24 24"><path fill="currentColor" d="M3 4.6 10.6 3.5v7.8H3zm8.6-1.2L21 2v9.3h-9.4zM3 12.7h7.6v7.8L3 19.4zm8.6 0H21V22l-9.4-1.3z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.4 4.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-task" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="12" height="12" rx="1.5"/><rect x="9" y="9" width="12" height="12" rx="1.5"/></symbol>
+  <symbol id="i-firefox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12.5" r="8"/><path d="M4.5 9.5c4-3.2 10.5-2.2 13.4 2M3.8 15c3.4 5.4 11.8 6.2 15.5.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-chrome" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.6"/><path d="M12 3.5h8.4M5 16.2 9.4 9"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M14 4l-4 16"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-spotify" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M7.5 9.5c3-.6 6.4-.2 9 1.4M8 12.8c2.5-.4 5.2 0 7.3 1.2"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.3M12 18.9v2.3M4.6 7.5l2 1.1M17.4 15.4l2 1.1M4.6 16.5l2-1.1M17.4 8.6l2-1.1"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M2.5 8.5a15 15 0 0 1 19 0M5.6 12a10 10 0 0 1 12.8 0M8.8 15.4a5 5 0 0 1 6.4 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h3l4-3.5v13L7 15H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-bat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="7" width="17" height="10" rx="2"/><path d="M21.5 10.5v3"/><rect x="4.5" y="9" width="11" height="6" rx="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 19a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 15 6-6 6 6"/></symbol>
+</svg>
+
+<div class="desktop">
+  <div class="windows">
+    <div class="win ff">
+      <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div> Firefox — Dinamic UI</div>
+      <div class="body"><div class="l m"></div><div class="l"></div><div class="l s"></div><div class="l"></div></div>
+    </div>
+    <div class="win term">
+      <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div> kitty — ~/Projects/Dinamic-Ui</div>
+      <div class="body"><div class="l s"></div><div class="l m"></div><div class="l"></div><div class="l s"></div></div>
+    </div>
+  </div>
+
+  <div class="taskbar">
+    <div class="center">
+      <button class="ico start" title="Inicio"><svg><use href="#i-win"/></svg></button>
+      <button class="ico" title="Buscar"><svg><use href="#i-search"/></svg></button>
+      <button class="ico" title="Ver tareas"><svg><use href="#i-task"/></svg></button>
+      <span class="sep"></span>
+      <button class="ico active" data-app title="Firefox"><svg><use href="#i-firefox"/></svg></button>
+      <button class="ico" data-app title="Chrome"><svg><use href="#i-chrome"/></svg><i class="running"></i></button>
+      <button class="ico" data-app title="VS Code"><svg><use href="#i-code"/></svg><i class="running"></i></button>
+      <button class="ico" data-app title="Kitty"><svg><use href="#i-term"/></svg><i class="running"></i></button>
+      <button class="ico" data-app title="Archivos"><svg><use href="#i-folder"/></svg></button>
+      <button class="ico" data-app title="Spotify"><svg><use href="#i-spotify"/></svg><i class="running"></i></button>
+      <button class="ico" data-app title="Ajustes"><svg><use href="#i-gear"/></svg></button>
+    </div>
+  </div>
+
+  <div class="tray">
+    <div class="clock">10:42<small>20 nov 2026</small></div>
+    <button class="ico" title="Red"><svg><use href="#i-wifi"/></svg></button>
+    <button class="ico" title="Volumen"><svg><use href="#i-vol"/></svg></button>
+    <button class="ico charge" title="Batería 87%"><svg><use href="#i-bat"/></svg></button>
+    <button class="ico" title="Notificaciones"><svg><use href="#i-bell"/></svg><i class="notif-dot"></i></button>
+    <button class="ico" id="show-desktop" title="Mostrar escritorio"><svg><use href="#i-up"/></svg></button>
+  </div>
+
+  <div class="controls">
+    <h1>Taskbar · Windows-like</h1>
+    <p class="sub">Maqueta a pantalla completa. Cambia el lado y prueba el autohide acercando el cursor al borde.</p>
+
+    <div class="group">
+      <div class="gt">Acoplar a</div>
+      <div class="sides">
+        <button data-side-btn="bottom" class="on">Abajo</button>
+        <button data-side-btn="top">Arriba</button>
+        <button data-side-btn="left">Izq.</button>
+        <button data-side-btn="right">Der.</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gt">Estados</div>
+      <div class="row">
+        <button class="toggle" id="autohide">Autohide</button>
+        <button class="toggle on" id="notif">Notificación</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gt">App activa</div>
+      <div class="sides">
+        <button class="mini-btn" data-focus="Firefox">FF</button>
+        <button class="mini-btn" data-focus="Chrome">CH</button>
+        <button class="mini-btn" data-focus="VS Code">CD</button>
+        <button class="mini-btn" data-focus="Kitty">KT</button>
+      </div>
+    </div>
+
+    <div class="group" style="margin-bottom:0">
+      <div class="row">
+        <button class="mini-btn" id="hide-controls">Ocultar controles</button>
+      </div>
+    </div>
+    <div class="foot">Clic en un icono cambia el foco. Los puntos indican ventanas abiertas de la misma app.</div>
+  </div>
+
+  <button class="show-controls" id="show-controls">Mostrar controles</button>
+  <div class="corner-hint">1920 × 1080 · Dinamic UI</div>
+</div>
+
+<script>
+  const body = document.body;
+
+  // ── Lado ────────────────────────────────────────────────
+  document.querySelectorAll('[data-side-btn]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      body.dataset.side = btn.dataset.sideBtn;
+      document.querySelectorAll('[data-side-btn]').forEach(function (b) {
+        b.classList.toggle('on', b === btn);
+      });
+      body.classList.remove('peek');
+      document.getElementById('show-desktop').style.transform =
+        body.dataset.side === 'left' ? 'rotate(90deg)' :
+        body.dataset.side === 'right' ? 'rotate(-90deg)' : '';
+    });
+  });
+
+  // ── Autohide: aparece al acercarse al borde activo ──────
+  document.getElementById('autohide').addEventListener('click', function () {
+    const on = body.classList.toggle('autohide');
+    this.classList.toggle('on', on);
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!body.classList.contains('autohide')) return;
+    const side = body.dataset.side;
+    const near =
+      (side === 'bottom' && innerHeight - e.clientY < 28) ||
+      (side === 'top' && e.clientY < 28) ||
+      (side === 'left' && e.clientX < 28) ||
+      (side === 'right' && innerWidth - e.clientX < 28);
+    body.classList.toggle('peek', near);
+  });
+
+  // ── Notificación ────────────────────────────────────────
+  document.getElementById('notif').addEventListener('click', function () {
+    const hidden = body.classList.toggle('hide-notif');
+    this.classList.toggle('on', !hidden);
+  });
+
+  // ── Foco de apps ────────────────────────────────────────
+  function setActive(title) {
+    document.querySelectorAll('[data-app]').forEach(function (b) {
+      const active = b.title === title;
+      b.classList.toggle('active', active);
+      const dot = b.querySelector('.running');
+      if (active) { if (dot) dot.remove(); }
+      else if (!dot) {
+        const d = document.createElement('i'); d.className = 'running'; b.appendChild(d);
+      }
+    });
+    document.querySelectorAll('[data-focus]').forEach(function (b) {
+      b.classList.toggle('on', b.dataset.focus === title);
+    });
+  }
+  document.querySelectorAll('[data-app]').forEach(function (b) {
+    b.addEventListener('click', function () { setActive(b.title); });
+  });
+  document.querySelectorAll('[data-focus]').forEach(function (b) {
+    b.addEventListener('click', function () { setActive(b.dataset.focus); });
+  });
+
+  // ── Mostrar/ocultar controles ───────────────────────────
+  document.getElementById('hide-controls').addEventListener('click', function () {
+    document.querySelector('.controls').classList.add('hidden');
+    body.classList.add('controls-off');
+  });
+  document.getElementById('show-controls').addEventListener('click', function () {
+    document.querySelector('.controls').classList.remove('hidden');
+    body.classList.remove('controls-off');
+  });
+</script>
+</body>
+</html>
