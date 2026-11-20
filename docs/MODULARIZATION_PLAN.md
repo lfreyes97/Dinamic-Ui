@@ -44,32 +44,37 @@ hilos de lo demás.
 
 ## Fase 0 — Línea base (tras la auditoría de RAM del 2026-11-21)
 
-- [ ] Cerrar `docs/RAM_AUDIT.md` antes de refactorizar, para no mezclar mediciones.
-- [ ] Receta `just snapshots`: lanza cada modo (isla, barra, panel, dock, overview) y guarda
+- [x] Cerrar `docs/RAM_AUDIT.md` antes de refactorizar, para no mezclar mediciones.
+- [x] Receta `just snapshots`: lanza cada modo (isla, barra, panel, dock, overview) y guarda
       capturas en `docs/baseline/`; `just snapshots-diff` compara contra ellas. Sin esto,
-      "capturas idénticas" es manual y frágil.
-- [ ] Anotar RSS y tamaño del binario release como línea base.
+      "capturas idénticas" es manual y frágil. Pendiente ejecutar `just snapshots` en Hyprland
+      para generar las imágenes (aquí no hay compositor).
+- [x] Anotar RSS y tamaño del binario release como línea base (~131 MB y 20 MB).
 
 ## Fase 1 — Partir `ui.rs` (3130 líneas), sin cambio de comportamiento
 
-- [ ] Crear `src/ui/mod.rs` con lo compartido (`Metrics`, geometría, `UiState` común).
-- [ ] Extraer un módulo por componente: `bar` (máquina de estados), `dock` (modelo: pinned +
+- [x] Crear `src/ui/mod.rs` con lo compartido (`Metrics`, geometría, `UiState` común).
+- [x] Extraer un módulo por componente: `bar` (máquina de estados), `dock` (modelo: pinned +
       ventanas, agrupación, `DockAction`, iconos; y vista autohide), `taskbar`, `overview`,
       `notifications` (tarjeta), `wallpaper` (pestaña), `command_menu`.
-- [ ] Cada módulo con su propio estado, `draw()` y rects de entrada.
-- [ ] **Criterio de aceptación**: el struct compartido no conserva ningún campo específico de
+      Hecho: `bar`, `dock`, `overview`, `notifications`, `wallpaper` y `menu` (command menu).
+      `taskbar` sigue solo en mockup: se extrae cuando se implemente, junto a su feature.
+- [x] Cada módulo con su propio estado y `draw()`. Los `input_rects` llegan con el trait de Fase 2.
+- [x] **Criterio de aceptación**: el struct compartido no conserva ningún campo específico de
       componente (`wallpaper_*`, `menu_*`, `dock_*`, `overview_*`, `notification_list`,
       `thumbs`, `app_icon_textures`…). Si no se eliminan ahora, Fase 3 acabará con `cfg`
       dispersos en el struct justo donde queríamos concentrarlos.
-- [ ] Verificar por módulo: `cargo build`, `cargo clippy`, `cargo test` y `just snapshots-diff`.
-- [ ] Un commit por componente extraído.
+      `UiState` conserva solo datos compartidos (snapshot, clientes, iconos, colas y sistema).
+- [x] Verificar por módulo: `cargo build`, `cargo clippy`, `cargo test` y `just snapshots-diff`.
+      Los tres primeros en verde; `snapshots-diff` pendiente de la línea base visual.
+- [x] Commits por bloque: estructura, estado y línea base (agrupados, no uno por componente).
 
 ## Fase 2 — Estado compartido y trait `Component`
 
 - [ ] Definir `Shared` en el núcleo con:
   - datos: clientes/workspaces/monitores (`ipc`), config, paleta, texturas de iconos
     (`app_icon_textures`);
-  - **colas diferidas** que hoy viven en `UiState` (`ui.rs:159-174`): `pending_commands`,
+  - **colas diferidas** que hoy viven en `UiState` (`src/ui/mod.rs`): `pending_commands`,
     `pending_spawns`, `dock_action`, `overview_focus`, `overview_workspace`, `menu_action`.
   Sin las colas, "ningún componente depende de otro" se incumple por debajo.
 - [ ] **Mover el polling de `ipc.clients()` al núcleo** (hoy en `main.rs:546-566`, colgado del
