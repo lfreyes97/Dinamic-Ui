@@ -99,14 +99,14 @@ ci: fmt-check check lint lint-colors test
 # Matriz de features: sin ninguna, cada una sola, combinaciones de referencia y todas.
 check-matrix:
     cargo check --no-default-features
-    for f in bar dock taskbar overview activities command-menu notifications wallpaper; do echo "== $f"; cargo check --no-default-features --features $f; done
+    for f in bar topbar dock taskbar overview activities command-menu notifications wallpaper; do echo "== $f"; cargo check --no-default-features --features $f; done
     cargo check --no-default-features --features dock,bar
     cargo check --no-default-features --features taskbar,overview
     cargo check --all-features
 
 # Clippy (sin avisos) en la matriz: lo que debe pasar antes de tocar features
 lint-matrix:
-    for f in "" bar dock overview activities command-menu notifications wallpaper dock,bar taskbar,overview; do echo "== ${f:-ninguna}"; cargo clippy --all-targets --no-default-features ${f:+--features $f} -- -D warnings; done
+    for f in "" bar topbar dock overview activities command-menu notifications wallpaper dock,bar taskbar,overview; do echo "== ${f:-ninguna}"; cargo clippy --all-targets --no-default-features ${f:+--features $f} -- -D warnings; done
 
 # Binario release mínimo: solo la barra (sin zbus, image ni iconos)
 build-minimal:

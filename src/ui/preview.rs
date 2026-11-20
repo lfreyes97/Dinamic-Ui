@@ -305,5 +305,27 @@ fn topbar_state(quick: bool, calendar: bool, k: f32) -> UiState {
     state.topbar.quick_open = quick;
     state.topbar.calendar_open = calendar;
     state.shared.snapshot.window_title = "Rust — Mozilla Firefox".into();
+    // Datos del sistema de ejemplo (los que leería `sysinfo`).
+    let system = &mut state.shared.system;
+    system.wifi = Some(crate::sysinfo::Wifi {
+        enabled: true,
+        ssid: Some("RAAH-5G".into()),
+    });
+    system.bluetooth = Some(crate::sysinfo::Bluetooth {
+        powered: true,
+        connected: 1,
+    });
+    system.volume = Some(crate::sysinfo::Volume {
+        percent: 64,
+        muted: false,
+    });
+    system.brightness = Some(80);
+    system.audio_output = Some("Altavoces internos".into());
+    state.shared.battery = crate::power::BatteryState {
+        present: true,
+        percent: 64,
+        charging: false,
+        minutes_left: Some(215),
+    };
     state
 }

@@ -16,7 +16,8 @@ mod component;
 mod preview;
 
 pub use component::{
-    dispatch_command, dispatch_key, input_rects, update_components, wants_keyboard, UpdateCtx,
+    dispatch_command, dispatch_key, input_rects, update_components, wants_keyboard, wants_system,
+    UpdateCtx,
 };
 
 #[cfg(feature = "bar")]
@@ -422,6 +423,64 @@ fn battery_glyph_at(painter: &egui::Painter, center: egui::Pos2, percent: u8, co
         egui::Vec2::new(fill_w, 6.0),
     );
     painter.rect_filled(fill, CornerRadius::same(1), color);
+}
+
+/// Sombra suave bajo una tarjeta flotante.
+fn drop_shadow(ui: &egui::Ui, rect: egui::Rect, radius: u8, offset: i8, blur: u8, alpha: u8) {
+    let shadow = egui::Shadow {
+        offset: [0, offset],
+        blur,
+        spread: 0,
+        color: Palette::scrim(alpha),
+    };
+    ui.painter()
+        .add(shadow.as_shape(rect, CornerRadius::same(radius)));
+}
+
+/// Icono, color y descripción del Wi-Fi según los datos reales de `sysinfo`.
+fn wifi_status(
+    system: &crate::sysinfo::SystemInfo,
+    palette: Palette,
+) -> (&'static str, Color32, String) {
+    match &system.wifi {
+        None => (ic::WIFI_HIGH, palette.muted, "Wi-Fi: sin datos".to_string()),
+        Some(w) if !w.enabled => (
+            ic::WIFI_SLASH,
+            palette.muted,
+            "Wi-Fi desactivado".to_string(),
+        ),
+        Some(w) => match &w.ssid {
+            Some(ssid) => (ic::WIFI_HIGH, palette.text_hi, format!("Wi-Fi: {ssid}")),
+            None => (ic::WIFI_X, palette.muted, "Wi-Fi sin conexión".to_string()),
+        },
+    }
+}
+
+/// Icono, color y descripción del audio según los datos reales de `sysinfo`.
+fn audio_status(
+    system: &crate::sysinfo::SystemInfo,
+    palette: Palette,
+) -> (&'static str, Color32, String) {
+    match &system.volume {
+        None => (
+            ic::SPEAKER_HIGH,
+            palette.muted,
+            "Audio: sin datos".to_string(),
+        ),
+        Some(v) if v.muted => (
+            ic::SPEAKER_SLASH,
+            palette.muted,
+            "Audio silenciado".to_string(),
+        ),
+        Some(v) => {
+            let icon = match v.percent {
+                0 => ic::SPEAKER_NONE,
+                1..=49 => ic::SPEAKER_LOW,
+                _ => ic::SPEAKER_HIGH,
+            };
+            (icon, palette.text_hi, format!("Volumen {}%", v.percent))
+        }
+    }
 }
 
 /// Fecha corta en español: "Mié. 18 nov."

@@ -5,7 +5,7 @@
 use smithay_client_toolkit::seat::keyboard::Keysym;
 
 use super::nav::{step, window_rect, Dir};
-use super::overlay::{drop_shadow, hint_bar, mini_window, pointer_moved, search_pill};
+use super::overlay::{hint_bar, mini_window, pointer_moved, search_pill};
 use super::overview_model as model;
 use super::*;
 

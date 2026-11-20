@@ -8,9 +8,7 @@ use smithay_client_toolkit::seat::keyboard::Keysym;
 
 use super::activities_model::{self as model, Activation};
 use super::nav::{step, ui_scale, window_rect, Dir};
-use super::overlay::{
-    drop_shadow, hint_bar, mini_window, monitor_rect, pointer_moved, search_pill,
-};
+use super::overlay::{hint_bar, mini_window, monitor_rect, pointer_moved, search_pill};
 use super::*;
 
 /// Estado de Actividades.

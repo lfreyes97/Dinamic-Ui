@@ -302,10 +302,9 @@ impl DinamicUi {
             }
         }
 
-        // Datos del sistema (panel e iconos de la barra): el hilo solo consulta
-        // con la barra expandida o el panel abierto.
-        self.sysinfo
-            .set_active(self.ui_state.bar.show_panel || self.ui_state.bar.expanded);
+        // Datos del sistema: el hilo solo consulta mientras algún componente los muestra
+        // (barra expandida, panel abierto, topbar…; ver `Component::wants_system`).
+        self.sysinfo.set_active(ui::wants_system(&self.ui_state));
         if let Some((info, revision)) = self.sysinfo.poll() {
             if revision != self.last_sysinfo_revision {
                 self.last_sysinfo_revision = revision;

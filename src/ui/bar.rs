@@ -108,40 +108,9 @@ pub(super) fn draw_bar_row(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     );
 
     // Zona derecha: batería · % · wifi · audio, con el estado real de `sysinfo`.
-    let system_color = palette.text_hi;
     let battery_color = battery_tone(state.shared.battery.percent, state.shared.battery.charging);
-    let (wifi_icon, wifi_color, wifi_tip) = match &state.shared.system.wifi {
-        None => (ic::WIFI_HIGH, palette.muted, "Wi-Fi: sin datos".to_string()),
-        Some(w) if !w.enabled => (
-            ic::WIFI_SLASH,
-            palette.muted,
-            "Wi-Fi desactivado".to_string(),
-        ),
-        Some(w) => match &w.ssid {
-            Some(ssid) => (ic::WIFI_HIGH, system_color, format!("Wi-Fi: {ssid}")),
-            None => (ic::WIFI_X, palette.muted, "Wi-Fi sin conexión".to_string()),
-        },
-    };
-    let (audio_icon, audio_color, audio_tip) = match &state.shared.system.volume {
-        None => (
-            ic::SPEAKER_HIGH,
-            palette.muted,
-            "Audio: sin datos".to_string(),
-        ),
-        Some(v) if v.muted => (
-            ic::SPEAKER_SLASH,
-            palette.muted,
-            "Audio silenciado".to_string(),
-        ),
-        Some(v) => {
-            let icon = match v.percent {
-                0 => ic::SPEAKER_NONE,
-                1..=49 => ic::SPEAKER_LOW,
-                _ => ic::SPEAKER_HIGH,
-            };
-            (icon, system_color, format!("Volumen {}%", v.percent))
-        }
-    };
+    let (wifi_icon, wifi_color, wifi_tip) = wifi_status(&state.shared.system, palette);
+    let (audio_icon, audio_color, audio_tip) = audio_status(&state.shared.system, palette);
     island_slot(
         ui,
         "bar-system",

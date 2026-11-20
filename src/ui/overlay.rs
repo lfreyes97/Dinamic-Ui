@@ -21,25 +21,6 @@ fn text_width(ui: &egui::Ui, text: &str, size: f32) -> f32 {
         .x
 }
 
-/// Sombra suave bajo una tarjeta flotante.
-pub(super) fn drop_shadow(
-    ui: &egui::Ui,
-    rect: egui::Rect,
-    radius: u8,
-    offset: i8,
-    blur: u8,
-    alpha: u8,
-) {
-    let shadow = egui::Shadow {
-        offset: [0, offset],
-        blur,
-        spread: 0,
-        color: Palette::scrim(alpha),
-    };
-    ui.painter()
-        .add(shadow.as_shape(rect, CornerRadius::same(radius)));
-}
-
 /// Píldora de búsqueda con el chip `ESC`. Muestra lo que se escribe (las teclas las recoge
 /// `handle_key`).
 pub(super) fn search_pill(ui: &egui::Ui, screen: egui::Rect, query: &str, placeholder: &str) {

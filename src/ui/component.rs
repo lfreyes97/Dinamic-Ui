@@ -69,6 +69,14 @@ pub trait Component {
         let _ = state;
         false
     }
+
+    /// `true` si ahora mismo muestra datos del sistema (wifi, volumen, brillo…): el hilo de
+    /// `sysinfo` solo consulta mientras alguien los pide. Primer paso del `needs()` de la
+    /// Fase 6.0 de `docs/WIDGETS_PLAN.md`.
+    fn wants_system(&self, state: &UiState) -> bool {
+        let _ = state;
+        false
+    }
 }
 
 /// Único lugar donde se decide qué componentes existen según las features
@@ -134,6 +142,11 @@ pub fn dispatch_key(state: &mut UiState, key: Keysym) -> bool {
         }
     }
     false
+}
+
+/// ¿Algún componente muestra ahora datos del sistema?
+pub fn wants_system(state: &UiState) -> bool {
+    build_components().iter().any(|c| c.wants_system(state))
 }
 
 /// ¿Algún componente necesita el teclado en exclusiva?
@@ -289,6 +302,10 @@ impl Component for BarShell {
         bar.island_progress = approach(bar.island_progress, island_target, ctx.dt * 6.0);
         dirty |= (bar.island_progress - before).abs() > 0.0005;
         dirty
+    }
+
+    fn wants_system(&self, state: &UiState) -> bool {
+        state.bar.expanded || state.bar.show_panel
     }
 
     fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
@@ -498,13 +515,12 @@ impl Component for Topbar {
             return Vec::new();
         }
         let mut rects = vec![topbar::topbar_rect(state, screen_w)];
+        // Las mismas funciones que usa el dibujo: no pueden desincronizarse.
         if state.topbar.quick_open {
-            let h = state.shared.config.topbar.height as i32;
-            rects.push((screen_w - 292, h + 6, 280, 218));
+            rects.push(topbar::quick_rect(state, screen_w));
         }
         if state.topbar.calendar_open {
-            let h = state.shared.config.topbar.height as i32;
-            rects.push((screen_w / 2 - 150, h + 6, 300, 224));
+            rects.push(topbar::calendar_rect(state, screen_w));
         }
         rects
     }
@@ -524,6 +540,10 @@ impl Component for Topbar {
         } else {
             false
         }
+    }
+
+    fn wants_system(&self, state: &UiState) -> bool {
+        state.topbar.enabled
     }
 
     fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
