@@ -14,8 +14,8 @@ lista en «Fuera de alcance».
 | Inicio | icono de la barra (azul) | «Actividades» (o el overview si no está compilada) |
 | Buscar | lupa | el menú de comandos (`menu`), si está compilado |
 | Ver tareas | icono de ventana | el overview de workspaces, si está compilado |
-| Apps | fijadas (`[dock] pinned`) y las que tienen ventanas abiertas | lanza si no tiene ventanas; si ya tiene el foco, pasa a su siguiente ventana |
-| Bandeja | notificaciones, batería (si hay), volumen, Wi-Fi y hora con fecha | solo descripción al pasar el cursor |
+| Apps | fijadas (`[dock] pinned`) y las que tienen ventanas abiertas | lanza si no tiene ventanas; si ya tiene el foco, pasa a su siguiente ventana; clic central: otra instancia |
+| Bandeja | Wi-Fi, volumen, batería (si hay), notificaciones y hora con fecha | solo descripción al pasar el cursor |
 
 - **Indicadores en el borde de pantalla** (como el mockup): una marca de 16 px para la app activa y
   un punto para las que solo tienen ventanas.
@@ -26,6 +26,18 @@ lista en «Fuera de alcance».
   activación del autohide) son las mismas funciones para el dibujo, el `input_region` y el
   `update`. El tamaño de las celdas sale de `[taskbar] size` (48 px → celdas de 40, como en el
   mockup), así que los iconos escalan con el grosor (40–72).
+- **Colocación pura** (`taskbar::plan`): una sola función calcula dónde va cada botón, el separador
+  y cada app (centrados en el eje, sin pasar del 62 % del largo de la barra) y la usan a la vez el
+  dibujo y la zona de entrada. Tiene tests en los cuatro lados.
+- **Separador** fino entre los botones de sistema y las apps, como en el mockup.
+- **Apps que no caben**: la última celda pasa a ser un botón «⋯» («N apps más») que abre un
+  desplegable con las ocultas (icono, nombre y cuántas ventanas tienen), anclado al botón y siempre
+  dentro de la pantalla (`overflow_card`). Se cierra con un clic fuera o `Esc`, y mientras está
+  abierto el autohide no oculta la barra. Hasta 10 filas; si hay más, una última fila dice «+N más».
+- **Clic central** en una app: otra instancia (como en el dock). Al pasar el cursor, la
+  descripción incluye «· N ventanas» si hay varias.
+- **Bandeja en orden de lectura** (Wi-Fi, volumen, batería, campana), también en vertical, donde
+  va de arriba abajo con la hora encima.
 - **Modelo de apps**: el mismo que el dock (`make_item`/`items`), con el mismo icono de respaldo
   que el dock (`dock_icon`).
 
@@ -54,10 +66,12 @@ fijos (`just lint-colors` limpio: todo sale de `palette`/`pal()`).
 - [ ] **Botones de sistema sin menú propio**: «Inicio» abre Actividades y «Buscar» el menú de
       comandos; no hay menú de inicio ni búsqueda de aplicaciones propios. Hacerlos sería una
       función nueva.
-- [ ] **Apps que no caben**: con muchas apps abiertas (a 1366 px caben unas 16 con el grosor por defecto) las sobrantes no se
-      dibujan y no hay forma de llegar a ellas. Falta un indicador «+N» o desplazamiento; es UI nueva.
 - [ ] **Acciones de la bandeja** (activar/desactivar Wi-Fi, subir volumen, abrir la campana): solo
       lectura, igual que el resumen del topbar, porque ejecutarlas cambia el sistema real.
+- [ ] **Clic derecho**: el dock abre un menú con los títulos de las ventanas y «Nueva ventana»; la
+      taskbar no tiene aún menú contextual (sí clic central y el ciclo de ventanas).
+- [ ] **Chevron de la bandeja** (iconos ocultos, como en el mockup): no hay iconos de bandeja
+      ocultos que mostrar todavía.
 - [ ] **Autohide y clics**: el cierre al alejarse, la animación de 0,28 s y que el dock ya no
       reclame entrada (hallazgo 9) se comprueban solo en el R7; la vista previa no tiene cursor.
 - [ ] **Duplicación con el dock**: `taskbar::items` repite la lista de apps de `dock::draw_dock`.

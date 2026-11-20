@@ -633,6 +633,11 @@ impl Component for Taskbar {
         if !state.taskbar.enabled {
             return Vec::new();
         }
+        // Con el desplegable de apps abierto, toda la pantalla recibe el clic: un clic fuera lo
+        // cierra (igual que los desplegables del topbar).
+        if taskbar::overflow_active(state) {
+            return vec![(0, 0, screen_w, screen_h)];
+        }
         if state.taskbar.progress > 0.5 {
             vec![taskbar::taskbar_rect(state, screen_w, screen_h)]
         } else {
@@ -646,7 +651,8 @@ impl Component for Taskbar {
         let near = ctx
             .cursor
             .is_some_and(|c| taskbar::near_edge(&cfg, c, ctx.screen_w, ctx.screen_h));
-        let visible = tb.enabled && (!cfg.autohide || near);
+        // Con el desplegable abierto la barra no se oculta aunque el cursor se aleje.
+        let visible = tb.enabled && (!cfg.autohide || near || tb.overflow_open);
         let before = tb.visible;
         tb.visible = visible;
         let before_progress = tb.progress;
@@ -670,6 +676,14 @@ impl Component for Taskbar {
             }
             _ => false,
         }
+    }
+
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        if key == Keysym::Escape && state.taskbar.overflow_open {
+            state.taskbar.overflow_open = false;
+            return true;
+        }
+        false
     }
 }
 

@@ -458,4 +458,13 @@ fn ui_preview_taskbar() {
         true,
         taskbar_state(Side::Bottom, &many, k),
     );
+    // Con el desplegable de las apps que no caben abierto, abajo y en el lado derecho.
+    for (name, side) in [
+        ("taskbar-overflow-bottom", Side::Bottom),
+        ("taskbar-overflow-right", Side::Right),
+    ] {
+        let mut state = taskbar_state(side, &many, k);
+        state.taskbar.overflow_open = true;
+        render_sized(name, r3, true, state);
+    }
 }

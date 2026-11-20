@@ -113,7 +113,7 @@ check-matrix keep="yes":
 
 # Clippy (sin avisos) en la matriz: lo que debe pasar antes de tocar features
 lint-matrix keep="yes":
-    for f in "" bar topbar dock overview activities dashboard config-panel command-menu notifications wallpaper dock,bar taskbar,overview; do echo "== ${f:-ninguna}"; env {{matrix_env}} cargo clippy --all-targets --no-default-features ${f:+--features $f} -- -D warnings; done
+    for f in "" bar topbar dock taskbar overview activities dashboard config-panel command-menu notifications wallpaper dock,bar taskbar,overview taskbar,topbar; do echo "== ${f:-ninguna}"; env {{matrix_env}} cargo clippy --all-targets --no-default-features ${f:+--features $f} -- -D warnings; done
     @just _matrix-done {{keep}}
 
 # Informa del tamaño de la matriz y, con `no`, la borra.
