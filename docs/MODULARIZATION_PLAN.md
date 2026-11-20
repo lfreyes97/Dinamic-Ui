@@ -10,7 +10,7 @@ hilos de lo demás.
   píldora → barra full width → panel. Comparten surface, animación y geometría. El máximo
   al que sube es config en runtime (`bar.max_state`), no compilación.
 - **Features de Cargo** solo para componentes independientes: `bar`, `dock`, `taskbar`
-  (por confirmar si es un modo de `dock`), `overview`, `notifications`, `wallpaper`.
+  (consume `dock`: `taskbar = ["dock"]`), `overview`, `notifications`, `wallpaper`.
   Las que arrastran dependencias pesadas (`notifications`, `wallpaper`, `overview`) son
   las prioritarias.
 - **Config en runtime** para apariencia y comportamiento (tamaños, `pinned`, autohide, colores).
@@ -29,7 +29,8 @@ hilos de lo demás.
 
 - [ ] Crear `src/ui/mod.rs` con lo compartido (`Metrics`, geometría, `UiState` común).
 - [ ] Extraer un módulo por componente: `bar` (notch/isla/píldora/barra/panel como una
-      máquina de estados), `dock`, `overview`, `notifications` (tarjeta), `wallpaper`
+      máquina de estados), `dock` (modelo: pinned + ventanas, agrupación, `DockAction`, iconos; y vista autohide),
+      `taskbar` (otra vista sobre el modelo del dock), `overview`, `notifications` (tarjeta), `wallpaper`
       (pestaña), `command_menu`.
 - [ ] Cada módulo con su propio estado, `draw()` y rects de entrada.
 - [ ] Verificar: `cargo build` + capturas idénticas a la Fase 0.
@@ -48,7 +49,7 @@ hilos de lo demás.
 
 ## Fase 3 — Features de Cargo
 
-- [ ] Declarar features en `Cargo.toml`; `default` = todas.
+- [ ] Declarar features en `Cargo.toml`; `default` = todas. `taskbar = ["dock"]`.
 - [ ] Dependencias opcionales ligadas a su feature: `zbus` → `notifications`;
       `image` → `wallpaper`/`overview`; `thumbs.rs` y `appicons.rs` bajo `cfg`.
 - [ ] `#[cfg]` en los `mod` correspondientes de `main.rs` y en `build_components()`.
@@ -72,7 +73,6 @@ hilos de lo demás.
 
 ## Pendiente por revisar
 
-- ¿`taskbar` es un modo de `dock` o un componente aparte? Decidir al revisar su mockup.
 - Los mockups `taskbar-mockup.html`, `topbar-mockup.html`, `dashboard-mockup.html`,
   `command-menu-mockup.html` y `config-panel-mockup.html` no se han analizado en detalle:
   confirmar qué dependencias entre componentes asumen antes de cerrar la lista de features.
