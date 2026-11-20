@@ -421,32 +421,6 @@ fn thumb(
     }
 }
 
-/// Bloque "Overview": icono y etiqueta; abre la vista de pantalla completa.
-fn overview_button(ui: &mut egui::Ui, rect: egui::Rect, id: &'static str, scale: f32) -> bool {
-    let p = pal();
-    let resp = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
-    let color = if resp.hovered() { p.text } else { p.muted };
-    icon_at(
-        ui,
-        egui::pos2(rect.center().x, rect.center().y - 7.0 * scale),
-        ic::FRAME_CORNERS,
-        ICON_MD * scale,
-        color,
-    );
-    text_at(
-        ui,
-        egui::pos2(rect.center().x, rect.center().y + 12.0 * scale),
-        egui::Align2::CENTER_CENTER,
-        "Overview",
-        8.5 * scale,
-        color,
-    );
-    if resp.hovered() {
-        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-    }
-    resp.clicked()
-}
-
 /// Fondo de una franja: panel casi opaco con un filete en el borde que da al escritorio.
 fn strip_background(ui: &egui::Ui, strip: egui::Rect, edge: (egui::Pos2, egui::Pos2)) {
     ui.painter().rect_filled(
@@ -495,9 +469,9 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     let thumb_sz = thumb_size_h(strip.height(), aspect);
     // Los controles crecen con el grosor de la franja (1× a 68 px; ~1,5× a 154 px).
     let sc = (strip.height() / 68.0).sqrt().clamp(1.0, 1.6);
-    let (gap, nav, ovw) = (8.0, 20.0 * sc, 56.0 * sc);
-    // Controles fijos: ‹ › | Overview (y el margen de los extremos).
-    let controls = nav + gap + gap + nav + 14.0 + 1.0 + 14.0 + ovw;
+    let (gap, nav) = (8.0, 20.0 * sc);
+    // Controles fijos: ‹ ›. (La franja es un overview en sí: no enlaza con otra vista.)
+    let controls = nav + gap + gap + nav;
     let capacity = model::fit_count(strip.width() - 48.0 - controls, thumb_sz.x, gap, 3, 8);
     state.overview.strip_visible = capacity;
 
@@ -550,26 +524,6 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         let max_offset = all.len().saturating_sub(capacity);
         state.overview.strip_offset = (state.overview.strip_offset + 1).min(max_offset);
     }
-    cursor += nav + 14.0;
-    ui.painter().line_segment(
-        [
-            egui::pos2(cursor, cy - thumb_sz.y / 2.0 + 4.0),
-            egui::pos2(cursor, cy + thumb_sz.y / 2.0 - 4.0),
-        ],
-        Stroke::new(1.0, palette.border),
-    );
-    cursor += 1.0 + 14.0;
-    if overview_button(
-        ui,
-        egui::Rect::from_min_size(
-            egui::pos2(cursor, cy - thumb_sz.y / 2.0),
-            egui::vec2(ovw, thumb_sz.y),
-        ),
-        "ov-h-expand",
-        sc,
-    ) {
-        overview::open(state, OverviewKind::Workspaces);
-    }
 }
 
 /// Franja vertical de workspaces (izquierda o derecha).
@@ -594,8 +548,8 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     let aspect = screen.width().max(1.0) / screen.height().max(1.0);
     let thumb_sz = thumb_size_v(strip.width(), aspect);
     let sc = (strip.width() / 78.0).sqrt().clamp(1.0, 1.6);
-    let (gap, nav, ovh) = (8.0, 20.0 * sc, 40.0 * sc);
-    let controls = nav + gap + gap + nav + 14.0 + 1.0 + 14.0 + ovh;
+    let (gap, nav) = (8.0, 20.0 * sc);
+    let controls = nav + gap + gap + nav;
     let capacity = model::fit_count(strip.height() - 24.0 - controls, thumb_sz.y, gap, 3, 8);
     state.overview.strip_visible = capacity;
 
@@ -647,25 +601,5 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     ) {
         let max_offset = all.len().saturating_sub(capacity);
         state.overview.strip_offset = (state.overview.strip_offset + 1).min(max_offset);
-    }
-    cursor += nav + 14.0;
-    ui.painter().line_segment(
-        [
-            egui::pos2(cx - thumb_sz.x / 2.0, cursor),
-            egui::pos2(cx + thumb_sz.x / 2.0, cursor),
-        ],
-        Stroke::new(1.0, palette.border),
-    );
-    cursor += 1.0 + 14.0;
-    if overview_button(
-        ui,
-        egui::Rect::from_min_size(
-            egui::pos2(cx - 28.0 * sc, cursor),
-            egui::vec2(56.0 * sc, ovh),
-        ),
-        "ov-v-expand",
-        sc,
-    ) {
-        overview::open(state, OverviewKind::Workspaces);
     }
 }

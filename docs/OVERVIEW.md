@@ -80,8 +80,9 @@ tests); el dibujo en `overview.rs` y `overview_collection.rs`. Comandos: `overvi
   levantado al pasar el cursor. Las ventanas son bloques translúcidos y la activa va teñida.
 - **Actividades:** cuadrícula de 6 columnas centrada, tiles con borde, puntos por ventana abierta
   y tira inferior con una vista esquemática de cada ventana y su título.
-- **Franjas:** botones con borde, miniaturas con número arriba a la derecha y nombre abajo,
-  y un bloque «Overview» (icono + etiqueta) tras un separador.
+- **Franjas:** botones con borde y miniaturas con número arriba a la derecha y nombre abajo. **Sin
+  botón hacia otra vista**: cada franja es un overview completo por sí misma y no enlaza con la
+  rejilla de pantalla completa (así no depende de que esté compilada ni activada).
 - **Barra de ayuda** inferior con las teclas dibujadas como chips.
 
 ### Dimensiones: el mockup es una guía, no una medida
@@ -99,7 +100,7 @@ Las franjas del mockup (68/78 px) eran una barra de estado, no un panel de escri
 - **Miniaturas:** conservan la proporción del monitor y envuelven su imagen, así las ventanas se
   leen (en 1366×768 miden ~220×130 px). Cuántas caben sale del espacio libre (3–8) y el
   teclado lo respeta.
-- **Controles y textos** (flechas, bloque «Overview», número y nombre) crecen con el grosor.
+- **Controles y textos** (flechas, número y nombre) crecen con el grosor.
 - **Actividades:** tiles, separación, iconos y tira de ventanas escalan entre 1× y 1,6× respecto
   a 720p; los textos crecen con la raíz de esa escala.
 
