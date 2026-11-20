@@ -62,7 +62,9 @@ El binario expone un socket en `$XDG_RUNTIME_DIR/dinamic-ui.sock` y un modo CLI:
 ./target/release/dinamic-ui --reload    # recarga config.toml sin reiniciar
 ```
 
-Así puedes enlazarlos en Hyprland (ver `hyprland/dinamic-ui.conf`, con `SUPER+I`).
+Así puedes enlazarlos en Hyprland (ver `hyprland/dinamic-ui.conf`): `SUPER+I` isla/barra,
+`SUPER+T` taskbar, `SUPER+B` topbar, `SUPER+O` overview, `SUPER SHIFT+O` actividades,
+`SUPER ALT+O` franja horizontal, `SUPER CTRL+O` franja vertical y `SUPER+M` command menu.
 
 ### Barras y overviews
 
