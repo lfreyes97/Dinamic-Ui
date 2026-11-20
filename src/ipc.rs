@@ -104,7 +104,9 @@ impl HyprlandIpc {
     pub fn cursor_pos(&self) -> Option<(i32, i32)> {
         let path = self.socket.as_ref()?;
         let mut stream = UnixStream::connect(path).ok()?;
-        stream.set_read_timeout(Some(Duration::from_millis(60))).ok()?;
+        stream
+            .set_read_timeout(Some(Duration::from_millis(60)))
+            .ok()?;
         stream.write_all(b"cursorpos").ok()?;
         let mut buf = [0u8; 128];
         let n = stream.read(&mut buf).ok()?;
@@ -134,11 +136,7 @@ impl HyprlandIpc {
                     title: get("title").unwrap_or_default(),
                     address: get("address").unwrap_or_default(),
                     mapped: v.get("mapped")?.as_bool().unwrap_or(false),
-                    workspace: v
-                        .get("workspace")?
-                        .get("id")?
-                        .as_i64()
-                        .unwrap_or(0) as i32,
+                    workspace: v.get("workspace")?.get("id")?.as_i64().unwrap_or(0) as i32,
                     x: at.first()?.as_i64().unwrap_or(0) as i32,
                     y: at.get(1)?.as_i64().unwrap_or(0) as i32,
                     w: size.first()?.as_i64().unwrap_or(0) as i32,
@@ -210,7 +208,9 @@ impl HyprlandIpc {
                     self.event_stream.take();
                     break;
                 }
-                Ok(n) => self.event_buffer.push_str(&String::from_utf8_lossy(&buf[..n])),
+                Ok(n) => self
+                    .event_buffer
+                    .push_str(&String::from_utf8_lossy(&buf[..n])),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(_) => {
                     self.event_stream.take();

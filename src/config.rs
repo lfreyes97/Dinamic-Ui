@@ -3,11 +3,15 @@
 //! Ruta: `$XDG_CONFIG_HOME/dinamic-ui/config.toml` (o `~/.config/dinamic-ui/config.toml`).
 //! Las variables de entorno `DINAMIC_UI_*` siguen teniendo prioridad.
 
-use std::{env, fs, path::PathBuf, sync::{Arc, RwLock}};
+use std::{
+    env, fs,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub theme: ThemeConfig,
@@ -136,21 +140,6 @@ impl Default for ClockConfig {
 impl Default for NotificationConfig {
     fn default() -> Self {
         Self { ttl_secs: 6 }
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            theme: ThemeConfig::default(),
-            sizes: Sizes::default(),
-            workspaces: Workspaces::default(),
-            notifications: NotificationConfig::default(),
-            clock: ClockConfig::default(),
-            wallpapers: WallpaperConfig::default(),
-            dock: DockConfig::default(),
-            menu: MenuConfig::default(),
-        }
     }
 }
 

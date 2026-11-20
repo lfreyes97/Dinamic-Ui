@@ -217,8 +217,8 @@ fn read_audio() -> (Option<Volume>, Option<String>) {
         let percent = out
             .split_whitespace()
             .find_map(|w| w.strip_suffix('%')?.parse::<u32>().ok())?;
-        let muted = run("pactl", &["get-sink-mute", "@DEFAULT_SINK@"])
-            .is_some_and(|m| m.contains("yes"));
+        let muted =
+            run("pactl", &["get-sink-mute", "@DEFAULT_SINK@"]).is_some_and(|m| m.contains("yes"));
         Some(Volume {
             percent: percent.min(255) as u8,
             muted,
@@ -231,15 +231,8 @@ fn read_audio() -> (Option<Volume>, Option<String>) {
         let default = default.trim();
         let json = run("pactl", &["-f", "json", "list", "sinks"])?;
         let sinks: Vec<serde_json::Value> = serde_json::from_str(&json).ok()?;
-        let sink = sinks
-            .iter()
-            .find(|s| s["name"].as_str() == Some(default))?;
-        Some(
-            sink["description"]
-                .as_str()
-                .unwrap_or(default)
-                .to_string(),
-        )
+        let sink = sinks.iter().find(|s| s["name"].as_str() == Some(default))?;
+        Some(sink["description"].as_str().unwrap_or(default).to_string())
     })();
     (volume, output)
 }
@@ -285,7 +278,12 @@ fn read_wallpaper() -> Option<Wallpaper> {
 }
 
 fn parse_wallpaper(out: &str) -> Option<Wallpaper> {
-    let shown = out.lines().next()?.split_once("currently displaying:")?.1.trim();
+    let shown = out
+        .lines()
+        .next()?
+        .split_once("currently displaying:")?
+        .1
+        .trim();
     if let Some(path) = shown.strip_prefix("image:") {
         return Some(Wallpaper::Image(path.trim().to_string()));
     }
@@ -305,13 +303,17 @@ mod tests {
 
     #[test]
     fn parses_awww_query() {
-        let image = ": eDP-1: 1366x768, scale: 1, currently displaying: image: /home/u/Pictures/a b.png\n";
+        let image =
+            ": eDP-1: 1366x768, scale: 1, currently displaying: image: /home/u/Pictures/a b.png\n";
         assert_eq!(
             parse_wallpaper(image),
             Some(Wallpaper::Image("/home/u/Pictures/a b.png".into()))
         );
         let color = ": eDP-1: 1366x768, scale: 1, currently displaying: color: DD9999\n";
-        assert_eq!(parse_wallpaper(color), Some(Wallpaper::Color("dd9999".into())));
+        assert_eq!(
+            parse_wallpaper(color),
+            Some(Wallpaper::Color("dd9999".into()))
+        );
         assert_eq!(parse_wallpaper(""), None);
         assert_eq!(parse_wallpaper("algo raro"), None);
     }

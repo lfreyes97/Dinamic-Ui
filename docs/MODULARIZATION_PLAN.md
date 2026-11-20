@@ -57,6 +57,10 @@ hilos de lo demás.
       ventanas, agrupación, `DockAction`, iconos; y vista autohide), `taskbar`, `overview`,
       `notifications` (tarjeta), `wallpaper` (pestaña), `command_menu`.
 - [ ] Cada módulo con su propio estado, `draw()` y rects de entrada.
+- [ ] **Criterio de aceptación**: el struct compartido no conserva ningún campo específico de
+      componente (`wallpaper_*`, `menu_*`, `dock_*`, `overview_*`, `notification_list`,
+      `thumbs`, `app_icon_textures`…). Si no se eliminan ahora, Fase 3 acabará con `cfg`
+      dispersos en el struct justo donde queríamos concentrarlos.
 - [ ] Verificar por módulo: `cargo build`, `cargo clippy`, `cargo test` y `just snapshots-diff`.
 - [ ] Un commit por componente extraído.
 
@@ -83,8 +87,13 @@ hilos de lo demás.
 - [ ] Dependencias opcionales: `zbus` → `notifications`; `image` → `wallpaper` (`thumbs.rs`);
       `freedesktop-icons` y `png` → `icons` (`appicons.rs`).
 - [ ] `appicons.rs`: sustituir `icon_path()` por `freedesktop-icons`; quitar la rama SVG y
-      `magick`; decodificar PNG con `png`. Verificar que el crate permita pedir solo PNG.
-- [ ] Clave `icon_theme` en config; si falta, leer `~/.config/gtk-3.0/settings.ini`; si no, `hicolor`.
+      `magick`; decodificar PNG con `png`. Usar `with_size(48).with_scale(scale)` para que en
+      HiDPI busque el PNG a 96 px y luego lo reescale a 48.
+      `find()` **prioriza PNG pero admite SVG**: comprobar la extensión de la ruta devuelta y
+      caer al glifo Phosphor si es `.svg`, para que el fallback sea determinista y no dependa
+      de que falle el decoder.
+- [ ] Clave `icon_theme` en config; si falta, usar `freedesktop_icons::default_theme_gtk()`;
+      si no hay tema GTK, `hicolor`.
 - [ ] Medir qué porcentaje de apps reales cae al fallback Phosphor por ser solo SVG; si es
       alto, implementar `svg-icons` (`resvg` con `default-features = false`) y medir RSS.
 - [ ] `#[cfg]` en los `mod` de `main.rs` y en `build_components()`.
@@ -105,10 +114,16 @@ hilos de lo demás.
 - [ ] Actualizar `docs/*.md` indicando la feature de cada componente.
 - [ ] `config.example.toml`: marcar qué secciones requieren qué feature.
 
-## Pendiente por revisar
+## Dependencias de los mockups (revisadas)
 
-- Mockups `taskbar`, `topbar`, `dashboard`, `command-menu` y `config-panel`: no analizados en
-  detalle; confirmar qué dependencias asumen antes de implementar `dashboard`/`config-panel`.
+- `taskbar` y `topbar`: no introducen datos nuevos. La taskbar es otra vista sobre el modelo
+  del dock (pinned + clientes del núcleo); la topbar se resuelve como estado de `bar`
+  (`bar.max_state`), con reloj y datos del sistema de `Shared`.
+- `dashboard`: solo `sysinfo` + paleta + `Shared.clients`; no necesita `dock` ni iconos propios
+  (usa las texturas ya compartidas). Para implementarlo se añade como feature.
+- `config-panel`: necesita el registro de componentes compilados para ocultar lo no compilado,
+  y el `config` compartido. No añade dependencias de render. Para implementarlo se añade como feature.
+- `command-menu`: comparte las texturas de iconos con `dock`/`overview` (ya cubierto por `icons`).
 
 ## Riesgos
 

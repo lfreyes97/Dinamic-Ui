@@ -7,7 +7,7 @@ use egui_wgpu::{
     wgpu::{
         Backends, CompositeAlphaMode, CreateSurfaceError, CurrentSurfaceTexture, Device, Instance,
         InstanceDescriptor, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface,
-        SurfaceConfiguration, SurfaceColorSpace, SurfaceTargetUnsafe, TextureFormat, TextureUsages,
+        SurfaceColorSpace, SurfaceConfiguration, SurfaceTargetUnsafe, TextureFormat, TextureUsages,
     },
     Renderer, RendererOptions, ScreenDescriptor,
 };
@@ -17,7 +17,10 @@ use raw_window_handle::{
 use wayland_backend::client::Backend;
 use wayland_client::{protocol::wl_surface::WlSurface, Proxy};
 
-use crate::{theme::Palette, ui::{self, UiState}};
+use crate::{
+    theme::Palette,
+    ui::{self, UiState},
+};
 
 pub struct Gfx {
     pub ctx: Context,
@@ -62,8 +65,7 @@ impl Gfx {
         }))
         .map_err(|_| GfxError::NoAdapter)?;
 
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&Default::default()))?;
+        let (device, queue) = pollster::block_on(adapter.request_device(&Default::default()))?;
 
         let caps = surface.get_capabilities(&adapter);
         // egui entrega colores en espacio gamma: un target sRGB aplicaría la
@@ -76,7 +78,10 @@ impl Gfx {
             .or_else(|| caps.formats.first().copied())
             .ok_or(GfxError::NoFormat)?;
 
-        let alpha_mode = if caps.alpha_modes.contains(&CompositeAlphaMode::PreMultiplied) {
+        let alpha_mode = if caps
+            .alpha_modes
+            .contains(&CompositeAlphaMode::PreMultiplied)
+        {
             CompositeAlphaMode::PreMultiplied
         } else {
             caps.alpha_modes
@@ -183,9 +188,9 @@ impl Gfx {
     ) -> Result<(), GfxError> {
         self.input.time = Some(self.start.elapsed().as_secs_f64());
         let raw_input = self.input.take();
-        let mut full_output =
-            self.ctx
-                .run_ui(raw_input, |ui| ui::draw(ui, state, palette, t, panel_t, pill_w));
+        let mut full_output = self.ctx.run_ui(raw_input, |ui| {
+            ui::draw(ui, state, palette, t, panel_t, pill_w)
+        });
         self.needs_repaint = full_output
             .viewport_output
             .get(&egui::ViewportId::ROOT)
@@ -212,7 +217,8 @@ impl Gfx {
         }
 
         let texture = match self.surface.get_current_texture() {
-            CurrentSurfaceTexture::Success(texture) | CurrentSurfaceTexture::Suboptimal(texture) => texture,
+            CurrentSurfaceTexture::Success(texture)
+            | CurrentSurfaceTexture::Suboptimal(texture) => texture,
             CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => return Ok(()),
             CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
@@ -228,17 +234,10 @@ impl Gfx {
             pixels_per_point: self.ctx.pixels_per_point(),
         };
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&Default::default());
+        let mut encoder = self.device.create_command_encoder(&Default::default());
 
-        self.renderer.update_buffers(
-            &self.device,
-            &self.queue,
-            &mut encoder,
-            &triangles,
-            &screen,
-        );
+        self.renderer
+            .update_buffers(&self.device, &self.queue, &mut encoder, &triangles, &screen);
 
         {
             let pass = encoder.begin_render_pass(&egui_wgpu::wgpu::RenderPassDescriptor {
@@ -310,7 +309,7 @@ impl From<RequestDeviceError> for GfxError {
 /// egui 0.37 no tiene peso en `FontId`: `.strong()` solo cambia el color, así
 /// que los textos destacados usan explícitamente `inter-semibold`.
 fn install_fonts(ctx: &Context) {
-    use egui::{FontFamily, FontDefinitions, text::FontData};
+    use egui::{text::FontData, FontDefinitions, FontFamily};
 
     let mut fonts = FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
@@ -322,7 +321,9 @@ fn install_fonts(ctx: &Context) {
 
     let base = std::env::var_os("XDG_DATA_HOME")
         .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share")))
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share"))
+        })
         .unwrap_or_default()
         .join("fonts")
         .join("Instatypst")
@@ -351,4 +352,3 @@ fn install_fonts(ctx: &Context) {
 
     ctx.set_fonts(fonts);
 }
-

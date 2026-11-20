@@ -47,7 +47,11 @@ pub fn read() -> BatteryState {
 /// con energía/potencia (`energy_*`/`power_now`) o carga/corriente
 /// (`charge_*`/`current_now`).
 fn minutes_left(path: &Path, charging: bool) -> Option<u32> {
-    let direct = if charging { "time_to_full_now" } else { "time_to_empty_now" };
+    let direct = if charging {
+        "time_to_full_now"
+    } else {
+        "time_to_empty_now"
+    };
     if let Some(secs) = read_u64(&path.join(direct)) {
         return (secs > 0).then_some((secs / 60) as u32);
     }

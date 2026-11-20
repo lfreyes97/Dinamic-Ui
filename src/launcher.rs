@@ -105,13 +105,17 @@ pub fn apps() -> Vec<Entry> {
     }
     let mut out = Vec::new();
     for dir in dirs {
-        let Ok(entries) = fs::read_dir(dir) else { continue };
+        let Ok(entries) = fs::read_dir(dir) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) != Some("desktop") {
                 continue;
             }
-            let Ok(text) = fs::read_to_string(&path) else { continue };
+            let Ok(text) = fs::read_to_string(&path) else {
+                continue;
+            };
             let field = |key: &str| -> Option<String> {
                 text.lines()
                     .find_map(|l| l.strip_prefix(key)?.strip_prefix('=')?.trim().into())
@@ -158,12 +162,16 @@ pub fn files(dirs: &[String]) -> Vec<Entry> {
     let mut out = Vec::new();
     for raw in dirs {
         let dir = expand_home(raw);
-        let Ok(entries) = fs::read_dir(&dir) else { continue };
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in entries.flatten().take(120) {
             let path = entry.path();
             if path.is_dir() && out.len() < 200 {
                 // Un nivel de profundidad, sin entrar en ocultos.
-                let Ok(children) = fs::read_dir(&path) else { continue };
+                let Ok(children) = fs::read_dir(&path) else {
+                    continue;
+                };
                 for child in children.flatten().take(40) {
                     push_file(&mut out, child.path());
                 }

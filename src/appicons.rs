@@ -7,7 +7,10 @@
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::{mpsc::{self, Sender}, Arc, Mutex},
+    sync::{
+        mpsc::{self, Sender},
+        Arc, Mutex,
+    },
     thread,
 };
 
@@ -15,10 +18,12 @@ use image::imageops::FilterType;
 
 pub const SIZE: u32 = 48;
 
+type ReadyIcons = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
 #[derive(Default)]
 pub struct AppIcons {
     names: HashMap<String, String>,
-    ready: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
+    ready: ReadyIcons,
     tx: Option<Sender<(String, PathBuf)>>,
     requested: HashSet<String>,
 }
@@ -36,13 +41,17 @@ impl AppIcons {
             dirs.push(PathBuf::from(home).join(".local/share/applications"));
         }
         for dir in dirs {
-            let Ok(entries) = std::fs::read_dir(dir) else { continue };
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                continue;
+            };
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().and_then(|s| s.to_str()) != Some("desktop") {
                     continue;
                 }
-                let Ok(text) = std::fs::read_to_string(&path) else { continue };
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
                 let mut icon = None;
                 let mut classes = vec![path
                     .file_stem()

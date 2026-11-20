@@ -1,8 +1,17 @@
-# Auditoría de RAM (2026-11-20) — pendiente para 2026-11-21
+# Auditoría de RAM — línea base cerrada
 
 Medido con `target/release/dinamic-ui`: RSS ~131 MB, de los cuales 22 MB son anónimos
 (heap/texturas) y 108 MB son librerías de GPU mapeadas (nvidia gpucomp 30, gallium 26,
 LLVM 26, nvidia eglcore 7, vulkan_radeon 5).
+
+| Métrica | Línea base |
+|---|---|
+| RSS | ~131 MB (22 MB anónimos + 108 MB GPU mapeada) |
+| Binario release | 20 MB (`opt-level = 2`, `lto = "thin"`) |
+| Capturas visuales | `just snapshots` → `docs/baseline/`; `just snapshots-diff` compara |
+
+La línea base queda congelada antes del refactor de `ui.rs`. Las tareas de abajo son
+optimizaciones pendientes, no bloquean Fase 1 del plan de modularización.
 
 ## Tareas, por prioridad
 

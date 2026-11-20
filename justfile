@@ -194,3 +194,32 @@ uninstall:
 # Tamaño del binario release (sin compilar)
 size: need-release
     @ls -lh {{rel_bin}}
+
+# ── Línea base visual (Fase 0 del plan de modularización) ────────────────
+
+# Capturas de referencia. Requiere Hyprland, `grim` y una instancia en marcha.
+# El dock se captura aparte: su hover depende de env vars al arrancar.
+snapshots: need-release
+    @command -v grim >/dev/null || { echo "grim no instalado"; exit 1; }
+    @mkdir -p docs/baseline
+    ./{{rel_bin}} --notch
+    sleep 0.4
+    grim docs/baseline/island.png
+    ./{{rel_bin}} --expand
+    sleep 0.4
+    grim docs/baseline/bar.png
+    ./{{rel_bin}} --panel
+    sleep 0.4
+    grim docs/baseline/panel.png
+    ./{{rel_bin}} --overview
+    sleep 0.4
+    grim docs/baseline/overview.png
+    ./{{rel_bin}} --menu
+    sleep 0.4
+    grim docs/baseline/menu.png
+    ./{{rel_bin}} --collapse
+    @echo "Capturas en docs/baseline/"
+
+# Comparar las capturas actuales con las guardadas en git.
+snapshots-diff:
+    @git diff --exit-code -- docs/baseline || { echo "Las capturas difieren de la línea base"; exit 1; }

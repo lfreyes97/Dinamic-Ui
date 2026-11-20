@@ -46,6 +46,7 @@ struct Server {
 #[interface(name = "org.freedesktop.Notifications")]
 impl Server {
     /// Estándar: `susssasa{sv}i` → devuelve el id asignado.
+    #[allow(clippy::too_many_arguments)]
     fn notify(
         &mut self,
         app_name: &str,

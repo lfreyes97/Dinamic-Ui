@@ -65,10 +65,7 @@ pub fn socket_path() -> Option<PathBuf> {
 pub fn handle_cli() -> Option<i32> {
     let arg = env::args().nth(1)?;
     let arg = arg.trim_start_matches('-');
-    let command = match Command::parse(arg) {
-        Some(command) => command,
-        None => return None,
-    };
+    let command = Command::parse(arg)?;
 
     let Some(path) = socket_path() else {
         eprintln!("[dinamic-ui] XDG_RUNTIME_DIR no definido");
