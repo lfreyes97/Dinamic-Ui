@@ -1,5 +1,6 @@
 //! Panel de control: pestañas, helpers y constantes propias.
 
+#[cfg(feature = "wallpaper")]
 use super::wallpaper::panel_wallpaper;
 use super::*;
 
@@ -19,7 +20,27 @@ pub(super) const P_ICON_BOX: Color32 = Color32::from_gray(0x25);
 pub(super) const P_TRACK: Color32 = Color32::from_gray(0x30);
 pub(super) const P_OK: Color32 = Color32::from_rgb(0x8b, 0xe0, 0x9b);
 
-pub(super) const PANEL_TABS: [&str; 5] = ["Workspace", "Clock", "System", "Wallpaper", "Alertas"];
+/// Pestañas del panel. Las de componentes opcionales solo existen si se compilaron.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum PanelTab {
+    Workspace,
+    Clock,
+    System,
+    #[cfg(feature = "wallpaper")]
+    Wallpaper,
+    #[cfg(feature = "notifications")]
+    Alerts,
+}
+
+pub(super) const PANEL_TABS: &[(PanelTab, &str)] = &[
+    (PanelTab::Workspace, "Workspace"),
+    (PanelTab::Clock, "Clock"),
+    (PanelTab::System, "System"),
+    #[cfg(feature = "wallpaper")]
+    (PanelTab::Wallpaper, "Wallpaper"),
+    #[cfg(feature = "notifications")]
+    (PanelTab::Alerts, "Alertas"),
+];
 
 pub(super) const DAYS_LONG: [&str; 7] = [
     "lunes",
@@ -96,7 +117,11 @@ pub(super) fn draw_panel(ui: &mut egui::Ui, state: &mut UiState, palette: Palett
     };
     if round_icon_button_at(ui, slot(0.0), "panel-gear", ic::GEAR).clicked() {
         // Comportamiento previo: el engranaje lleva a Alertas (no hay vista de ajustes).
-        state.bar.panel_tab = 4;
+        // Sin esa pestaña compilada no hay a dónde ir.
+        #[cfg(feature = "notifications")]
+        if let Some(i) = PANEL_TABS.iter().position(|(t, _)| *t == PanelTab::Alerts) {
+            state.bar.panel_tab = i;
+        }
     }
     if round_icon_button_at(ui, slot(1.0), "panel-power", ic::POWER).clicked() {
         state.should_exit = true;
@@ -119,7 +144,7 @@ pub(super) fn draw_panel(ui: &mut egui::Ui, state: &mut UiState, palette: Palett
     let inner = bar.shrink(3.0);
     let gap = 3.0;
     let tab_w = (inner.width() - gap * (PANEL_TABS.len() as f32 - 1.0)) / PANEL_TABS.len() as f32;
-    for (i, label) in PANEL_TABS.iter().enumerate() {
+    for (i, (_, label)) in PANEL_TABS.iter().enumerate() {
         let rect = egui::Rect::from_min_size(
             egui::Pos2::new(inner.min.x + i as f32 * (tab_w + gap), inner.min.y),
             egui::Vec2::new(tab_w, inner.height()),
@@ -187,12 +212,14 @@ pub(super) fn draw_panel(ui: &mut egui::Ui, state: &mut UiState, palette: Palett
             // Mismo ancho con o sin barra de scroll visible.
             ui.set_max_width(width);
             ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-            match tab {
-                0 => panel_workspaces(ui, state, palette),
-                1 => panel_clock(ui, state),
-                2 => panel_system(ui, state),
-                3 => panel_wallpaper(ui, state),
-                _ => panel_notifications(ui, state),
+            match PANEL_TABS[tab].0 {
+                PanelTab::Workspace => panel_workspaces(ui, state, palette),
+                PanelTab::Clock => panel_clock(ui, state),
+                PanelTab::System => panel_system(ui, state),
+                #[cfg(feature = "wallpaper")]
+                PanelTab::Wallpaper => panel_wallpaper(ui, state),
+                #[cfg(feature = "notifications")]
+                PanelTab::Alerts => panel_notifications(ui, state),
             }
         });
 }
@@ -926,6 +953,7 @@ pub(super) fn format_minutes(minutes: u32) -> String {
 
 // ── Alertas (centro de notificaciones, cola de la Fase B) ───────────────
 
+#[cfg(feature = "notifications")]
 pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
     let width = ui.available_width();
 

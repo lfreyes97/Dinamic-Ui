@@ -1,15 +1,17 @@
 //! Datos y colas compartidos por todos los componentes del shell.
 //!
 //! Fase 2 del plan de modularización: ningún componente consulta a otro; todos
-//! leen/escriben aquí. En Fase 3 estos campos se repartirán en `Shared` con
-//! `#[cfg]` por feature.
+//! leen/escriben aquí. Los iconos viven aquí (no en el dock) para que overview y
+//! command menu los tengan aunque el dock no esté compilado.
 
-use std::{collections::HashMap, sync::Arc};
+#[cfg(feature = "icons")]
+use std::collections::HashMap;
+use std::sync::Arc;
 
+#[cfg(feature = "icons")]
 use egui::TextureHandle;
 
 use crate::{
-    appicons::AppIcons,
     config,
     ipc::{ClientInfo, HyprlandSnapshot},
     power::BatteryState,
@@ -36,8 +38,8 @@ pub struct Shared {
     pub clients: Vec<ClientInfo>,
     pub battery: BatteryState,
     pub system: SystemInfo,
-    pub app_icons: AppIcons,
-    pub app_icon_textures: HashMap<String, TextureHandle>,
+    #[cfg(feature = "icons")]
+    icons: IconCache,
     /// Destello breve cuando cambia el workspace/ventana.
     pub pulse: f32,
     // ── Colas diferidas ───────────────────────────────────────────────
@@ -49,7 +51,44 @@ pub struct Shared {
     pub menu_action: Option<crate::launcher::EntryAction>,
 }
 
+/// Iconos de app: carga en un hilo y sube a textura bajo demanda.
+#[cfg(feature = "icons")]
+struct IconCache {
+    loader: crate::appicons::AppIcons,
+    textures: HashMap<String, TextureHandle>,
+}
+
+#[cfg(feature = "icons")]
+impl IconCache {
+    fn new() -> Self {
+        Self {
+            loader: crate::appicons::AppIcons::new(),
+            textures: HashMap::new(),
+        }
+    }
+}
+
 impl Shared {
+    /// Textura del icono de una clase/nombre de app. La primera llamada lo pide al
+    /// hilo de carga; mientras no esté listo (o si solo existe en SVG) devuelve
+    /// `None` y quien llama dibuja su glifo de reserva.
+    #[cfg(feature = "icons")]
+    pub fn icon(&mut self, ctx: &egui::Context, class: &str) -> Option<TextureHandle> {
+        let cache = &mut self.icons;
+        cache.loader.request(class);
+        for (name, rgba) in cache.loader.drain() {
+            let size = crate::appicons::SIZE as usize;
+            let image = egui::ColorImage::from_rgba_unmultiplied([size, size], &rgba);
+            let handle = ctx.load_texture(
+                format!("appicon-{name}"),
+                image,
+                egui::TextureOptions::LINEAR,
+            );
+            cache.textures.insert(name, handle);
+        }
+        cache.textures.get(&class.to_lowercase()).cloned()
+    }
+
     pub fn new() -> Self {
         Self {
             config: config::get(),
@@ -58,8 +97,8 @@ impl Shared {
             clients: Vec::new(),
             battery: BatteryState::default(),
             system: SystemInfo::default(),
-            app_icons: AppIcons::new(),
-            app_icon_textures: HashMap::new(),
+            #[cfg(feature = "icons")]
+            icons: IconCache::new(),
             pulse: 0.0,
             pending_commands: Vec::new(),
             pending_spawns: Vec::new(),

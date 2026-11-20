@@ -27,28 +27,6 @@ struct DockItem {
     command: String,
     windows: Vec<crate::ipc::ClientInfo>,
 }
-/// Icono Phosphor según la clase de la ventana (o el comando fijado).
-pub(super) fn dock_icon(name: &str) -> &'static str {
-    let n = name.to_lowercase();
-    if n.contains("firefox") || n.contains("chrome") || n.contains("chromium") {
-        ic::GLOBE
-    } else if n.contains("code") || n.contains("codium") {
-        ic::CODE
-    } else if n.contains("kitty") || n.contains("term") || n.contains("alacritty") {
-        ic::TERMINAL
-    } else if n.contains("mail") || n.contains("thunderbird") {
-        ic::ENVELOPE
-    } else if n.contains("spotify") || n.contains("music") {
-        ic::MUSIC_NOTES
-    } else if n.contains("nautilus") || n.contains("thunar") || n.contains("files") {
-        ic::FOLDER
-    } else if n.contains("obs") || n.contains("camera") {
-        ic::CAMERA
-    } else {
-        ic::APP_WINDOW
-    }
-}
-
 /// Dock inferior: se desliza desde abajo cuando el cursor llega al borde.
 pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let cfg = &config::get().dock;
@@ -94,26 +72,6 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
     }
     if items.is_empty() {
         return;
-    }
-
-    // Pedir iconos reales y subir los que ya vinieron del hilo.
-    for item in &items {
-        state.shared.app_icons.request(&item.name);
-    }
-    for (class, rgba) in state.shared.app_icons.drain() {
-        let image = egui::ColorImage::from_rgba_unmultiplied(
-            [
-                crate::appicons::SIZE as usize,
-                crate::appicons::SIZE as usize,
-            ],
-            &rgba,
-        );
-        let handle = ui.ctx().load_texture(
-            format!("appicon-{class}"),
-            image,
-            egui::TextureOptions::LINEAR,
-        );
-        state.shared.app_icon_textures.insert(class, handle);
     }
 
     const ITEM: f32 = 42.0;
@@ -179,7 +137,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
         let icon_size = if pressed { 22.0 } else { 26.0 };
         let icon_rect =
             egui::Rect::from_center_size(rect.center(), egui::vec2(icon_size, icon_size));
-        if let Some(texture) = state.shared.app_icon_textures.get(&name.to_lowercase()) {
+        if let Some(texture) = state.shared.icon(ui.ctx(), name) {
             egui::Image::new(egui::load::SizedTexture::new(
                 texture.id(),
                 icon_rect.size(),

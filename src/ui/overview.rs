@@ -1,6 +1,5 @@
 //! Overview de workspaces con ventanas en posición relativa.
 
-use super::dock::dock_icon;
 use super::*;
 
 /// Estado del overview (modo pantalla completa).
@@ -112,6 +111,7 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
             .clients
             .iter()
             .filter(|c| c.workspace == *id as i32)
+            .cloned()
             .collect();
         for (j, win) in windows.iter().enumerate() {
             let wx = content.min.x + win.x as f32 / monitor_w * content.width();
@@ -151,11 +151,7 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
                 StrokeKind::Middle,
             );
             let icon_center = rect.min + egui::vec2(9.0, 9.0);
-            if let Some(texture) = state
-                .shared
-                .app_icon_textures
-                .get(&win.class.to_lowercase())
-            {
+            if let Some(texture) = state.shared.icon(ui.ctx(), &win.class) {
                 egui::Image::new(egui::load::SizedTexture::new(
                     texture.id(),
                     egui::vec2(12.0, 12.0),

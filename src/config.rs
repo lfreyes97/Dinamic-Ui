@@ -23,6 +23,7 @@ pub struct Config {
     pub wallpapers: WallpaperConfig,
     pub dock: DockConfig,
     pub menu: MenuConfig,
+    pub icons: IconsConfig,
 }
 
 /// Techo de expansión de la barra: notch → compacto → barra → panel.
@@ -48,6 +49,14 @@ impl Default for BarConfig {
             max_state: BarMaxState::Panel,
         }
     }
+}
+
+/// Iconos de aplicación (feature `icons`).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct IconsConfig {
+    /// Tema de iconos. Vacío: el de GTK (`gsettings`) y, si no hay, `hicolor`.
+    pub theme: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

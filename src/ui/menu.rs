@@ -168,7 +168,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             rect.min + egui::vec2(26.0, rect.height() / 2.0),
             egui::vec2(30.0, 30.0),
         );
-        if let Some(texture) = state.shared.app_icon_textures.get(&entry.icon_key) {
+        if let Some(texture) = state.shared.icon(ui.ctx(), &entry.icon_key) {
             egui::Image::new(egui::load::SizedTexture::new(
                 texture.id(),
                 icon_rect.size(),

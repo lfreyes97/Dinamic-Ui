@@ -8,6 +8,7 @@ use egui_phosphor::regular as ic;
 use crate::{config, notifications::Notification, sysinfo::Wallpaper, theme::Palette};
 
 mod bar;
+mod bar_state;
 mod component;
 
 pub use component::{dispatch_command, input_rects};
@@ -125,7 +126,7 @@ pub fn metrics() -> Metrics {
 /// Estado de la UI. Conserva solo datos compartidos; el estado de cada
 /// componente vive en su módulo (`bar`, `dock`, `menu`, `notifications`, ...).
 pub struct UiState {
-    pub bar: bar::BarState,
+    pub bar: bar_state::BarState,
     pub dock: dock::DockState,
     pub menu: menu::MenuState,
     pub notifications: notifications::NotificationState,
@@ -140,7 +141,7 @@ pub struct UiState {
 impl UiState {
     pub fn new() -> Self {
         Self {
-            bar: bar::BarState::new(),
+            bar: bar_state::BarState::new(),
             dock: dock::DockState::new(),
             menu: menu::MenuState::default(),
             notifications: notifications::NotificationState::default(),
@@ -214,6 +215,28 @@ pub fn draw(
     let ctx = component::DrawCtx { t, panel_t, pill_w };
     for mut component in component::build_components() {
         component.draw(ui, state, ctx, palette);
+    }
+}
+
+/// Icono Phosphor según la clase de la ventana (o el comando fijado).
+fn dock_icon(name: &str) -> &'static str {
+    let n = name.to_lowercase();
+    if n.contains("firefox") || n.contains("chrome") || n.contains("chromium") {
+        ic::GLOBE
+    } else if n.contains("code") || n.contains("codium") {
+        ic::CODE
+    } else if n.contains("kitty") || n.contains("term") || n.contains("alacritty") {
+        ic::TERMINAL
+    } else if n.contains("mail") || n.contains("thunderbird") {
+        ic::ENVELOPE
+    } else if n.contains("spotify") || n.contains("music") {
+        ic::MUSIC_NOTES
+    } else if n.contains("nautilus") || n.contains("thunar") || n.contains("files") {
+        ic::FOLDER
+    } else if n.contains("obs") || n.contains("camera") {
+        ic::CAMERA
+    } else {
+        ic::APP_WINDOW
     }
 }
 

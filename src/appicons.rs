@@ -1,8 +1,9 @@
-//! Iconos reales de apps para el dock.
+//! Iconos reales de apps (feature `icons`).
 //!
-//! Resuelve `class` de Hyprland → `Icon=` del `.desktop` → PNG del tema
-//! (hicolor, Adwaita…). La decodificación va en un hilo propio, igual que las
-//! miniaturas de wallpaper, para no congelar el render.
+//! Resuelve `class` de Hyprland → `Icon=` del `.desktop` → PNG del tema activo
+//! (con herencia, vía `freedesktop-icons`). Solo PNG: sin SVG ni procesos externos;
+//! si un icono es SVG, no hay textura y la UI cae a un glifo Phosphor.
+//! La decodificación va en un hilo propio para no congelar el render.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -14,8 +15,6 @@ use std::{
     thread,
 };
 
-use image::imageops::FilterType;
-
 pub const SIZE: u32 = 48;
 
 type ReadyIcons = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
@@ -24,7 +23,7 @@ type ReadyIcons = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 pub struct AppIcons {
     names: HashMap<String, String>,
     ready: ReadyIcons,
-    tx: Option<Sender<(String, PathBuf)>>,
+    tx: Option<Sender<(String, String)>>,
     requested: HashSet<String>,
 }
 
@@ -85,29 +84,17 @@ impl AppIcons {
             return;
         };
         let tx = self.tx.get_or_insert_with(|| {
-            let (tx, rx) = mpsc::channel::<(String, PathBuf)>();
+            let (tx, rx) = mpsc::channel::<(String, String)>();
             let ready = Arc::clone(&self.ready);
             thread::Builder::new()
                 .name("dinamic-ui-appicons".into())
                 .spawn(move || {
-                    for (class, path) in rx {
-                        let decoded = if path.extension().and_then(|s| s.to_str()) == Some("svg") {
-                            // Sin añadir resvg: convertimos con el `magick` del sistema.
-                            std::process::Command::new("magick")
-                                .arg(&path)
-                                .arg(format!("{SIZE}x{SIZE}"))
-                                .arg("png:-")
-                                .output()
-                                .ok()
-                                .and_then(|out| image::load_from_memory(&out.stdout).ok())
-                        } else {
-                            image::open(&path).ok()
+                    let theme = resolve_theme();
+                    for (class, name) in rx {
+                        let Some(path) = icon_path(&name, &theme) else {
+                            continue;
                         };
-                        if let Some(img) = decoded {
-                            let rgba = img
-                                .resize_exact(SIZE, SIZE, FilterType::Lanczos3)
-                                .to_rgba8()
-                                .into_raw();
+                        if let Some(rgba) = decode_png_icon(&path) {
                             if let Ok(mut ready) = ready.lock() {
                                 ready.push((class, rgba));
                             }
@@ -117,9 +104,7 @@ impl AppIcons {
                 .ok();
             tx
         });
-        if let Some(path) = icon_path(&icon_name) {
-            let _ = tx.send((key, path));
-        }
+        let _ = tx.send((key, icon_name));
     }
 
     pub fn drain(&self) -> Vec<(String, Vec<u8>)> {
@@ -130,38 +115,158 @@ impl AppIcons {
     }
 }
 
-fn icon_path(name: &str) -> Option<PathBuf> {
-    if Path::new(name).is_absolute() {
-        return Some(PathBuf::from(name));
-    }
-    let mut roots = Vec::new();
-    if let Some(home) = std::env::var_os("HOME") {
-        roots.push(PathBuf::from(home).join(".local/share/icons"));
-    }
-    roots.push(PathBuf::from("/usr/share/icons"));
-    roots.push(PathBuf::from("/usr/share/pixmaps"));
+/// Tema activo: `[icons] theme` de la config, si no el de GTK, si no `hicolor`.
+fn resolve_theme() -> String {
+    crate::config::get()
+        .icons
+        .theme
+        .clone()
+        .filter(|t| !t.trim().is_empty())
+        .or_else(freedesktop_icons::default_theme_gtk)
+        .unwrap_or_else(|| "hicolor".to_string())
+}
 
-    for root in roots {
-        // Temas y tamaños típicos; primero los PNG de 48/32/22.
-        for theme in ["hicolor", "Adwaita", "AdwaitaLegacy"] {
-            for size in [
-                "48x48", "128x128", "64x64", "32x32", "256x256", "22x22", "16x16", "scalable",
-            ] {
-                let dir = root.join(theme).join(size).join("apps");
-                let png = dir.join(format!("{name}.png"));
-                if png.is_file() {
-                    return Some(png);
-                }
-                let svg = dir.join(format!("{name}.svg"));
-                if svg.is_file() {
-                    return Some(svg);
+/// Ruta del PNG del icono, o `None` si no existe o solo hay SVG.
+fn icon_path(name: &str, theme: &str) -> Option<PathBuf> {
+    let path = if Path::new(name).is_absolute() {
+        PathBuf::from(name)
+    } else {
+        freedesktop_icons::lookup(name)
+            .with_size(SIZE as u16)
+            .with_theme(theme)
+            .with_cache()
+            .find()?
+    };
+    let is_png = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("png"));
+    is_png.then_some(path)
+}
+
+/// Decodifica un PNG a `SIZE × SIZE` RGBA (sin premultiplicar).
+fn decode_png_icon(path: &Path) -> Option<Vec<u8>> {
+    let file = std::fs::File::open(path).ok()?;
+    let mut decoder = png::Decoder::new(std::io::BufReader::new(file));
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0; reader.output_buffer_size()?];
+    let info = reader.next_frame(&mut buf).ok()?;
+    let data = &buf[..info.buffer_size()];
+    let (w, h) = (info.width as usize, info.height as usize);
+    let rgba: Vec<u8> = match info.color_type {
+        png::ColorType::Rgba => data.to_vec(),
+        png::ColorType::Rgb => data
+            .chunks_exact(3)
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect(),
+        png::ColorType::GrayscaleAlpha => data
+            .chunks_exact(2)
+            .flat_map(|p| [p[0], p[0], p[0], p[1]])
+            .collect(),
+        png::ColorType::Grayscale => data.iter().flat_map(|&g| [g, g, g, 255]).collect(),
+        png::ColorType::Indexed => return None,
+    };
+    if w == 0 || h == 0 || rgba.len() != w * h * 4 {
+        return None;
+    }
+    Some(resize_rgba(&rgba, w, h, SIZE as usize))
+}
+
+/// Pesos de un filtro triangular (bilinear con antialias al reducir) para un eje.
+fn axis_weights(src: usize, dst: usize) -> Vec<(usize, Vec<f32>)> {
+    let scale = src as f32 / dst as f32;
+    let support = scale.max(1.0);
+    (0..dst)
+        .map(|i| {
+            let center = (i as f32 + 0.5) * scale;
+            let first = ((center - support).floor().max(0.0)) as usize;
+            let last = ((center + support).ceil() as usize).min(src);
+            let mut weights: Vec<f32> = (first..last)
+                .map(|x| (1.0 - ((x as f32 + 0.5 - center) / support).abs()).max(0.0))
+                .collect();
+            let sum: f32 = weights.iter().sum();
+            if sum > 0.0 {
+                weights.iter_mut().for_each(|w| *w /= sum);
+            }
+            (first, weights)
+        })
+        .collect()
+}
+
+/// Reescala RGBA a `dst × dst` promediando en alfa premultiplicado (sin halos).
+fn resize_rgba(src: &[u8], w: usize, h: usize, dst: usize) -> Vec<u8> {
+    if w == dst && h == dst {
+        return src.to_vec();
+    }
+    let premul: Vec<f32> = src
+        .chunks_exact(4)
+        .flat_map(|p| {
+            let a = p[3] as f32 / 255.0;
+            [p[0] as f32 * a, p[1] as f32 * a, p[2] as f32 * a, p[3] as f32]
+        })
+        .collect();
+    let (xw, yw) = (axis_weights(w, dst), axis_weights(h, dst));
+    // Horizontal: h filas × dst columnas.
+    let mut tmp = vec![0.0f32; h * dst * 4];
+    for y in 0..h {
+        for (x, (first, weights)) in xw.iter().enumerate() {
+            let mut acc = [0.0f32; 4];
+            for (k, wt) in weights.iter().enumerate() {
+                let i = (y * w + first + k) * 4;
+                for c in 0..4 {
+                    acc[c] += premul[i + c] * wt;
                 }
             }
-        }
-        let direct = root.join(format!("{name}.png"));
-        if direct.is_file() {
-            return Some(direct);
+            tmp[(y * dst + x) * 4..][..4].copy_from_slice(&acc);
         }
     }
-    None
+    // Vertical y des-premultiplicado.
+    let mut out = vec![0u8; dst * dst * 4];
+    for (y, (first, weights)) in yw.iter().enumerate() {
+        for x in 0..dst {
+            let mut acc = [0.0f32; 4];
+            for (k, wt) in weights.iter().enumerate() {
+                let i = ((first + k) * dst + x) * 4;
+                for c in 0..4 {
+                    acc[c] += tmp[i + c] * wt;
+                }
+            }
+            let a = acc[3];
+            let o = (y * dst + x) * 4;
+            if a > 0.5 {
+                let inv = 255.0 / a;
+                for c in 0..3 {
+                    out[o + c] = (acc[c] * inv).round().clamp(0.0, 255.0) as u8;
+                }
+            }
+            out[o + 3] = a.round().clamp(0.0, 255.0) as u8;
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resize_keeps_flat_color_and_alpha() {
+        let src: Vec<u8> = (0..(96 * 96)).flat_map(|_| [200, 10, 10, 255]).collect();
+        let out = resize_rgba(&src, 96, 96, 48);
+        assert_eq!(out.len(), 48 * 48 * 4);
+        assert!(out.chunks_exact(4).all(|p| p == [200, 10, 10, 255]));
+    }
+
+    #[test]
+    fn upscale_transparent_stays_transparent() {
+        let src = vec![0u8; 22 * 22 * 4];
+        let out = resize_rgba(&src, 22, 22, 48);
+        assert!(out.chunks_exact(4).all(|p| p[3] == 0));
+    }
+
+    #[test]
+    fn svg_is_rejected_for_fallback() {
+        assert!(icon_path("/no/existe/icono.svg", "hicolor").is_none());
+    }
 }

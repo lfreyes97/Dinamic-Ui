@@ -1,62 +1,6 @@
-//! Barra: isla/píldora y fila de workspaces, reloj y estado.
+//! Barra: dibujo de la isla/píldora, workspaces, reloj y estado (feature `bar`).
 
 use super::*;
-
-/// Fases de la barra, de menor a mayor expansión.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BarPhase {
-    Notch,
-    Compact,
-    Bar,
-    Panel,
-}
-
-/// Estado de la barra: isla → píldora → barra, con panel acoplado.
-#[derive(Default)]
-pub struct BarState {
-    pub expansion: f32,
-    pub expanded: bool,
-    pub show_panel: bool,
-    pub panel_progress: f32,
-    pub panel_tab: usize,
-    pub island_progress: f32,
-    pub island_active: bool,
-    pub island_compact: bool,
-    pub layout_preset: usize,
-}
-
-impl BarState {
-    /// Fase actual, derivada de los booleanos hasta que Fase 3 los sustituya.
-    #[allow(dead_code)]
-    pub fn phase(&self) -> BarPhase {
-        if self.show_panel {
-            BarPhase::Panel
-        } else if self.expanded {
-            BarPhase::Bar
-        } else if self.island_compact {
-            BarPhase::Compact
-        } else {
-            BarPhase::Notch
-        }
-    }
-
-    pub fn new() -> Self {
-        let panel = std::env::var_os("DINAMIC_UI_PANEL").is_some();
-        Self {
-            expanded: std::env::var_os("DINAMIC_UI_EXPANDED").is_some(),
-            show_panel: panel,
-            panel_progress: if panel { 1.0 } else { 0.0 },
-            panel_tab: std::env::var("DINAMIC_UI_PANEL_TAB")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0)
-                .min(crate::ui::panel::PANEL_TABS.len() - 1),
-            island_active: std::env::var_os("DINAMIC_UI_ISLAND").is_some(),
-            ..Self::default()
-        }
-    }
-}
 
 /// Icono de estado de la barra con tooltip.
 pub(super) fn bar_icon(ui: &mut egui::Ui, icon: &str, color: Color32, tip: String) {
