@@ -92,6 +92,8 @@ pub fn build_components() -> Vec<Box<dyn Component>> {
     components.push(Box::new(Dock));
     #[cfg(feature = "overview")]
     components.push(Box::new(Overview));
+    #[cfg(feature = "activities")]
+    components.push(Box::new(Activities));
     #[cfg(feature = "command-menu")]
     components.push(Box::new(CommandMenu));
     components
@@ -703,9 +705,9 @@ impl Component for Overview {
         }
         use super::overview::OverviewKind;
         match state.overview.kind {
-            OverviewKind::Workspaces | OverviewKind::Activities => vec![(0, 0, screen_w, screen_h)],
+            OverviewKind::Workspaces => vec![(0, 0, screen_w, screen_h)],
             OverviewKind::StripH | OverviewKind::StripV => {
-                vec![super::overview_collection::strip_rect(
+                vec![super::overview_strips::strip_rect(
                     state, screen_w, screen_h,
                 )]
             }
@@ -714,7 +716,7 @@ impl Component for Overview {
 
     fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
         let mut dirty = false;
-        // Animación de entrada/salida; al terminar de cerrar se sueltan la búsqueda y las apps.
+        // Animación de entrada/salida; al terminar de cerrar se suelta la búsqueda.
         let ov = &mut state.overview;
         let before = ov.progress;
         ov.progress = approach(
@@ -722,8 +724,7 @@ impl Component for Overview {
             if ov.overview { 1.0 } else { 0.0 },
             ctx.dt * 7.0,
         );
-        if !ov.overview && ov.progress <= 0.0 && !ov.apps.is_empty() {
-            ov.apps = Vec::new();
+        if !ov.overview && ov.progress <= 0.0 && !ov.query.is_empty() {
             ov.query.clear();
         }
         dirty |= (ov.progress - before).abs() > 0.0005;
@@ -760,7 +761,6 @@ impl Component for Overview {
         use super::overview::OverviewKind;
         let kind = match command {
             "overview" => OverviewKind::Workspaces,
-            "overview-activities" => OverviewKind::Activities,
             "overview-strip-h" => OverviewKind::StripH,
             "overview-strip-v" => OverviewKind::StripV,
             _ => return false,
@@ -770,6 +770,82 @@ impl Component for Overview {
             state.overview.overview = false;
         } else {
             overview::open(state, kind);
+            // Solo un overlay a pantalla completa a la vez.
+            #[cfg(feature = "activities")]
+            {
+                state.activities.open = false;
+            }
+        }
+        true
+    }
+}
+
+/// Actividades: lanzador a pantalla completa (feature `activities`, independiente del overview).
+#[cfg(feature = "activities")]
+struct Activities;
+#[cfg(feature = "activities")]
+impl Component for Activities {
+    fn name(&self) -> &'static str {
+        "activities"
+    }
+
+    fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, _ctx: DrawCtx, palette: Palette) {
+        if !state.activities.visible() {
+            return;
+        }
+        // Fundido de entrada y salida; se restaura la opacidad para los componentes siguientes.
+        let fade = crate::smootherstep(state.activities.progress);
+        let previous = ui.opacity();
+        ui.set_opacity(previous * fade);
+        activities::draw(ui, state, palette);
+        ui.set_opacity(previous);
+    }
+
+    fn input_rects(
+        &self,
+        state: &UiState,
+        screen_w: i32,
+        screen_h: i32,
+    ) -> Vec<(i32, i32, i32, i32)> {
+        if state.activities.open {
+            vec![(0, 0, screen_w, screen_h)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        let a = &mut state.activities;
+        let before = a.progress;
+        a.progress = approach(a.progress, if a.open { 1.0 } else { 0.0 }, ctx.dt * 7.0);
+        // Al terminar de cerrar se sueltan las apps leídas y la búsqueda.
+        if !a.open && a.progress <= 0.0 && !a.apps.is_empty() {
+            a.apps = Vec::new();
+            a.query.clear();
+        }
+        (a.progress - before).abs() > 0.0005
+    }
+
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        activities::handle_key(state, key)
+    }
+
+    fn wants_keyboard(&self, state: &UiState) -> bool {
+        state.activities.open
+    }
+
+    fn on_command(&mut self, command: &str, state: &mut UiState) -> bool {
+        if command != "activities" {
+            return false;
+        }
+        if state.activities.open {
+            state.activities.open = false;
+        } else {
+            activities::open(state);
+            #[cfg(feature = "overview")]
+            {
+                state.overview.overview = false;
+            }
         }
         true
     }
@@ -810,6 +886,10 @@ impl Component for CommandMenu {
                 #[cfg(feature = "overview")]
                 {
                     state.overview.overview = false;
+                }
+                #[cfg(feature = "activities")]
+                {
+                    state.activities.open = false;
                 }
                 state.bar.show_panel = false;
                 menu.menu_query.clear();

@@ -29,7 +29,7 @@ lto = "thin"
 
 # Componentes compilables por separado. Ver docs/MODULARIZATION_PLAN.md.
 [features]
-default = ["bar", "dock", "taskbar", "topbar", "overview", "command-menu", "notifications", "wallpaper"]
+default = ["bar", "dock", "taskbar", "topbar", "overview", "activities", "command-menu", "notifications", "wallpaper"]
 # Isla / píldora / barra / panel (un solo componente con estados de expansión).
 bar = []
 # Topbar GNOME-like: reloj, estado y desplegables.
@@ -39,7 +39,11 @@ icons = ["dep:freedesktop-icons", "dep:png"]
 dock = ["icons"]
 # Otra vista sobre el modelo del dock (reservada: aún sin implementar).
 taskbar = ["dock"]
+# Overview de workspaces: rejilla de pantalla completa y franjas acoplables.
 overview = ["icons"]
+# Actividades: lanzador a pantalla completa (apps instaladas + ventanas). No es un overview de
+# workspaces: se parece al modo «Apps» del command menu y no depende del overview.
+activities = ["icons"]
 command-menu = ["icons"]
 # Servidor org.freedesktop.Notifications (zbus) y su tarjeta.
 notifications = ["dep:zbus"]

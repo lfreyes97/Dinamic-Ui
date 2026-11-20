@@ -94,9 +94,10 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
     if act_response.clicked() {
         state.topbar.quick_open = false;
         state.topbar.calendar_open = false;
-        #[cfg(feature = "overview")]
-        {
-            state.overview.overview = true;
+        // Abre Actividades si está compilada; si no, el overview de workspaces. Va por el
+        // registro de comandos: el topbar no conoce el estado de ninguno de los dos.
+        if !super::dispatch_command("activities", state) {
+            super::dispatch_command("overview", state);
         }
     }
     let focus = state.shared.snapshot.window_title.clone();

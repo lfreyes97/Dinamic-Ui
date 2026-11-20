@@ -20,7 +20,7 @@ pub enum Command {
     Compact,
     Notch,
     Overview,
-    OverviewActivities,
+    Activities,
     OverviewStripH,
     OverviewStripV,
     Taskbar,
@@ -40,7 +40,7 @@ impl Command {
             Self::Compact => "compact",
             Self::Notch => "notch",
             Self::Overview => "overview",
-            Self::OverviewActivities => "overview-activities",
+            Self::Activities => "activities",
             Self::OverviewStripH => "overview-strip-h",
             Self::OverviewStripV => "overview-strip-v",
             Self::Taskbar => "taskbar",
@@ -59,10 +59,10 @@ impl Command {
             | Self::Panel
             | Self::Compact
             | Self::Notch => Some(("bar", cfg!(feature = "bar"))),
-            Self::Overview
-            | Self::OverviewActivities
-            | Self::OverviewStripH
-            | Self::OverviewStripV => Some(("overview", cfg!(feature = "overview"))),
+            Self::Overview | Self::OverviewStripH | Self::OverviewStripV => {
+                Some(("overview", cfg!(feature = "overview")))
+            }
+            Self::Activities => Some(("activities", cfg!(feature = "activities"))),
             Self::Taskbar => Some(("taskbar", cfg!(feature = "taskbar"))),
             Self::Topbar => Some(("topbar", cfg!(feature = "topbar"))),
             Self::Menu => Some(("command-menu", cfg!(feature = "command-menu"))),
@@ -81,7 +81,8 @@ impl Command {
             "compact" => Some(Self::Compact),
             "notch" => Some(Self::Notch),
             "overview" => Some(Self::Overview),
-            "overview-activities" => Some(Self::OverviewActivities),
+            // `overview-activities` era el nombre antiguo: se acepta para no romper atajos.
+            "activities" | "overview-activities" => Some(Self::Activities),
             "overview-strip-h" => Some(Self::OverviewStripH),
             "overview-strip-v" => Some(Self::OverviewStripV),
             "taskbar" => Some(Self::Taskbar),

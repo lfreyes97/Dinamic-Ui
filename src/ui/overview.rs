@@ -1,25 +1,27 @@
-//! Overview: cuatro vistas (rejilla, actividades, franja horizontal y vertical) sobre un
-//! mismo estado. La lógica (qué se muestra, navegación, búsqueda) vive en `overview_model.rs`.
+//! Overview de workspaces: la rejilla de pantalla completa y las franjas acoplables, sobre un
+//! mismo estado. La lógica (qué se muestra, navegación, búsqueda) vive en `overview_model.rs`;
+//! las piezas visuales compartidas con Actividades, en `overlay.rs`.
 
 use smithay_client_toolkit::seat::keyboard::Keysym;
 
-use super::overview_model::{self as model, Activation, Dir};
+use super::nav::{step, window_rect, Dir};
+use super::overlay::{drop_shadow, hint_bar, mini_window, pointer_moved, search_pill};
+use super::overview_model as model;
 use super::*;
 
-/// Las cuatro vistas de overview.
+/// Las tres vistas de overview de workspaces.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum OverviewKind {
     #[default]
     Workspaces,
-    Activities,
     StripH,
     StripV,
 }
 
 impl OverviewKind {
-    /// Vistas modales: cubren la pantalla, toman el teclado y admiten búsqueda.
+    /// Vista modal: cubre la pantalla, toma el teclado y admite búsqueda. Las franjas no.
     pub fn is_modal(self) -> bool {
-        matches!(self, Self::Workspaces | Self::Activities)
+        matches!(self, Self::Workspaces)
     }
 }
 
@@ -34,15 +36,18 @@ pub struct OverviewState {
     pub strip_offset: usize,
     /// Miniaturas que caben en la franja (lo fija el dibujo según el espacio; 0 = aún no).
     pub strip_visible: usize,
-    /// Búsqueda (vistas modales).
+    /// Búsqueda (solo la rejilla).
     pub query: String,
     /// Elemento seleccionado con el teclado o el cursor.
     pub selected: usize,
-    /// Apps instaladas, leídas al abrir Actividades y soltadas al terminar de cerrar.
-    pub apps: Vec<crate::desktop::DesktopApp>,
 }
 
 impl OverviewState {
+    /// ¿Hay algo que dibujar? (también mientras se desvanece al cerrar).
+    pub fn visible(&self) -> bool {
+        self.overview || self.progress > 0.005
+    }
+
     /// Miniaturas visibles de la franja para navegar con el teclado.
     pub fn strip_window(&self) -> usize {
         if self.strip_visible == 0 {
@@ -51,16 +56,7 @@ impl OverviewState {
             self.strip_visible
         }
     }
-
-    /// ¿Hay algo que dibujar? (también mientras se desvanece al cerrar).
-    pub fn visible(&self) -> bool {
-        self.overview || self.progress > 0.005
-    }
 }
-
-/// Columnas de la cuadrícula de Actividades y máximo de apps mostradas.
-pub(super) const ACTIVITY_COLS: usize = 6;
-const ACTIVITY_CAP: usize = 24;
 
 pub(super) fn current_ws(state: &UiState) -> u32 {
     state.shared.snapshot.workspace.parse::<u32>().unwrap_or(1)
@@ -81,17 +77,6 @@ pub(super) fn strip_ids(state: &UiState) -> Vec<u32> {
     model::pad_workspace_ids(ids, count as usize, count)
 }
 
-/// Apps de Actividades según la búsqueda actual.
-pub(super) fn activity_tiles(state: &UiState) -> Vec<model::Tile> {
-    model::build_tiles(
-        &state.overview.apps,
-        &state.shared.clients,
-        &state.shared.config.dock.pinned,
-        &state.overview.query,
-        ACTIVITY_CAP,
-    )
-}
-
 /// Abre una vista (o cambia de vista si ya estaba abierta) con la selección inicial.
 pub(super) fn open(state: &mut UiState, kind: OverviewKind) {
     state.bar.show_panel = false;
@@ -108,26 +93,7 @@ pub(super) fn open(state: &mut UiState, kind: OverviewKind) {
                 model::scroll_to(0, selected, state.overview.strip_window());
             selected
         }
-        OverviewKind::Activities => 0,
     };
-    // Las apps instaladas solo se leen mientras Actividades está abierta.
-    state.overview.apps = if kind == OverviewKind::Activities {
-        crate::desktop::scan()
-    } else {
-        Vec::new()
-    };
-}
-
-/// Ejecuta una tile: enfoca (cicla entre sus ventanas) o lanza.
-pub(super) fn run_tile(state: &mut UiState, tile: &model::Tile) {
-    match model::activate(tile, &state.shared.snapshot.window_address) {
-        Activation::Focus(address) => state.shared.overview_focus = Some(address),
-        Activation::Launch(argv) => {
-            state.shared.pending_spawns.push(argv);
-            state.overview.overview = false;
-        }
-        Activation::Nothing => {}
-    }
 }
 
 /// Primera ventana que coincide con la búsqueda, recorriendo los workspaces en orden.
@@ -170,12 +136,7 @@ fn navigate(state: &mut UiState, dir: Dir) {
     match state.overview.kind {
         OverviewKind::Workspaces => {
             let count = grid_ids(state).len();
-            state.overview.selected = model::step(selected, dir, count.clamp(1, 3), count);
-        }
-        OverviewKind::Activities => {
-            let count = activity_tiles(state).len();
-            let cols = ACTIVITY_COLS.min(count.max(1));
-            state.overview.selected = model::step(selected, dir, cols, count);
+            state.overview.selected = step(selected, dir, count.clamp(1, 3), count);
         }
         OverviewKind::StripH | OverviewKind::StripV => {
             // En una franja solo hay un eje: arriba/izquierda retrocede, abajo/derecha avanza.
@@ -184,7 +145,7 @@ fn navigate(state: &mut UiState, dir: Dir) {
                 Dir::Right | Dir::Down => Dir::Right,
             };
             let count = strip_ids(state).len();
-            let next = model::step(selected, dir, count, count);
+            let next = step(selected, dir, count, count);
             let visible = state.overview.strip_window();
             state.overview.selected = next;
             state.overview.strip_offset =
@@ -203,11 +164,6 @@ fn activate_selected(state: &mut UiState) {
                 }
             } else if let Some(id) = grid_ids(state).get(selected) {
                 state.shared.overview_workspace = Some(*id);
-            }
-        }
-        OverviewKind::Activities => {
-            if let Some(tile) = activity_tiles(state).get(selected).cloned() {
-                run_tile(state, &tile);
             }
         }
         OverviewKind::StripH | OverviewKind::StripV => {
@@ -235,8 +191,8 @@ fn digit(key: Keysym) -> Option<u32> {
 
 /// Teclado del overview abierto; `true` si consumió la tecla.
 ///
-/// `Esc` primero limpia la búsqueda y después cierra. En las vistas modales escribir filtra;
-/// en la rejilla, un número salta a ese workspace mientras no haya búsqueda.
+/// `Esc` primero limpia la búsqueda y después cierra. En la rejilla escribir filtra y un número
+/// salta a ese workspace mientras no haya búsqueda; las franjas solo navegan y saltan.
 pub(super) fn handle_key(state: &mut UiState, key: Keysym) -> bool {
     if !state.overview.overview {
         return false;
@@ -267,11 +223,7 @@ pub(super) fn handle_key(state: &mut UiState, key: Keysym) -> bool {
     }
 
     let kind = state.overview.kind;
-    let jump_allowed = match kind {
-        OverviewKind::Workspaces => state.overview.query.is_empty(),
-        OverviewKind::StripH | OverviewKind::StripV => true,
-        OverviewKind::Activities => false,
-    };
+    let jump_allowed = !kind.is_modal() || state.overview.query.is_empty();
     if jump_allowed {
         if let Some(n) = digit(key) {
             state.shared.overview_workspace = Some(n);
@@ -294,181 +246,8 @@ pub(super) fn handle_key(state: &mut UiState, key: Keysym) -> bool {
             reset_selection(state);
         }
     }
-    // Una vista modal tiene el teclado en exclusiva: no dejamos pasar teclas sueltas.
+    // La rejilla tiene el teclado en exclusiva: no dejamos pasar teclas sueltas.
     true
-}
-
-/// ¿El cursor se movió en este frame? Evita que una tarjeta quieta bajo el cursor robe la
-/// selección que se acaba de mover con el teclado.
-pub(super) fn pointer_moved(ui: &egui::Ui) -> bool {
-    ui.input(|i| i.pointer.delta() != egui::Vec2::ZERO)
-}
-
-// ── Piezas visuales compartidas por las cuatro vistas ───────────────────
-
-/// Ancho en píxeles de un texto (para colocar chips y etiquetas).
-fn text_width(ui: &egui::Ui, text: &str, size: f32) -> f32 {
-    ui.painter()
-        .layout_no_wrap(
-            text.to_string(),
-            egui::FontId::new(size, egui::FontFamily::Proportional),
-            egui::Color32::WHITE,
-        )
-        .size()
-        .x
-}
-
-/// Sombra suave bajo una tarjeta flotante.
-pub(super) fn drop_shadow(
-    ui: &egui::Ui,
-    rect: egui::Rect,
-    radius: u8,
-    offset: i8,
-    blur: u8,
-    alpha: u8,
-) {
-    let shadow = egui::Shadow {
-        offset: [0, offset],
-        blur,
-        spread: 0,
-        color: Palette::scrim(alpha),
-    };
-    ui.painter()
-        .add(shadow.as_shape(rect, CornerRadius::same(radius)));
-}
-
-/// Píldora de búsqueda con el chip `ESC`. Muestra lo que se escribe (las teclas las recoge
-/// `handle_key`).
-pub(super) fn search_pill(ui: &egui::Ui, screen: egui::Rect, query: &str, placeholder: &str) {
-    let p = pal();
-    let w = (screen.width() * 0.78).min(400.0);
-    let r = egui::Rect::from_center_size(
-        egui::pos2(screen.center().x, screen.min.y + 33.0),
-        egui::vec2(w, 34.0),
-    );
-    drop_shadow(ui, r, 17, 10, 30, 100);
-    ui.painter().rect(
-        r,
-        CornerRadius::same(17),
-        Palette::with_alpha(p.solid(), 232),
-        Stroke::new(1.0, if query.is_empty() { p.border } else { p.accent }),
-        StrokeKind::Middle,
-    );
-    icon_at(
-        ui,
-        egui::pos2(r.min.x + 17.0, r.center().y),
-        ic::MAGNIFYING_GLASS,
-        ICON_MD,
-        p.muted,
-    );
-    let (text, color) = if query.is_empty() {
-        (placeholder.to_string(), p.dim)
-    } else {
-        (format!("{query}|"), p.text)
-    };
-    text_at(
-        ui,
-        egui::pos2(r.min.x + 32.0, r.center().y),
-        egui::Align2::LEFT_CENTER,
-        text,
-        TEXT_BODY,
-        color,
-    );
-    let esc_w = text_width(ui, "ESC", 8.5) + 12.0;
-    let chip = egui::Rect::from_center_size(
-        egui::pos2(r.max.x - 14.0 - esc_w / 2.0, r.center().y),
-        egui::vec2(esc_w, 16.0),
-    );
-    ui.painter().rect(
-        chip,
-        CornerRadius::same(5),
-        Palette::sheen(8),
-        Stroke::new(1.0, p.border),
-        StrokeKind::Middle,
-    );
-    text_at(
-        ui,
-        chip.center(),
-        egui::Align2::CENTER_CENTER,
-        "ESC",
-        8.5,
-        p.muted,
-    );
-}
-
-/// Barra de ayuda inferior con las teclas dibujadas como chips.
-pub(super) fn hint_bar(ui: &egui::Ui, screen: egui::Rect, items: &[(&str, &str)]) {
-    let p = pal();
-    let (size, pad, gap_in, gap_out) = (9.5, 6.0, 5.0, 16.0);
-    let widths: Vec<(f32, f32)> = items
-        .iter()
-        .map(|(key, label)| {
-            (
-                text_width(ui, key, size) + pad * 2.0,
-                text_width(ui, label, size),
-            )
-        })
-        .collect();
-    let total: f32 = widths.iter().map(|(k, l)| k + gap_in + l).sum::<f32>()
-        + gap_out * (items.len().saturating_sub(1)) as f32;
-    let y = screen.max.y - 18.0;
-    let mut x = screen.center().x - total / 2.0;
-    for ((key, label), (kw, lw)) in items.iter().zip(widths) {
-        let chip = egui::Rect::from_min_size(egui::pos2(x, y - 8.0), egui::vec2(kw, 16.0));
-        ui.painter().rect(
-            chip,
-            CornerRadius::same(4),
-            Palette::sheen(8),
-            Stroke::new(1.0, p.border),
-            StrokeKind::Middle,
-        );
-        text_at(
-            ui,
-            chip.center(),
-            egui::Align2::CENTER_CENTER,
-            *key,
-            size,
-            p.muted,
-        );
-        x += kw + gap_in;
-        text_at(
-            ui,
-            egui::pos2(x, y),
-            egui::Align2::LEFT_CENTER,
-            *label,
-            size,
-            p.dim,
-        );
-        x += lw + gap_out;
-    }
-}
-
-/// Ventana esquemática dentro de una miniatura: gris translúcido; la activa, teñida de acento.
-pub(super) fn mini_window(
-    ui: &egui::Ui,
-    rect: egui::Rect,
-    active: bool,
-    hovered: bool,
-    radius: u8,
-) {
-    let p = pal();
-    let (fill, stroke) = if hovered {
-        (Palette::with_alpha(p.muted, 80), p.text)
-    } else if active {
-        (
-            Palette::with_alpha(p.accent, 77),
-            Palette::with_alpha(p.accent, 115),
-        )
-    } else {
-        (Palette::with_alpha(p.muted, 56), Palette::sheen(23))
-    };
-    ui.painter().rect(
-        rect,
-        CornerRadius::same(radius),
-        fill,
-        Stroke::new(1.0, stroke),
-        StrokeKind::Middle,
-    );
 }
 
 /// Overview: rejilla de workspaces con las ventanas en su posición relativa.
@@ -636,7 +415,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         // La ventana activa se pinta al final: queda encima si se solapan.
         for j in model::paint_order(&windows, &active_address) {
             let win = &windows[j];
-            let rect = model::window_rect(win, monitor, mon, 8.0);
+            let rect = window_rect(win, monitor, mon, 8.0);
             if rect.width() <= 0.0 || rect.height() <= 0.0 {
                 continue;
             }
@@ -716,8 +495,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
 pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     match state.overview.kind {
         OverviewKind::Workspaces => draw_workspaces(ui, state, palette),
-        OverviewKind::Activities => super::overview_collection::draw_activities(ui, state, palette),
-        OverviewKind::StripH => super::overview_collection::draw_strip_h(ui, state, palette),
-        OverviewKind::StripV => super::overview_collection::draw_strip_v(ui, state, palette),
+        OverviewKind::StripH => super::overview_strips::draw_strip_h(ui, state, palette),
+        OverviewKind::StripV => super::overview_strips::draw_strip_v(ui, state, palette),
     }
 }

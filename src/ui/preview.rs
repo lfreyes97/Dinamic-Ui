@@ -167,6 +167,7 @@ fn render_sized(name: &str, size: (f32, f32), windows_behind: bool, mut state: U
             },
             {
                 state.overview.progress = if state.overview.overview { 1.0 } else { 0.0 };
+                state.activities.progress = if state.activities.open { 1.0 } else { 0.0 };
                 state
             },
         );
@@ -185,15 +186,17 @@ fn render_sized(name: &str, size: (f32, f32), windows_behind: bool, mut state: U
 
 fn open_overview(kind: overview::OverviewKind, query: &str, k: f32) -> UiState {
     let mut state = sample_state(k);
-    state.overview.apps = apps();
     overview::open(&mut state, kind);
-    // `open` relee los `.desktop` del sistema: aquí queremos los de ejemplo.
-    state.overview.apps = if kind == overview::OverviewKind::Activities {
-        apps()
-    } else {
-        Vec::new()
-    };
     state.overview.query = query.into();
+    state
+}
+
+/// Actividades con las apps de ejemplo (no las del sistema).
+fn open_activities(query: &str, k: f32) -> UiState {
+    let mut state = sample_state(k);
+    activities::open(&mut state);
+    state.activities.apps = apps();
+    state.activities.query = query.into();
     state
 }
 
@@ -220,15 +223,11 @@ fn ui_preview_overviews() {
         false,
         open_overview(Workspaces, "code", 1.0),
     );
-    render(
-        "overview-activities",
-        false,
-        open_overview(Activities, "", 1.0),
-    );
+    render("overview-activities", false, open_activities("", 1.0));
     render(
         "overview-activities-search",
         false,
-        open_overview(Activities, "term", 1.0),
+        open_activities("term", 1.0),
     );
     render(
         "strip-h-top",
@@ -263,7 +262,7 @@ fn ui_preview_overviews() {
         "overview-activities-1080p",
         big,
         false,
-        open_overview(Activities, "", 1.5),
+        open_activities("", 1.5),
     );
     render_sized(
         "strip-h-top-1080p",

@@ -20,7 +20,8 @@ hilos de lo demás.
   | `bar` | — | notch/isla/píldora/barra/panel |
   | `dock` | `icons` | modelo + vista autohide |
   | `taskbar` | `dock` | otra vista sobre el modelo del dock |
-  | `overview` | `icons` | consume clientes del núcleo, no del dock |
+  | `overview` | `icons` | rejilla y franjas de workspaces; consume clientes del núcleo |
+  | `activities` | `icons` | lanzador (apps + ventanas); independiente del overview |
   | `command-menu` | `icons` | `launcher.rs` |
   | `notifications` | `dep:zbus` | servidor DBus en hilo propio |
   | `wallpaper` | `dep:image` | pestaña + `thumbs.rs` |

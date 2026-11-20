@@ -12,7 +12,7 @@ use crate::{config, theme::Palette};
 mod bar;
 mod bar_state;
 mod component;
-#[cfg(all(test, feature = "overview"))]
+#[cfg(all(test, feature = "overview", feature = "activities"))]
 mod preview;
 
 pub use component::{
@@ -22,18 +22,27 @@ pub use component::{
 #[cfg(feature = "bar")]
 #[allow(unused_imports)] // lo usan los módulos hermanos vía `use super::*`
 use panel::*;
+#[cfg(feature = "activities")]
+mod activities;
+#[cfg(feature = "activities")]
+mod activities_model;
 #[cfg(feature = "dock")]
 mod dock;
 #[cfg(feature = "command-menu")]
 mod menu;
 #[cfg(feature = "notifications")]
 mod notifications;
+// Piezas comunes de los overlays a pantalla completa.
+#[cfg(any(feature = "overview", feature = "activities"))]
+mod nav;
+#[cfg(any(feature = "overview", feature = "activities"))]
+mod overlay;
 #[cfg(feature = "overview")]
 mod overview;
 #[cfg(feature = "overview")]
-mod overview_collection;
-#[cfg(feature = "overview")]
 mod overview_model;
+#[cfg(feature = "overview")]
+mod overview_strips;
 #[cfg(feature = "bar")]
 pub mod panel;
 #[cfg(feature = "taskbar")]
@@ -161,6 +170,8 @@ pub struct UiState {
     pub notifications: notifications::NotificationState,
     #[cfg(feature = "overview")]
     pub overview: overview::OverviewState,
+    #[cfg(feature = "activities")]
+    pub activities: activities::ActivitiesState,
     #[cfg(feature = "wallpaper")]
     pub wallpaper: wallpaper::WallpaperState,
 
@@ -185,6 +196,8 @@ impl UiState {
             notifications: notifications::NotificationState::new(),
             #[cfg(feature = "overview")]
             overview: overview::OverviewState::default(),
+            #[cfg(feature = "activities")]
+            activities: activities::ActivitiesState::default(),
             #[cfg(feature = "wallpaper")]
             wallpaper: wallpaper::WallpaperState::default(),
             shared: crate::shared::Shared::new(),

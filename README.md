@@ -52,7 +52,7 @@ El binario expone un socket en `$XDG_RUNTIME_DIR/dinamic-ui.sock` y un modo CLI:
 ./target/release/dinamic-ui --compact    # fija el modo compacto (reloj)
 ./target/release/dinamic-ui --notch      # vuelve al notch
 ./target/release/dinamic-ui --overview   # overview de workspaces
-./target/release/dinamic-ui --overview-activities  # apps + ventanas
+./target/release/dinamic-ui --activities            # lanzador: apps + ventanas
 ./target/release/dinamic-ui --overview-strip-h     # franja horizontal
 ./target/release/dinamic-ui --overview-strip-v     # franja vertical
 ./target/release/dinamic-ui --taskbar     # taskbar Windows-like (4 lados)
@@ -75,10 +75,11 @@ con desplegables de ajustes rápidos y calendario; su altura se configura en
 `[topbar] height`. Ambas son mutuamente excluyentes y sustituyen a la isla/barra
 mientras están activas.
 
-Los overviews son cuatro (`--overview`, `--overview-activities`, `--overview-strip-h`,
+Hay tres overviews de workspaces (`--overview`, `--overview-strip-h`,
 `--overview-strip-v`). Las franjas se acoplan con `[overview] strip_h_side` y
-`strip_v_side`, y su botón de expandir abre la rejilla a pantalla completa.
-Las maquetas de referencia están en `docs/*-mockup.html`.
+`strip_v_side` y su tamaño (`strip_h_height` / `strip_v_width`: fracción de la pantalla o
+píxeles). Actividades (`--activities`) es aparte: un lanzador con las apps instaladas y las
+ventanas abiertas, con su propia feature. Las maquetas de referencia están en `docs/*-mockup.html`.
 
 ### Archivo de configuración
 
