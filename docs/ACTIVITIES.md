@@ -22,7 +22,12 @@ con tests).
   `src/search.rs` que comparte el command menu. Máximo 24.
 - **Activar** (`↵` o clic): si la app tiene ventanas abiertas las enfoca (con varias, cicla entre
   ellas); si no, la lanza. Una ventana sin `.desktop` aparece igualmente (se enfoca, no se lanza).
-- **Tira de ventanas abiertas** abajo, con una vista esquemática de cada una y su título.
+- **Tira de ventanas abiertas** abajo, con una vista esquemática de cada una y su título. Como las
+  franjas del overview, **no es una barra de estado**: su alto es una fracción de la pantalla
+  (`[activities] strip_height`, 1/5 por defecto = 154 px en 1366×768; también acepta píxeles). Las
+  tarjetas se derivan de ese alto y de la proporción del monitor (la vista esquemática la
+  conserva), y cuántas caben sale del ancho. La ventana activa va primero; si hay más de las que
+  caben aparece «+N ventanas más». Código: `activities_model::film_layout` (puro, con tests).
 - **Teclado exclusivo**: escribir filtra, `←→↑↓`/`Tab` mueven la selección, `↵` activa, `Esc`
   limpia la búsqueda y, si ya está vacía, cierra.
 - **Fundido** de entrada y salida.

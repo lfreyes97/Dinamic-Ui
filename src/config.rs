@@ -27,6 +27,7 @@ pub struct Config {
     pub taskbar: TaskbarConfig,
     pub topbar: TopbarConfig,
     pub overview: OverviewConfig,
+    pub activities: ActivitiesConfig,
 }
 
 /// Techo de expansión de la barra: notch → compacto → barra → panel.
@@ -105,6 +106,23 @@ impl Default for TopbarConfig {
         Self {
             enabled: false,
             height: 34,
+        }
+    }
+}
+
+/// Actividades (feature `activities`).
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(default)]
+pub struct ActivitiesConfig {
+    /// Alto de la tira de ventanas abiertas: fracción del alto de pantalla (`0.2` = 1/5, por
+    /// defecto) o píxeles (`154`). Como las franjas del overview, no es una barra de estado.
+    pub strip_height: StripSize,
+}
+
+impl Default for ActivitiesConfig {
+    fn default() -> Self {
+        Self {
+            strip_height: StripSize::Fraction(1.0 / 5.0),
         }
     }
 }
@@ -392,6 +410,18 @@ mod tests {
         assert_eq!(StripSize::Pixels(9999).resolve(768.0), 384);
         assert_eq!(StripSize::Fraction(0.9).resolve(1000.0), 500);
         assert_eq!(StripSize::Fraction(0.0).resolve(1000.0), 50);
+    }
+
+    #[test]
+    fn activities_strip_height_defaults_to_a_fifth_and_accepts_both_forms() {
+        let default: Config = toml::from_str("").unwrap();
+        assert_eq!(default.activities.strip_height, StripSize::Fraction(0.2));
+        let frac: Config = toml::from_str("[activities]\nstrip_height = 0.3\n").unwrap();
+        assert_eq!(frac.activities.strip_height, StripSize::Fraction(0.3));
+        let px: Config = toml::from_str("[activities]\nstrip_height = 180\n").unwrap();
+        assert_eq!(px.activities.strip_height, StripSize::Pixels(180));
+        // 1/5 de 768 px = 154 px: una tira de verdad.
+        assert_eq!(default.activities.strip_height.resolve(768.0), 154);
     }
 
     #[test]

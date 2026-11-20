@@ -6,7 +6,7 @@
 
 use smithay_client_toolkit::seat::keyboard::Keysym;
 
-use super::activities_model::{self as model, Activation};
+use super::activities_model::{self as model, film_layout, order_windows, Activation};
 use super::nav::{step, ui_scale, window_rect, Dir};
 use super::overlay::{hint_bar, mini_window, monitor_rect, pointer_moved, search_pill};
 use super::*;
@@ -160,7 +160,14 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     // Zona de la cuadrícula: entre el buscador y la tira de ventanas.
     // Las medidas del mockup son para 720p: se escalan con la pantalla.
     let k = ui_scale(screen.height());
-    let film_h = 70.0 * k;
+    // La tira de ventanas es una fracción de la pantalla (1/5 por defecto), como las franjas del
+    // overview: con medidas fijas se quedaba en una barra de ~70 px.
+    let film_h = state
+        .shared
+        .config
+        .activities
+        .strip_height
+        .resolve(screen.height()) as f32;
     let film_y = screen.max.y - 40.0 - film_h;
     let top = screen.min.y + 92.0 * k.sqrt();
     let cols = COLS.min(tiles.len().max(1));
@@ -280,28 +287,24 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         }
     }
 
-    // Tira de ventanas abiertas: tantas como caben, con una vista esquemática de cada una.
+    // Tira de ventanas abiertas: la activa primero y tantas como caben, con una vista esquemática
+    // grande de cada una (tiene la proporción del monitor).
     let active = state.shared.snapshot.window_address.clone();
-    let (fw, gap) = (124.0 * k, 10.0 * k);
-    let capacity = (((screen.width() - 120.0) / (fw + gap)).floor() as usize).clamp(1, 12);
-    let windows: Vec<crate::ipc::ClientInfo> = state
-        .shared
-        .clients
-        .iter()
-        .filter(|c| c.mapped)
-        .take(capacity)
-        .cloned()
-        .collect();
-    let film_w = windows.len() as f32 * (fw + gap) - gap;
     let monitor = screen.size();
     let aspect = monitor.x.max(1.0) / monitor.y.max(1.0);
-    for (i, win) in windows.iter().enumerate() {
+    let film = film_layout(screen.width(), film_h, aspect);
+    let all = order_windows(&state.shared.clients, &active);
+    let shown = all.len().min(film.capacity);
+    let (card_w, gap, pad) = (film.card.0, film.gap, film.pad);
+    let film_w = shown as f32 * (card_w + gap) - gap;
+    let caption_size = 9.0 * film.scale;
+    for (i, win) in all.iter().take(shown).enumerate() {
         let r = egui::Rect::from_min_size(
             egui::pos2(
-                screen.center().x - film_w / 2.0 + i as f32 * (fw + gap),
+                screen.center().x - film_w / 2.0 + i as f32 * (card_w + gap),
                 film_y,
             ),
-            egui::vec2(fw, film_h),
+            egui::vec2(card_w, film_h),
         );
         let resp = ui.interact(
             r,
@@ -327,8 +330,10 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
             StrokeKind::Middle,
         );
         // Vista esquemática de la ventana dentro del monitor.
-        let pic =
-            egui::Rect::from_min_max(r.min + egui::vec2(8.0, 7.0), r.max - egui::vec2(8.0, 26.0));
+        let pic = egui::Rect::from_min_size(
+            r.min + egui::vec2(pad, pad),
+            egui::vec2(film.pic.0, film.pic.1),
+        );
         let mon = monitor_rect(pic, aspect);
         ui.painter()
             .rect_filled(mon, CornerRadius::same(3), Palette::sheen(8));
@@ -336,26 +341,36 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         if wr.width() > 0.0 && wr.height() > 0.0 {
             mini_window(ui, wr, is_active, resp.hovered(), 2);
         }
-        // Pie: icono y título.
-        let icon_c = egui::pos2(r.min.x + 15.0, r.max.y - 12.0);
+        // Pie: icono y título (recortado a lo que cabe en la tarjeta).
+        let icon_px = 13.0 * film.scale;
+        let cy = r.max.y - film.caption / 2.0 - pad * 0.25;
+        let icon_c = egui::pos2(r.min.x + pad + icon_px / 2.0, cy);
         if let Some(texture) = state.shared.icon(ui.ctx(), &win.class) {
             egui::Image::new(egui::load::SizedTexture::new(
                 texture.id(),
-                egui::vec2(13.0, 13.0),
+                egui::vec2(icon_px, icon_px),
             ))
             .paint_at(
                 ui,
-                egui::Rect::from_center_size(icon_c, egui::vec2(13.0, 13.0)),
+                egui::Rect::from_center_size(icon_c, egui::vec2(icon_px, icon_px)),
             );
         } else {
-            icon_at(ui, icon_c, dock_icon(&win.class), 11.0, palette.text);
+            icon_at(
+                ui,
+                icon_c,
+                dock_icon(&win.class),
+                icon_px * 0.85,
+                palette.text,
+            );
         }
+        let text_x = r.min.x + pad + icon_px + 6.0 * film.scale;
+        let max_chars = (((r.max.x - pad - text_x) / (caption_size * 0.55)) as usize).clamp(6, 48);
         text_at(
             ui,
-            egui::pos2(r.min.x + 27.0, r.max.y - 12.0),
+            egui::pos2(text_x, cy),
             egui::Align2::LEFT_CENTER,
-            truncate(&win.title, 15),
-            8.5 * k.sqrt(),
+            truncate(&win.title, max_chars),
+            caption_size,
             palette.muted,
         );
         if resp.hovered() {
@@ -364,6 +379,19 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         if resp.clicked() {
             focus_window(state, win.address.clone());
         }
+    }
+    if all.len() > shown {
+        text_at(
+            ui,
+            egui::pos2(screen.max.x - 60.0, film_y - 10.0),
+            egui::Align2::RIGHT_CENTER,
+            match all.len() - shown {
+                1 => "+1 ventana más".to_string(),
+                n => format!("+{n} ventanas más"),
+            },
+            caption_size,
+            palette.dim,
+        );
     }
 
     hint_bar(

@@ -86,3 +86,8 @@ pinned = ["firefox", "code", "kitty"]
 # Tamaño de las franjas: fracción de la pantalla (0.05–0.5) o píxeles enteros.
 # strip_h_height = 0.2      # 1/5 del alto  (154 px en 1366×768)
 # strip_v_width = 0.1667    # 1/6 del ancho (228 px en 1366×768)
+
+# Actividades (lanzador: apps instaladas + ventanas abiertas).
+# [activities]
+# strip_height = 0.2        # alto de la tira de ventanas: fracción de la pantalla (1/5) o píxeles
+

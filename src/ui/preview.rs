@@ -300,6 +300,12 @@ fn ui_preview_overviews() {
         true,
         strip_state(StripV, Side::Top, Side::Right, k),
     );
+    render_sized(
+        "overview-activities-1366",
+        r3,
+        false,
+        open_activities("", k),
+    );
 
     // Topbar (la pantalla del R3: 1366×768).
     render_sized("topbar", r3, true, topbar_state(false, false, k));
