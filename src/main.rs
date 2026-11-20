@@ -17,17 +17,14 @@ use chrono::Local;
 use control::ControlServer;
 use gfx::Gfx;
 use ipc::HyprlandIpc;
-use theme::Palette;
 use smithay_client_toolkit::{
-    reexports::{
-        calloop::{
-            generic::Generic, timer::Timer, EventLoop, Interest, Mode, PostAction,
-        },
-        calloop_wayland_source::WaylandSource,
-    },
     compositor::{CompositorHandler, CompositorState},
     delegate_registry,
     output::{OutputHandler, OutputState},
+    reexports::{
+        calloop::{generic::Generic, timer::Timer, EventLoop, Interest, Mode, PostAction},
+        calloop_wayland_source::WaylandSource,
+    },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
@@ -43,12 +40,20 @@ use smithay_client_toolkit::{
         WaylandSurface,
     },
 };
+use theme::Palette;
 use ui::{metrics, UiState, PANEL_GAP};
 use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_region, wl_seat, wl_surface},
     Connection, QueueHandle,
 };
+
+type InputRects = (
+    (i32, i32, i32, i32),
+    (i32, i32, i32, i32),
+    (i32, i32, i32, i32),
+    (i32, i32, i32, i32),
+);
 
 struct DinamicUi {
     registry_state: RegistryState,
@@ -77,14 +82,7 @@ struct DinamicUi {
     width: u32,
     height: u32,
     /// Último rect del input region (x, w, h) para no recrearlo igual.
-    last_input_region: Option<
-        (
-            (i32, i32, i32, i32),
-            (i32, i32, i32, i32),
-            (i32, i32, i32, i32),
-            (i32, i32, i32, i32),
-        ),
-    >,
+    last_input_region: Option<InputRects>,
     scale: i32,
     last_frame: Instant,
     last_battery: Instant,
@@ -122,13 +120,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let layer_shell = LayerShell::bind(&globals, &qh)?;
 
     let surface = compositor_state.create_surface(&qh);
-    let layer = layer_shell.create_layer_surface(
-        &qh,
-        surface,
-        Layer::Top,
-        Some("dinamic-ui"),
-        None,
-    );
+    let layer =
+        layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("dinamic-ui"), None);
     // Surface fijo a TODA la pantalla: arriba van isla/barra/panel y abajo el
     // dock. El input region limita los clics a los elementos dibujados.
     layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
@@ -251,7 +244,11 @@ impl DinamicUi {
     /// Pinta un color sólido con `awww` (su demonio debe estar en marcha).
     /// El fondo persiste aunque se cierre la UI.
     fn change_wallpaper(&mut self, color: &str) {
-        sysinfo::spawn_detached(vec!["awww".to_string(), "clear".to_string(), color.to_string()]);
+        sysinfo::spawn_detached(vec![
+            "awww".to_string(),
+            "clear".to_string(),
+            color.to_string(),
+        ]);
     }
 
     fn draw(&mut self, qh: &QueueHandle<Self>) {
@@ -326,9 +323,9 @@ impl DinamicUi {
         }
 
         // Notificaciones DBus (cola alimentada por un hilo propio).
-        let (notification, _count, revision) = self.notifications.poll(std::time::Duration::from_secs(
-            config::get().notifications.ttl_secs,
-        ));
+        let (notification, _count, revision) = self.notifications.poll(
+            std::time::Duration::from_secs(config::get().notifications.ttl_secs),
+        );
         if revision != self.last_notification_revision {
             self.last_notification_revision = revision;
             dirty = true;
@@ -389,13 +386,17 @@ impl DinamicUi {
             if revision != self.last_sysinfo_revision {
                 self.last_sysinfo_revision = revision;
                 if info.layout != self.ui_state.system.layout {
-                    if let Some(preset) = info.layout.as_deref().and_then(ui::layout_preset_index) {
+                    if let Some(preset) = info
+                        .layout
+                        .as_deref()
+                        .and_then(ui::panel::layout_preset_index)
+                    {
                         self.ui_state.layout_preset = preset;
                     }
                 }
                 // El fondo real manda sobre la selección optimista de la rejilla.
                 self.ui_state.wallpaper_selected = match &info.wallpaper {
-                    Some(sysinfo::Wallpaper::Color(hex)) => ui::wallpaper_swatch_index(hex),
+                    Some(sysinfo::Wallpaper::Color(hex)) => ui::panel::wallpaper_swatch_index(hex),
                     _ => None,
                 };
                 self.ui_state.wallpaper_image = match &info.wallpaper {
@@ -456,7 +457,12 @@ impl DinamicUi {
                 self.width as f32,
                 self.ui_state.island_progress * self.ui_state.island_progress,
             );
-            (r.min.x as i32, 0, r.width() as i32, r.height().max(8.0) as i32)
+            (
+                r.min.x as i32,
+                0,
+                r.width() as i32,
+                r.height().max(8.0) as i32,
+            )
         } else {
             (
                 ((self.width as f32 - pill_w) / 2.0).round() as i32,
@@ -496,10 +502,7 @@ impl DinamicUi {
             (bar, card, notif, dock)
         };
         if self.last_input_region != Some(region) {
-            let wl_region = self
-                .compositor_state
-                .wl_compositor()
-                .create_region(qh, ());
+            let wl_region = self.compositor_state.wl_compositor().create_region(qh, ());
             wl_region.add(bar.0, bar.1, bar.2, bar.3);
             if card.3 > 0 {
                 wl_region.add(card.0, card.1, card.2, card.3);
@@ -547,8 +550,8 @@ impl DinamicUi {
         if self.last_dock_query.elapsed() >= std::time::Duration::from_millis(120) {
             self.last_dock_query = Instant::now();
             if let Some((x, y)) = self.ipc.cursor_pos() {
-                let near_bottom = std::env::var_os("DINAMIC_UI_DOCK").is_some()
-                    || y >= self.height as i32 - 24;
+                let near_bottom =
+                    std::env::var_os("DINAMIC_UI_DOCK").is_some() || y >= self.height as i32 - 24;
                 if near_bottom != self.ui_state.dock_visible {
                     self.ui_state.dock_visible = near_bottom;
                     dirty = true;
@@ -581,8 +584,7 @@ impl DinamicUi {
 
         let dock_target = if self.ui_state.dock_visible { 1.0 } else { 0.0 };
         let dock_before = self.ui_state.dock_progress;
-        self.ui_state.dock_progress =
-            approach(self.ui_state.dock_progress, dock_target, dt * 5.0);
+        self.ui_state.dock_progress = approach(self.ui_state.dock_progress, dock_target, dt * 5.0);
         if (self.ui_state.dock_progress - dock_before).abs() > 0.0005 {
             dirty = true;
         }
@@ -606,9 +608,7 @@ impl DinamicUi {
                     }
                 }
                 launcher::EntryAction::OpenFile(path) => {
-                    let _ = std::process::Command::new("xdg-open")
-                        .arg(&path)
-                        .spawn();
+                    let _ = std::process::Command::new("xdg-open").arg(&path).spawn();
                 }
                 launcher::EntryAction::Workspace(id) => {
                     self.ipc.dispatch(&format!("workspace {id}"));
@@ -642,7 +642,8 @@ impl DinamicUi {
         let physical = (self.width * scale, self.height * scale);
         self.gfx.resize(physical.0, physical.1);
         self.gfx.set_scale(scale as f32);
-        self.gfx.set_logical_size(self.width as f32, self.height as f32);
+        self.gfx
+            .set_logical_size(self.width as f32, self.height as f32);
 
         // Repintamos solo cuando hay cambios; de vez en cuando para refrescar
         // el reloj y volver a consultar el IPC. Si no hay nada que pintar ni
@@ -653,7 +654,7 @@ impl DinamicUi {
             || animating
             || has_input
             || self.gfx.needs_repaint()
-            || self.idle_frames % 15 == 0;
+            || self.idle_frames.is_multiple_of(15);
 
         // El ritmo lo marca el timer de calloop; no pedimos frame callbacks
         // Wayland para no despertar 60 veces por segundo en reposo.
@@ -849,8 +850,9 @@ impl KeyboardHandler for DinamicUi {
         // Redibujar al instante: el menu y las animaciones no esperan al timer.
         self.tick = true;
         if self.ui_state.menu_open {
-            use launcher::{EntryAction, MenuMode};
-            let count = launcher::filter(&self.ui_state.menu_entries, &self.ui_state.menu_query).len();
+            use launcher::MenuMode;
+            let count =
+                launcher::filter(&self.ui_state.menu_entries, &self.ui_state.menu_query).len();
             match event.keysym {
                 Keysym::Escape => {
                     self.ui_state.menu_open = false;
@@ -863,7 +865,8 @@ impl KeyboardHandler for DinamicUi {
                 }
                 Keysym::Down => {
                     if count > 0 {
-                        self.ui_state.menu_selected = (self.ui_state.menu_selected + 1).min(count - 1);
+                        self.ui_state.menu_selected =
+                            (self.ui_state.menu_selected + 1).min(count - 1);
                     }
                 }
                 Keysym::Tab => {
@@ -876,17 +879,12 @@ impl KeyboardHandler for DinamicUi {
                     self.ui_state.menu_selected = 0;
                 }
                 Keysym::Return => {
-                    if let Some(entry) = launcher::filter(
-                        &self.ui_state.menu_entries,
-                        &self.ui_state.menu_query,
-                    )
-                    .into_iter()
-                    .nth(self.ui_state.menu_selected)
+                    if let Some(entry) =
+                        launcher::filter(&self.ui_state.menu_entries, &self.ui_state.menu_query)
+                            .into_iter()
+                            .nth(self.ui_state.menu_selected)
                     {
-                        let action = match entry.action {
-                            EntryAction::Workspace(id) => EntryAction::Workspace(id),
-                            other => other,
-                        };
+                        let action = entry.action;
                         self.ui_state.menu_action = Some(action);
                         self.ui_state.menu_open = false;
                         self.layer
@@ -1010,7 +1008,8 @@ impl PointerHandler for DinamicUi {
                     vertical,
                     ..
                 } => {
-                    let delta = egui::Vec2::new(-horizontal.absolute as f32, -vertical.absolute as f32);
+                    let delta =
+                        egui::Vec2::new(-horizontal.absolute as f32, -vertical.absolute as f32);
                     if delta != egui::Vec2::ZERO {
                         self.pending_events.push(egui::Event::MouseWheel {
                             unit: egui::MouseWheelUnit::Point,
