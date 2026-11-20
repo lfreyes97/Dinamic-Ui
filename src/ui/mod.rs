@@ -11,7 +11,9 @@ mod bar;
 mod bar_state;
 mod component;
 
-pub use component::{dispatch_command, input_rects};
+pub use component::{
+    dispatch_command, dispatch_key, input_rects, update_components, wants_keyboard, UpdateCtx,
+};
 
 use panel::*;
 mod dock;
@@ -144,7 +146,7 @@ impl UiState {
             bar: bar_state::BarState::new(),
             dock: dock::DockState::new(),
             menu: menu::MenuState::default(),
-            notifications: notifications::NotificationState::default(),
+            notifications: notifications::NotificationState::new(),
             overview: overview::OverviewState::default(),
             wallpaper: wallpaper::WallpaperState::default(),
             shared: crate::shared::Shared::new(),

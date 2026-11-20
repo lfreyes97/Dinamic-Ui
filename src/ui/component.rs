@@ -5,7 +5,8 @@
 //! decide qué componentes existen; el orden del vector es el z-order.
 
 use super::*;
-use crate::{config::BarMaxState, theme::Palette};
+use crate::{approach, config::BarMaxState, theme::Palette};
+use smithay_client_toolkit::seat::keyboard::Keysym;
 
 /// Geometría animada que comparten los componentes en un frame.
 #[derive(Clone, Copy)]
@@ -15,7 +16,17 @@ pub struct DrawCtx {
     pub pill_w: f32,
 }
 
-/// Un componente del shell: dibujo, entrada y comandos propios.
+/// Datos de cada frame que reciben los componentes en `update`.
+#[derive(Clone, Copy)]
+pub struct UpdateCtx {
+    pub dt: f32,
+    pub screen_w: i32,
+    pub screen_h: i32,
+    /// Posición del cursor; solo en los frames en que el núcleo la consultó.
+    pub cursor: Option<(i32, i32)>,
+}
+
+/// Un componente del shell: dibujo, entrada, comandos y su propia lógica de host.
 pub trait Component {
     #[allow(dead_code)]
     fn name(&self) -> &'static str;
@@ -38,18 +49,47 @@ pub trait Component {
         let _ = (command, state);
         false
     }
+
+    /// Lógica por frame (animaciones, servicios, acciones diferidas).
+    /// Devuelve `true` si hay que repintar.
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        let _ = (state, ctx);
+        false
+    }
+
+    /// Tecla pulsada; devuelve `true` si la consumió (se prueba de arriba abajo).
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        let _ = (state, key);
+        false
+    }
+
+    /// `true` si necesita el foco exclusivo del teclado mientras está activo.
+    fn wants_keyboard(&self, state: &UiState) -> bool {
+        let _ = state;
+        false
+    }
 }
 
-/// Orden de dibujo: barra, notificación, panel, dock, overview y menú.
+/// Único lugar donde se decide qué componentes existen según las features
+/// compiladas. El orden del vector es el z-order (de abajo arriba).
+#[allow(clippy::vec_init_then_push)] // con `--no-default-features` no hay ningún push
 pub fn build_components() -> Vec<Box<dyn Component>> {
-    vec![
-        Box::new(BarShell),
-        Box::new(NotificationCard),
-        Box::new(Panel),
-        Box::new(Dock),
-        Box::new(Overview),
-        Box::new(CommandMenu),
-    ]
+    let mut components: Vec<Box<dyn Component>> = Vec::new();
+    #[cfg(feature = "bar")]
+    components.push(Box::new(BarShell));
+    #[cfg(feature = "notifications")]
+    components.push(Box::new(NotificationCard));
+    #[cfg(feature = "bar")]
+    components.push(Box::new(Panel));
+    #[cfg(feature = "wallpaper")]
+    components.push(Box::new(WallpaperHost));
+    #[cfg(feature = "dock")]
+    components.push(Box::new(Dock));
+    #[cfg(feature = "overview")]
+    components.push(Box::new(Overview));
+    #[cfg(feature = "command-menu")]
+    components.push(Box::new(CommandMenu));
+    components
 }
 
 /// Unión de los rects de entrada de todos los componentes.
@@ -70,8 +110,33 @@ pub fn dispatch_command(command: &str, state: &mut UiState) -> bool {
     false
 }
 
+/// Actualiza todos los componentes; `true` si alguno pide repintar.
+pub fn update_components(state: &mut UiState, ctx: &UpdateCtx) -> bool {
+    let mut dirty = false;
+    for component in build_components().iter_mut() {
+        dirty |= component.update(state, ctx);
+    }
+    dirty
+}
+
+/// Reparte una tecla de arriba abajo (z-order inverso) hasta que alguien la consume.
+pub fn dispatch_key(state: &mut UiState, key: Keysym) -> bool {
+    for component in build_components().iter_mut().rev() {
+        if component.on_key(state, key) {
+            return true;
+        }
+    }
+    false
+}
+
+/// ¿Algún componente necesita el teclado en exclusiva?
+pub fn wants_keyboard(state: &UiState) -> bool {
+    build_components().iter().any(|c| c.wants_keyboard(state))
+}
+
 // ── Rect helpers ────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 fn rect_of(r: egui::Rect) -> (i32, i32, i32, i32) {
     (
         r.min.x as i32,
@@ -81,6 +146,7 @@ fn rect_of(r: egui::Rect) -> (i32, i32, i32, i32) {
     )
 }
 
+#[cfg(feature = "bar")]
 fn bar_rect(state: &UiState, w: i32) -> (i32, i32, i32, i32) {
     let t = crate::smootherstep(state.bar.expansion);
     let pill_w = crate::lerp(metrics().island_w as f32, metrics().bar_w as f32, t);
@@ -97,6 +163,7 @@ fn bar_rect(state: &UiState, w: i32) -> (i32, i32, i32, i32) {
     }
 }
 
+#[cfg(feature = "bar")]
 fn card_rect(state: &UiState, w: i32) -> (i32, i32, i32, i32) {
     let t = crate::smootherstep(state.bar.expansion);
     let panel_t = crate::smootherstep(state.bar.panel_progress);
@@ -111,7 +178,9 @@ fn card_rect(state: &UiState, w: i32) -> (i32, i32, i32, i32) {
 
 // ── Componentes ────────────────────────────────────────────────────────
 
+#[cfg(feature = "bar")]
 struct BarShell;
+#[cfg(feature = "bar")]
 impl Component for BarShell {
     fn name(&self) -> &'static str {
         "bar"
@@ -166,9 +235,60 @@ impl Component for BarShell {
             _ => false,
         }
     }
+
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        let mut dirty = false;
+        let bar = &mut state.bar;
+        // Zona del notch: franja superior centrada.
+        if let Some((x, y)) = ctx.cursor {
+            let near_top = std::env::var_os("DINAMIC_UI_ISLAND").is_some()
+                || (y <= 18 && (x - ctx.screen_w / 2).abs() <= 100);
+            if near_top != bar.island_active {
+                bar.island_active = near_top;
+                dirty = true;
+            }
+        }
+        // La distribución real manda: se aplica el preset solo cuando cambia.
+        if state.shared.system.layout != bar.last_layout {
+            bar.last_layout = state.shared.system.layout.clone();
+            if let Some(preset) = bar
+                .last_layout
+                .as_deref()
+                .and_then(panel::layout_preset_index)
+            {
+                bar.layout_preset = preset;
+            }
+        }
+        // Animación isla <-> barra.
+        let before = bar.expansion;
+        let target = if bar.expanded { 1.0 } else { 0.0 };
+        bar.expansion = approach(bar.expansion, target, ctx.dt * 4.5);
+        dirty |= (bar.expansion - before).abs() > 0.0005;
+
+        let island_target = if bar.island_active || bar.island_compact {
+            1.0
+        } else {
+            0.0
+        };
+        let before = bar.island_progress;
+        bar.island_progress = approach(bar.island_progress, island_target, ctx.dt * 6.0);
+        dirty |= (bar.island_progress - before).abs() > 0.0005;
+        dirty
+    }
+
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        // Esc nunca cierra el proceso: solo deshace la capa superior.
+        if key == Keysym::Escape && state.bar.expanded {
+            state.bar.expanded = false;
+            return true;
+        }
+        false
+    }
 }
 
+#[cfg(feature = "notifications")]
 struct NotificationCard;
+#[cfg(feature = "notifications")]
 impl Component for NotificationCard {
     fn name(&self) -> &'static str {
         "notifications"
@@ -195,9 +315,53 @@ impl Component for NotificationCard {
         }
         vec![rect]
     }
+
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        // Notificaciones DBus (cola alimentada por un hilo propio).
+        let n = &mut state.notifications;
+        let mut dirty = false;
+        let (notification, _count, revision) = n
+            .service
+            .poll(std::time::Duration::from_secs(config::get().notifications.ttl_secs));
+        if revision != n.last_revision {
+            n.last_revision = revision;
+            dirty = true;
+        }
+        if n.dismiss_notification {
+            n.dismiss_notification = false;
+            n.service.dismiss();
+            dirty = true;
+        }
+        n.notification = notification;
+        n.notification_count = n.service.session_count() as usize;
+        n.notification_list = n.service.list();
+        n.dnd = n.service.dnd();
+        if let Some(id) = n.dismiss_notification_id.take() {
+            n.service.dismiss_id(id);
+            dirty = true;
+        }
+        if n.clear_all_notifications {
+            n.clear_all_notifications = false;
+            n.service.clear_all();
+            dirty = true;
+        }
+        if n.toggle_dnd {
+            n.toggle_dnd = false;
+            let dnd = !n.service.dnd();
+            n.service.set_dnd(dnd);
+            dirty = true;
+        }
+        // La notificación entra/sale con su propio progreso.
+        let before = n.notification_progress;
+        let target = if n.notification.is_some() { 1.0 } else { 0.0 };
+        n.notification_progress = approach(n.notification_progress, target, ctx.dt * 2.0);
+        dirty || (n.notification_progress - before).abs() > 0.0005
+    }
 }
 
+#[cfg(feature = "bar")]
 struct Panel;
+#[cfg(feature = "bar")]
 impl Component for Panel {
     fn name(&self) -> &'static str {
         "panel"
@@ -217,9 +381,85 @@ impl Component for Panel {
             false
         }
     }
+
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        // El panel tiene su propio progreso: así se cierra animado.
+        let bar = &mut state.bar;
+        let before = bar.panel_progress;
+        let target = if bar.show_panel { 1.0 } else { 0.0 };
+        bar.panel_progress = approach(bar.panel_progress, target, ctx.dt * 6.0);
+        (bar.panel_progress - before).abs() > 0.0005
+    }
+
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        if key == Keysym::Escape && state.bar.show_panel {
+            state.bar.show_panel = false;
+            return true;
+        }
+        false
+    }
 }
 
+/// Lógica de host de la pestaña Wallpaper: aplicar fondos y sincronizar con `awww`.
+#[cfg(feature = "wallpaper")]
+struct WallpaperHost;
+#[cfg(feature = "wallpaper")]
+impl Component for WallpaperHost {
+    fn name(&self) -> &'static str {
+        "wallpaper"
+    }
+
+    fn draw(&mut self, _ui: &mut egui::Ui, _state: &mut UiState, _ctx: DrawCtx, _p: Palette) {}
+
+    fn update(&mut self, state: &mut UiState, _ctx: &UpdateCtx) -> bool {
+        let mut dirty = false;
+        let w = &mut state.wallpaper;
+        // El demonio `awww` debe estar en marcha. El color persiste aunque se cierre la UI.
+        if let Some(color) = w.wallpaper_color.take() {
+            state
+                .shared
+                .pending_spawns
+                .push(vec!["awww".into(), "clear".into(), color]);
+            dirty = true;
+        }
+        if let Some(path) = w.wallpaper_image_request.take() {
+            state.shared.pending_spawns.push(vec![
+                "awww".into(),
+                "img".into(),
+                path.to_string_lossy().into_owned(),
+            ]);
+            dirty = true;
+        }
+        // Una miniatura terminó de generarse: repintar para mostrarla.
+        let revision = w.thumbs.revision();
+        if revision != w.last_thumb_revision {
+            w.last_thumb_revision = revision;
+            dirty = true;
+        }
+        // El fondo real manda sobre la selección optimista de la rejilla.
+        if state.shared.system_revision != w.last_system_revision {
+            w.last_system_revision = state.shared.system_revision;
+            let current = &state.shared.system.wallpaper;
+            w.wallpaper_selected = match current {
+                Some(crate::sysinfo::Wallpaper::Color(hex)) => {
+                    wallpaper::wallpaper_swatch_index(hex)
+                }
+                _ => None,
+            };
+            w.wallpaper_image = match current {
+                Some(crate::sysinfo::Wallpaper::Image(path)) => {
+                    Some(std::path::PathBuf::from(path))
+                }
+                _ => None,
+            };
+        }
+        dirty
+    }
+}
+
+#[cfg(feature = "dock")]
 struct Dock;
+#[cfg(feature = "dock")]
 impl Component for Dock {
     fn name(&self) -> &'static str {
         "dock"
@@ -241,9 +481,42 @@ impl Component for Dock {
             vec![(0, screen_h - 72, screen_w, 72)]
         }
     }
+
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        let mut dirty = false;
+        // Cursor cerca del borde inferior.
+        if let Some((_, y)) = ctx.cursor {
+            let near_bottom =
+                std::env::var_os("DINAMIC_UI_DOCK").is_some() || y >= ctx.screen_h - 24;
+            if near_bottom != state.dock.dock_visible {
+                state.dock.dock_visible = near_bottom;
+                dirty = true;
+            }
+        }
+        let target = if state.dock.dock_visible { 1.0 } else { 0.0 };
+        let before = state.dock.dock_progress;
+        state.dock.dock_progress = approach(state.dock.dock_progress, target, ctx.dt * 5.0);
+        dirty |= (state.dock.dock_progress - before).abs() > 0.0005;
+
+        if let Some(action) = state.shared.dock_action.take() {
+            match action {
+                crate::shared::DockAction::Focus(address) => state
+                    .shared
+                    .pending_commands
+                    .push(format!("focuswindow address:{address}")),
+                crate::shared::DockAction::Launch(command) => {
+                    state.shared.pending_spawns.push(vec![command])
+                }
+            }
+            dirty = true;
+        }
+        dirty
+    }
 }
 
+#[cfg(feature = "overview")]
 struct Overview;
+#[cfg(feature = "overview")]
 impl Component for Overview {
     fn name(&self) -> &'static str {
         "overview"
@@ -268,6 +541,32 @@ impl Component for Overview {
         }
     }
 
+    fn update(&mut self, state: &mut UiState, _ctx: &UpdateCtx) -> bool {
+        let mut dirty = false;
+        if let Some(address) = state.shared.overview_focus.take() {
+            state
+                .shared
+                .pending_commands
+                .push(format!("focuswindow address:{address}"));
+            state.overview.overview = false;
+            dirty = true;
+        }
+        if let Some(id) = state.shared.overview_workspace.take() {
+            state.shared.pending_commands.push(format!("workspace {id}"));
+            state.overview.overview = false;
+            dirty = true;
+        }
+        dirty
+    }
+
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        if key == Keysym::Escape && state.overview.overview {
+            state.overview.overview = false;
+            return true;
+        }
+        false
+    }
+
     fn on_command(&mut self, command: &str, state: &mut UiState) -> bool {
         if command == "overview" {
             state.overview.overview = !state.overview.overview;
@@ -281,7 +580,9 @@ impl Component for Overview {
     }
 }
 
+#[cfg(feature = "command-menu")]
 struct CommandMenu;
+#[cfg(feature = "command-menu")]
 impl Component for CommandMenu {
     fn name(&self) -> &'static str {
         "command-menu"
@@ -315,10 +616,53 @@ impl Component for CommandMenu {
                 state.bar.show_panel = false;
                 menu.menu_query.clear();
                 menu.menu_selected = 0;
+                menu::refresh_entries(state);
             }
             true
         } else {
             false
         }
+    }
+
+    fn update(&mut self, state: &mut UiState, _ctx: &UpdateCtx) -> bool {
+        use crate::launcher::EntryAction;
+        let Some(action) = state.shared.menu_action.take() else {
+            return false;
+        };
+        match action {
+            EntryAction::Launch(command) => {
+                let argv: Vec<String> = command.split_whitespace().map(String::from).collect();
+                state.shared.pending_spawns.push(argv);
+            }
+            EntryAction::OpenFile(path) => state
+                .shared
+                .pending_spawns
+                .push(vec!["xdg-open".into(), path.to_string_lossy().into_owned()]),
+            EntryAction::Workspace(id) => {
+                state.shared.pending_commands.push(format!("workspace {id}"))
+            }
+            EntryAction::Command(command) => match command.as_str() {
+                "reload" => state.shared.reload_requested = true,
+                "quit" => state.should_exit = true,
+                // El resto (panel, overview, compact…) los atiende el registro; si el
+                // componente no está compilado, el comando se ignora.
+                other => {
+                    dispatch_command(other, state);
+                }
+            },
+        }
+        true
+    }
+
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        if !state.menu.menu_open {
+            return false;
+        }
+        menu::handle_key(state, key);
+        true
+    }
+
+    fn wants_keyboard(&self, state: &UiState) -> bool {
+        state.menu.menu_open
     }
 }

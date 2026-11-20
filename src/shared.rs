@@ -38,6 +38,10 @@ pub struct Shared {
     pub clients: Vec<ClientInfo>,
     pub battery: BatteryState,
     pub system: SystemInfo,
+    /// Sube cada vez que el hilo de sistema publica datos nuevos.
+    pub system_revision: u64,
+    /// Un componente pidió recargar config y paleta (lo ejecuta el núcleo).
+    pub reload_requested: bool,
     #[cfg(feature = "icons")]
     icons: IconCache,
     /// Destello breve cuando cambia el workspace/ventana.
@@ -97,6 +101,8 @@ impl Shared {
             clients: Vec::new(),
             battery: BatteryState::default(),
             system: SystemInfo::default(),
+            system_revision: 0,
+            reload_requested: false,
             #[cfg(feature = "icons")]
             icons: IconCache::new(),
             pulse: 0.0,

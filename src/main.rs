@@ -64,11 +64,8 @@ struct DinamicUi {
     gfx: Gfx,
     ui_state: UiState,
     ipc: HyprlandIpc,
-    notifications: notifications::Notifications,
-    last_notification_revision: u64,
     sysinfo: sysinfo::SystemMonitor,
     last_sysinfo_revision: u64,
-    last_thumb_revision: u64,
     control: ControlServer,
     palette: Palette,
     last_snapshot: ipc::HyprlandSnapshot,
@@ -82,10 +79,12 @@ struct DinamicUi {
     scale: i32,
     last_frame: Instant,
     last_battery: Instant,
-    last_dock_query: Instant,
+    /// Última consulta de la posición del cursor (la comparten bar y dock).
+    last_cursor_query: Instant,
     /// Clientes de Hyprland, consultados por el núcleo (no por el dock).
     last_clients_query: Instant,
-    menu_focus: bool,
+    /// ¿El layer tiene el teclado en exclusiva? (lo pide un componente, p. ej. el menú).
+    keyboard_exclusive: bool,
     idle_frames: u32,
     /// Comandos del socket de control (entregados por la fuente calloop).
     pending_control: Vec<control::Command>,
@@ -141,11 +140,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         gfx,
         ui_state: UiState::new(),
         ipc: HyprlandIpc::new(),
-        notifications: notifications::Notifications::new(),
-        last_notification_revision: 0,
         sysinfo: sysinfo::SystemMonitor::new(),
         last_sysinfo_revision: 0,
-        last_thumb_revision: 0,
         control: ControlServer::new()?,
         palette: Palette::load(),
         last_snapshot: ipc::HyprlandSnapshot::default(),
@@ -157,9 +153,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         scale: 1,
         last_frame: Instant::now(),
         last_battery: Instant::now() - std::time::Duration::from_secs(5),
-        last_dock_query: Instant::now() - std::time::Duration::from_secs(2),
+        last_cursor_query: Instant::now() - std::time::Duration::from_secs(2),
         last_clients_query: Instant::now() - std::time::Duration::from_secs(2),
-        menu_focus: false,
+        keyboard_exclusive: false,
         idle_frames: 0,
         pending_control: Vec::new(),
         qh: qh.clone(),
@@ -220,34 +216,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 impl DinamicUi {
-    fn refresh_menu_entries(&mut self) {
-        use launcher::MenuMode;
-        self.ui_state.menu.menu_entries = match self.ui_state.menu.menu_mode {
-            MenuMode::Apps => launcher::apps(),
-            MenuMode::Files => launcher::files(&config::get().menu.file_dirs),
-            MenuMode::Workspaces => launcher::workspaces(&self.ui_state.shared.snapshot.occupied),
-            MenuMode::Commands => launcher::commands(),
-        };
-        self.ui_state.menu.menu_selected = 0;
-    }
-
-    /// Aplica una imagen con `awww img` (su demonio debe estar en marcha).
-    fn change_wallpaper_image(&mut self, path: &std::path::Path) {
-        sysinfo::spawn_detached(vec![
-            "awww".to_string(),
-            "img".to_string(),
-            path.to_string_lossy().into_owned(),
-        ]);
-    }
-
-    /// Pinta un color sólido con `awww` (su demonio debe estar en marcha).
-    /// El fondo persiste aunque se cierre la UI.
-    fn change_wallpaper(&mut self, color: &str) {
-        sysinfo::spawn_detached(vec![
-            "awww".to_string(),
-            "clear".to_string(),
-            color.to_string(),
-        ]);
+    /// Recarga config y paleta (comando `reload` o petición de un componente).
+    fn reload_config(&mut self) {
+        if let Err(e) = config::reload() {
+            eprintln!("[dinamic-ui] reload: {e}");
+        }
+        self.palette = Palette::load();
     }
 
     fn draw(&mut self, qh: &QueueHandle<Self>) {
@@ -257,22 +231,16 @@ impl DinamicUi {
         let pending_control = std::mem::take(&mut self.pending_control);
         for command in pending_control {
             dirty = true;
-            let was_menu_open = self.ui_state.menu.menu_open;
             if ui::dispatch_command(command.name(), &mut self.ui_state) {
-                if !was_menu_open && self.ui_state.menu.menu_open {
-                    self.refresh_menu_entries();
-                }
                 continue;
             }
             match command {
                 control::Command::Quit => self.exit = true,
-                control::Command::Reload => {
-                    if let Err(e) = config::reload() {
-                        eprintln!("[dinamic-ui] reload: {e}");
-                    }
-                    self.palette = Palette::load();
-                }
-                _ => {}
+                control::Command::Reload => self.reload_config(),
+                other => eprintln!(
+                    "[dinamic-ui] comando `{}` no disponible: componente no compilado",
+                    other.name()
+                ),
             }
         }
 
@@ -301,98 +269,18 @@ impl DinamicUi {
             }
         }
 
-        // Notificaciones DBus (cola alimentada por un hilo propio).
-        let (notification, _count, revision) = self.notifications.poll(
-            std::time::Duration::from_secs(config::get().notifications.ttl_secs),
-        );
-        if revision != self.last_notification_revision {
-            self.last_notification_revision = revision;
-            dirty = true;
-        }
-        if self.ui_state.notifications.dismiss_notification {
-            self.ui_state.notifications.dismiss_notification = false;
-            self.notifications.dismiss();
-            dirty = true;
-        }
-        self.ui_state.notifications.notification = notification;
-        self.ui_state.notifications.notification_count =
-            self.notifications.session_count() as usize;
-        self.ui_state.notifications.notification_list = self.notifications.list();
-        self.ui_state.notifications.dnd = self.notifications.dnd();
-
-        if let Some(id) = self.ui_state.notifications.dismiss_notification_id.take() {
-            self.notifications.dismiss_id(id);
-            dirty = true;
-        }
-        if self.ui_state.notifications.clear_all_notifications {
-            self.ui_state.notifications.clear_all_notifications = false;
-            self.notifications.clear_all();
-            dirty = true;
-        }
-        if self.ui_state.notifications.toggle_dnd {
-            self.ui_state.notifications.toggle_dnd = false;
-            let dnd = !self.notifications.dnd();
-            self.notifications.set_dnd(dnd);
-            dirty = true;
-        }
-        if let Some(color) = self.ui_state.wallpaper.wallpaper_color.take() {
-            self.change_wallpaper(&color);
-            dirty = true;
-        }
-        if let Some(path) = self.ui_state.wallpaper.wallpaper_image_request.take() {
-            self.change_wallpaper_image(&path);
-            dirty = true;
-        }
-
-        for command in self.ui_state.shared.pending_commands.drain(..) {
-            self.ipc.dispatch(&command);
-        }
-        // Comandos externos (hyprctl eval, xdg-open…) fuera del hilo de render.
-        for argv in self.ui_state.shared.pending_spawns.drain(..) {
-            sysinfo::spawn_detached(argv);
-        }
-
         // Datos del sistema (panel e iconos de la barra): el hilo solo consulta
         // con la barra expandida o el panel abierto.
         self.sysinfo
             .set_active(self.ui_state.bar.show_panel || self.ui_state.bar.expanded);
-        // Una miniatura terminó de generarse: repintar para mostrarla.
-        let thumb_revision = self.ui_state.wallpaper.thumbs.revision();
-        if thumb_revision != self.last_thumb_revision {
-            self.last_thumb_revision = thumb_revision;
-            dirty = true;
-        }
         if let Some((info, revision)) = self.sysinfo.poll() {
             if revision != self.last_sysinfo_revision {
                 self.last_sysinfo_revision = revision;
-                if info.layout != self.ui_state.shared.system.layout {
-                    if let Some(preset) = info
-                        .layout
-                        .as_deref()
-                        .and_then(ui::panel::layout_preset_index)
-                    {
-                        self.ui_state.bar.layout_preset = preset;
-                    }
-                }
-                // El fondo real manda sobre la selección optimista de la rejilla.
-                self.ui_state.wallpaper.wallpaper_selected = match &info.wallpaper {
-                    Some(sysinfo::Wallpaper::Color(hex)) => {
-                        ui::wallpaper::wallpaper_swatch_index(hex)
-                    }
-                    _ => None,
-                };
-                self.ui_state.wallpaper.wallpaper_image = match &info.wallpaper {
-                    Some(sysinfo::Wallpaper::Image(path)) => Some(std::path::PathBuf::from(path)),
-                    _ => None,
-                };
                 self.ui_state.shared.system = info;
+                self.ui_state.shared.system_revision = revision;
                 dirty = true;
             }
         }
-        if self.ui_state.should_exit {
-            self.exit = true;
-        }
-
         let now = Instant::now();
         let dt = now.duration_since(self.last_frame).as_secs_f32().min(0.1);
         self.last_frame = now;
@@ -402,37 +290,36 @@ impl DinamicUi {
             dirty = true;
         }
 
-        // Animación isla <-> barra.
-        let previous_exp = self.ui_state.bar.expansion;
-        let exp_target = if self.ui_state.bar.expanded { 1.0 } else { 0.0 };
-        self.ui_state.bar.expansion = approach(self.ui_state.bar.expansion, exp_target, dt * 4.5);
+        // Cursor: lo consultan la isla (zona del notch) y el dock (borde inferior).
+        let mut cursor = None;
+        if self.last_cursor_query.elapsed() >= Duration::from_millis(120) {
+            self.last_cursor_query = Instant::now();
+            cursor = self.ipc.cursor_pos();
+        }
 
-        // El panel tiene su propio progreso: así se cierra animado.
-        let previous_panel = self.ui_state.bar.panel_progress;
-        let panel_target = if self.ui_state.bar.show_panel {
-            1.0
-        } else {
-            0.0
+        // Cada componente actualiza su estado, sus servicios y sus acciones diferidas.
+        let update_ctx = ui::UpdateCtx {
+            dt,
+            screen_w: self.width as i32,
+            screen_h: self.height as i32,
+            cursor,
         };
-        self.ui_state.bar.panel_progress =
-            approach(self.ui_state.bar.panel_progress, panel_target, dt * 6.0);
+        let animating = ui::update_components(&mut self.ui_state, &update_ctx);
 
-        // La notificación entra/sale con su propio progreso.
-        let previous_notif = self.ui_state.notifications.notification_progress;
-        let notif_target = if self.ui_state.notifications.notification.is_some() {
-            1.0
-        } else {
-            0.0
-        };
-        self.ui_state.notifications.notification_progress = approach(
-            self.ui_state.notifications.notification_progress,
-            notif_target,
-            dt * 2.0,
-        );
-
-        let animating = (self.ui_state.bar.expansion - previous_exp).abs() > 0.0005
-            || (self.ui_state.bar.panel_progress - previous_panel).abs() > 0.0005
-            || (self.ui_state.notifications.notification_progress - previous_notif).abs() > 0.0005;
+        // Colas diferidas: órdenes a Hyprland y comandos externos fuera del render.
+        for command in self.ui_state.shared.pending_commands.drain(..) {
+            self.ipc.dispatch(&command);
+        }
+        for argv in self.ui_state.shared.pending_spawns.drain(..) {
+            sysinfo::spawn_detached(argv);
+        }
+        if std::mem::take(&mut self.ui_state.shared.reload_requested) {
+            self.reload_config();
+            dirty = true;
+        }
+        if self.ui_state.should_exit {
+            self.exit = true;
+        }
 
         let t = smootherstep(self.ui_state.bar.expansion);
         let panel_t = smootherstep(self.ui_state.bar.panel_progress);
@@ -468,110 +355,17 @@ impl DinamicUi {
             }
         }
 
-        // El command menu necesita el foco de teclado mientras está abierto.
-        if self.ui_state.menu.menu_open != self.menu_focus {
-            self.menu_focus = self.ui_state.menu.menu_open;
-            let focus = if self.menu_focus {
+        // Un componente (p. ej. el command menu) puede pedir el teclado en exclusiva.
+        let want_keyboard = ui::wants_keyboard(&self.ui_state);
+        if want_keyboard != self.keyboard_exclusive {
+            self.keyboard_exclusive = want_keyboard;
+            let focus = if want_keyboard {
                 KeyboardInteractivity::Exclusive
             } else {
                 KeyboardInteractivity::OnDemand
             };
             self.layer.set_keyboard_interactivity(focus);
             self.layer.commit();
-        }
-
-        // Dock: cursor cerca del borde inferior y clientes para los iconos.
-        if self.last_dock_query.elapsed() >= std::time::Duration::from_millis(120) {
-            self.last_dock_query = Instant::now();
-            if let Some((x, y)) = self.ipc.cursor_pos() {
-                let near_bottom =
-                    std::env::var_os("DINAMIC_UI_DOCK").is_some() || y >= self.height as i32 - 24;
-                if near_bottom != self.ui_state.dock.dock_visible {
-                    self.ui_state.dock.dock_visible = near_bottom;
-                    dirty = true;
-                }
-                // Zona del notch: franja superior centrada.
-                let near_top = std::env::var_os("DINAMIC_UI_ISLAND").is_some()
-                    || (y <= 18 && (x - self.width as i32 / 2).abs() <= 100);
-                if near_top != self.ui_state.bar.island_active {
-                    self.ui_state.bar.island_active = near_top;
-                    dirty = true;
-                }
-            }
-        }
-        let island_target = if self.ui_state.bar.island_active || self.ui_state.bar.island_compact {
-            1.0
-        } else {
-            0.0
-        };
-        let island_before = self.ui_state.bar.island_progress;
-        self.ui_state.bar.island_progress =
-            approach(self.ui_state.bar.island_progress, island_target, dt * 6.0);
-        if (self.ui_state.bar.island_progress - island_before).abs() > 0.0005 {
-            dirty = true;
-        }
-
-        let dock_target = if self.ui_state.dock.dock_visible {
-            1.0
-        } else {
-            0.0
-        };
-        let dock_before = self.ui_state.dock.dock_progress;
-        self.ui_state.dock.dock_progress =
-            approach(self.ui_state.dock.dock_progress, dock_target, dt * 5.0);
-        if (self.ui_state.dock.dock_progress - dock_before).abs() > 0.0005 {
-            dirty = true;
-        }
-        if let Some(action) = self.ui_state.shared.dock_action.take() {
-            match action {
-                shared::DockAction::Focus(address) => {
-                    self.ipc.dispatch(&format!("focuswindow address:{address}"));
-                }
-                shared::DockAction::Launch(command) => {
-                    let _ = std::process::Command::new(&command).spawn();
-                }
-            }
-            dirty = true;
-        }
-        if let Some(action) = self.ui_state.shared.menu_action.take() {
-            match action {
-                launcher::EntryAction::Launch(command) => {
-                    let parts: Vec<&str> = command.split_whitespace().collect();
-                    if let Some((first, rest)) = parts.split_first() {
-                        let _ = std::process::Command::new(first).args(rest).spawn();
-                    }
-                }
-                launcher::EntryAction::OpenFile(path) => {
-                    let _ = std::process::Command::new("xdg-open").arg(&path).spawn();
-                }
-                launcher::EntryAction::Workspace(id) => {
-                    self.ipc.dispatch(&format!("workspace {id}"));
-                }
-                launcher::EntryAction::Command(command) => match command.as_str() {
-                    "panel" => self.ui_state.bar.show_panel = !self.ui_state.bar.show_panel,
-                    "overview" => {
-                        self.ui_state.overview.overview = !self.ui_state.overview.overview
-                    }
-                    "reload" => {
-                        let _ = config::reload();
-                        self.palette = Palette::load();
-                    }
-                    "compact" => self.ui_state.bar.island_compact = true,
-                    "quit" => self.exit = true,
-                    _ => {}
-                },
-            }
-            dirty = true;
-        }
-        if let Some(address) = self.ui_state.shared.overview_focus.take() {
-            self.ipc.dispatch(&format!("focuswindow address:{address}"));
-            self.ui_state.overview.overview = false;
-            dirty = true;
-        }
-        if let Some(id) = self.ui_state.shared.overview_workspace.take() {
-            self.ipc.dispatch(&format!("workspace {id}"));
-            self.ui_state.overview.overview = false;
-            dirty = true;
         }
 
         let scale = self.scale.max(1) as u32;
@@ -620,7 +414,7 @@ pub(crate) fn smootherstep(t: f32) -> f32 {
     t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
 }
 
-fn approach(current: f32, target: f32, step: f32) -> f32 {
+pub(crate) fn approach(current: f32, target: f32, step: f32) -> f32 {
     if (current - target).abs() <= step {
         target
     } else if current < target {
@@ -785,88 +579,9 @@ impl KeyboardHandler for DinamicUi {
     ) {
         // Redibujar al instante: el menu y las animaciones no esperan al timer.
         self.tick = true;
-        if self.ui_state.menu.menu_open {
-            use launcher::MenuMode;
-            let count = launcher::filter(
-                &self.ui_state.menu.menu_entries,
-                &self.ui_state.menu.menu_query,
-            )
-            .len();
-            match event.keysym {
-                Keysym::Escape => {
-                    self.ui_state.menu.menu_open = false;
-                    self.layer
-                        .set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
-                    self.layer.commit();
-                }
-                Keysym::Up => {
-                    self.ui_state.menu.menu_selected =
-                        self.ui_state.menu.menu_selected.saturating_sub(1);
-                }
-                Keysym::Down => {
-                    if count > 0 {
-                        self.ui_state.menu.menu_selected =
-                            (self.ui_state.menu.menu_selected + 1).min(count - 1);
-                    }
-                }
-                Keysym::Tab => {
-                    self.ui_state.menu.menu_mode = self.ui_state.menu.menu_mode.next();
-                    self.ui_state.menu.menu_query.clear();
-                    self.refresh_menu_entries();
-                }
-                Keysym::BackSpace => {
-                    self.ui_state.menu.menu_query.pop();
-                    self.ui_state.menu.menu_selected = 0;
-                }
-                Keysym::Return => {
-                    if let Some(entry) = launcher::filter(
-                        &self.ui_state.menu.menu_entries,
-                        &self.ui_state.menu.menu_query,
-                    )
-                    .into_iter()
-                    .nth(self.ui_state.menu.menu_selected)
-                    {
-                        let action = entry.action;
-                        self.ui_state.shared.menu_action = Some(action);
-                        self.ui_state.menu.menu_open = false;
-                        self.layer
-                            .set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
-                        self.layer.commit();
-                    }
-                }
-                Keysym::_1 | Keysym::_2 | Keysym::_3 | Keysym::_4 => {
-                    let index = match event.keysym {
-                        Keysym::_1 => 0,
-                        Keysym::_2 => 1,
-                        Keysym::_3 => 2,
-                        _ => 3,
-                    };
-                    self.ui_state.menu.menu_mode = MenuMode::ALL[index];
-                    self.ui_state.menu.menu_query.clear();
-                    self.refresh_menu_entries();
-                }
-                _ => {
-                    let text = xkbcommon::xkb::keysym_to_utf8(event.keysym);
-                    if text.chars().count() == 1 && !text.chars().next().unwrap().is_control() {
-                        self.ui_state.menu.menu_query.push_str(&text);
-                        self.ui_state.menu.menu_selected = 0;
-                    }
-                }
-            }
-            return;
-        }
-
-        if event.keysym == Keysym::Escape {
-            // Esc nunca cierra el proceso: solo deshace la capa superior.
-            // Para salir: botón "Salir" del panel o `dinamic-ui --quit`.
-            if self.ui_state.overview.overview {
-                self.ui_state.overview.overview = false;
-            } else if self.ui_state.bar.show_panel {
-                self.ui_state.bar.show_panel = false;
-            } else if self.ui_state.bar.expanded {
-                self.ui_state.bar.expanded = false;
-            }
-        }
+        // Los componentes consumen la tecla de arriba abajo. Esc nunca cierra el
+        // proceso: solo deshace la capa superior (salir: botón del panel o `--quit`).
+        ui::dispatch_key(&mut self.ui_state, event.keysym);
     }
 
     fn repeat_key(

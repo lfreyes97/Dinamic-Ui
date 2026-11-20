@@ -12,6 +12,72 @@ pub struct MenuState {
     pub menu_entries: Vec<crate::launcher::Entry>,
 }
 
+/// Recarga las entradas según el modo actual.
+pub(super) fn refresh_entries(state: &mut UiState) {
+    use crate::launcher::{self, MenuMode};
+    state.menu.menu_entries = match state.menu.menu_mode {
+        MenuMode::Apps => launcher::apps(),
+        MenuMode::Files => launcher::files(&config::get().menu.file_dirs),
+        MenuMode::Workspaces => launcher::workspaces(&state.shared.snapshot.occupied),
+        MenuMode::Commands => launcher::commands(),
+    };
+    state.menu.menu_selected = 0;
+}
+
+/// Teclado del menú abierto: navegación, modos, búsqueda y ejecución.
+pub(super) fn handle_key(state: &mut UiState, key: smithay_client_toolkit::seat::keyboard::Keysym) {
+    use crate::launcher::{filter, MenuMode};
+    use smithay_client_toolkit::seat::keyboard::Keysym;
+
+    let count = filter(&state.menu.menu_entries, &state.menu.menu_query).len();
+    match key {
+        Keysym::Escape => state.menu.menu_open = false,
+        Keysym::Up => state.menu.menu_selected = state.menu.menu_selected.saturating_sub(1),
+        Keysym::Down => {
+            if count > 0 {
+                state.menu.menu_selected = (state.menu.menu_selected + 1).min(count - 1);
+            }
+        }
+        Keysym::Tab => {
+            state.menu.menu_mode = state.menu.menu_mode.next();
+            state.menu.menu_query.clear();
+            refresh_entries(state);
+        }
+        Keysym::BackSpace => {
+            state.menu.menu_query.pop();
+            state.menu.menu_selected = 0;
+        }
+        Keysym::Return => {
+            if let Some(entry) = filter(&state.menu.menu_entries, &state.menu.menu_query)
+                .into_iter()
+                .nth(state.menu.menu_selected)
+            {
+                let action = entry.action;
+                state.shared.menu_action = Some(action);
+                state.menu.menu_open = false;
+            }
+        }
+        Keysym::_1 | Keysym::_2 | Keysym::_3 | Keysym::_4 => {
+            let index = match key {
+                Keysym::_1 => 0,
+                Keysym::_2 => 1,
+                Keysym::_3 => 2,
+                _ => 3,
+            };
+            state.menu.menu_mode = MenuMode::ALL[index];
+            state.menu.menu_query.clear();
+            refresh_entries(state);
+        }
+        _ => {
+            let text = xkbcommon::xkb::keysym_to_utf8(key);
+            if text.chars().count() == 1 && !text.chars().next().unwrap().is_control() {
+                state.menu.menu_query.push_str(&text);
+                state.menu.menu_selected = 0;
+            }
+        }
+    }
+}
+
 /// Command menu: lanzador y buscador, con pestañas de modo.
 pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     use crate::launcher::{filter, MenuMode};

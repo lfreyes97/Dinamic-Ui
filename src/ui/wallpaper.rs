@@ -13,6 +13,8 @@ pub struct WallpaperState {
     pub wallpaper_files: Vec<std::path::PathBuf>,
     pub wallpaper_scan: Option<(std::path::PathBuf, std::time::Instant)>,
     pub thumbs: crate::thumbs::Thumbnails,
+    pub last_thumb_revision: u64,
+    pub last_system_revision: u64,
     pub thumb_textures: std::collections::HashMap<std::path::PathBuf, egui::TextureHandle>,
 }
 
@@ -28,6 +30,8 @@ impl Default for WallpaperState {
             wallpaper_files: Vec::new(),
             wallpaper_scan: None,
             thumbs: crate::thumbs::Thumbnails::new(),
+            last_thumb_revision: 0,
+            last_system_revision: 0,
             thumb_textures: std::collections::HashMap::new(),
         }
     }

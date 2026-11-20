@@ -2,9 +2,10 @@
 
 use super::*;
 
-/// Estado de la tarjeta de notificaciones y la cola DND.
-#[derive(Default)]
+/// Estado de la tarjeta de notificaciones y la cola DND. Posee el servicio DBus.
 pub struct NotificationState {
+    pub service: crate::notifications::Notifications,
+    pub last_revision: u64,
     pub notification: Option<Notification>,
     pub notification_count: usize,
     pub notification_progress: f32,
@@ -14,6 +15,24 @@ pub struct NotificationState {
     pub dismiss_notification_id: Option<u32>,
     pub clear_all_notifications: bool,
     pub toggle_dnd: bool,
+}
+
+impl NotificationState {
+    pub fn new() -> Self {
+        Self {
+            service: crate::notifications::Notifications::new(),
+            last_revision: 0,
+            notification: None,
+            notification_count: 0,
+            notification_progress: 0.0,
+            dismiss_notification: false,
+            dnd: false,
+            notification_list: Vec::new(),
+            dismiss_notification_id: None,
+            clear_all_notifications: false,
+            toggle_dnd: false,
+        }
+    }
 }
 
 /// La isla solo muestra workspace, reloj y batería, con `space-between`.
