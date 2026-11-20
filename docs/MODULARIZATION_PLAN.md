@@ -24,6 +24,7 @@ hilos de lo demás.
   | `command-menu` | `icons` | `launcher.rs` |
   | `notifications` | `dep:zbus` | servidor DBus en hilo propio |
   | `wallpaper` | `dep:image` | pestaña + `thumbs.rs` |
+  | `svg-icons` (opcional, futura) | `icons`, `dep:resvg` (sin texto) | solo si la medición de fallbacks lo justifica |
   | `icons` (interna) | `dep:freedesktop-icons`, `dep:png` | `appicons.rs`; la activan sus consumidores. Solo PNG, sin SVG ni `magick` |
 
   `dashboard` y `config-panel` (mockups) son **futuros**: se añaden como feature cuando se
@@ -35,7 +36,8 @@ hilos de lo demás.
   no controlada) y no se añade `resvg`. La búsqueda pasa de `icon_path()` con `hicolor`/`Adwaita`
   fijos al crate `freedesktop-icons`, que respeta el tema y su herencia. Las apps con solo
   icono SVG caen al glifo Phosphor (ya es el fallback). Si al medir faltan demasiados,
-  se reconsidera `resvg`.
+  se añade la feature opcional `svg-icons` con `resvg` sin texto (medido: +0,9 MB de binario,
+  +31 crates, ~18 s de compilación; con features por defecto +2,2 MB y +57 crates).
 - **Config en runtime** para apariencia y comportamiento (tamaños, `pinned`, autohide, colores).
 - **Núcleo siempre compilado** (sin feature): `gfx`, `ipc`, `config`, `theme`, `control`.
 - Los `#[cfg(feature)]` se concentran en el registro de componentes y en `Cargo.toml`.
@@ -83,7 +85,8 @@ hilos de lo demás.
 - [ ] `appicons.rs`: sustituir `icon_path()` por `freedesktop-icons`; quitar la rama SVG y
       `magick`; decodificar PNG con `png`. Verificar que el crate permita pedir solo PNG.
 - [ ] Clave `icon_theme` en config; si falta, leer `~/.config/gtk-3.0/settings.ini`; si no, `hicolor`.
-- [ ] Medir qué porcentaje de apps reales cae al fallback Phosphor por ser solo SVG.
+- [ ] Medir qué porcentaje de apps reales cae al fallback Phosphor por ser solo SVG; si es
+      alto, implementar `svg-icons` (`resvg` con `default-features = false`) y medir RSS.
 - [ ] `#[cfg]` en los `mod` de `main.rs` y en `build_components()`.
 - [ ] `control.rs`: comandos de componentes no compilados responden "no compilado".
 - [ ] El panel de ajustes oculta/deshabilita lo no compilado.
@@ -116,4 +119,4 @@ hilos de lo demás.
 | `cfg` dispersos y difíciles de leer | Un solo registro; núcleo sin features |
 | Dependencias ocultas entre componentes | `Shared` con datos y colas; compilar cada feature sola |
 | `image` opcional rompe un build solo-`taskbar` | `icons` ya no usa `image` (solo `png`) |
-| Apps solo-SVG sin icono real | Fallback Phosphor; medir y reconsiderar `resvg` |
+| Apps solo-SVG sin icono real | Fallback Phosphor; medir y, si hace falta, feature `svg-icons` |
