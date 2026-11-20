@@ -8,7 +8,7 @@ LLVM 26, nvidia eglcore 7, vulkan_radeon 5).
 |---|---|
 | RSS | ~131 MB (22 MB anónimos + 108 MB GPU mapeada) |
 | Binario release | 20 MB (`opt-level = 2`, `lto = "thin"`) |
-| Capturas visuales | `just snapshots` → `docs/baseline/`; `just snapshots-diff` compara |
+| Capturas visuales | `just snapshots` → `docs/baseline/` (comparación visual manual) |
 
 La línea base queda congelada antes del refactor de `ui.rs`. Las tareas de abajo son
 optimizaciones pendientes, no bloquean Fase 1 del plan de modularización.

@@ -219,7 +219,3 @@ snapshots: need-release
     grim docs/baseline/menu.png
     ./{{rel_bin}} --collapse
     @echo "Capturas en docs/baseline/"
-
-# Comparar las capturas actuales con las guardadas en git.
-snapshots-diff:
-    @git diff --exit-code -- docs/baseline || { echo "Las capturas difieren de la línea base"; exit 1; }

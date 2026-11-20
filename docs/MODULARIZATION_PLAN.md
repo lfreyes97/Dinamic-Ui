@@ -46,8 +46,8 @@ hilos de lo demás.
 
 - [x] Cerrar `docs/RAM_AUDIT.md` antes de refactorizar, para no mezclar mediciones.
 - [x] Receta `just snapshots`: lanza cada modo (isla, barra, panel, dock, overview) y guarda
-      capturas en `docs/baseline/`; `just snapshots-diff` compara contra ellas. Sin esto,
-      "capturas idénticas" es manual y frágil. Pendiente ejecutar `just snapshots` en Hyprland
+      capturas en `docs/baseline/` para comparar a ojo (revisión visual manual, sin diff
+      automático: el reloj y la batería cambian). Pendiente ejecutar `just snapshots` en Hyprland
       para generar las imágenes (aquí no hay compositor).
 - [x] Anotar RSS y tamaño del binario release como línea base (~131 MB y 20 MB).
 
@@ -65,8 +65,8 @@ hilos de lo demás.
       `thumbs`, `app_icon_textures`…). Si no se eliminan ahora, Fase 3 acabará con `cfg`
       dispersos en el struct justo donde queríamos concentrarlos.
       `UiState` conserva solo datos compartidos (snapshot, clientes, iconos, colas y sistema).
-- [x] Verificar por módulo: `cargo build`, `cargo clippy`, `cargo test` y `just snapshots-diff`.
-      Los tres primeros en verde; `snapshots-diff` pendiente de la línea base visual.
+- [x] Verificar por módulo: `cargo build`, `cargo clippy`, `cargo test` y comparación visual manual
+      con `just snapshots`. Los tres primeros en verde; la visual pendiente de la línea base.
 - [x] Commits por bloque: estructura, estado y línea base (agrupados, no uno por componente).
 
 ## Fase 2 — Estado compartido y trait `Component`
@@ -136,7 +136,7 @@ hilos de lo demás.
 
 | Riesgo | Mitigación |
 |---|---|
-| Refactor de `ui.rs` rompe animaciones/geometría | `just snapshots-diff` + un commit por módulo |
+| Refactor de `ui.rs` rompe animaciones/geometría | capturas `just snapshots` revisadas a ojo + un commit por módulo |
 | Explosión de combinaciones de features | CI con matriz acotada |
 | `cfg` dispersos y difíciles de leer | Un solo registro; núcleo sin features |
 | Dependencias ocultas entre componentes | `Shared` con datos y colas; compilar cada feature sola |
