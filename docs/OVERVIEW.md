@@ -70,6 +70,28 @@ tests); el dibujo en `overview.rs` y `overview_collection.rs`. Comandos: `overvi
 - Las entradas `.desktop` se leen en un solo sitio (`src/desktop.rs`: solo el grupo
   `[Desktop Entry]`, códigos de campo fuera) y las comparten iconos, command menu y overview.
 
+### Diseño visual (alineado con `overviews-mockup.html`)
+
+- **Buscador** con chip `ESC` en las dos vistas modales (rejilla y Actividades): se tiñe de acento
+  al escribir y la rejilla cuenta las coincidencias.
+- **Rejilla 3×2** que incluye también los workspaces vacíos (se rellenan con los de menor
+  número libre): etiqueta `01` arriba, nombre abajo (`[workspaces] names`, o «Vacío» /
+  «N ventanas» si no hay nombre), tarjeta activa teñida con halo de acento, sombra y ligero
+  levantado al pasar el cursor. Las ventanas son bloques translúcidos y la activa va teñida.
+- **Actividades:** cuadrícula de 6 columnas centrada, tiles con borde, puntos por ventana abierta
+  y tira inferior con una vista esquemática de cada ventana y su título.
+- **Franjas:** botones con borde, miniaturas con número arriba a la derecha y nombre abajo,
+  y un bloque «Overview» (icono + etiqueta) tras un separador.
+- **Barra de ayuda** inferior con las teclas dibujadas como chips.
+
+### Vista previa sin compositor
+
+`just preview` (`cargo test ui_preview -- --ignored`) renderiza la **UI real** a PNG en
+`target/ui-preview/` usando la GPU y `egui_kittest` (dependencia solo de desarrollo), con datos
+de ejemplo y la config por defecto: `overview-workspaces`, `…-search`, `overview-activities`,
+`…-search`, `strip-h-top`, `strip-h-bottom`, `strip-v-left`, `strip-v-right`. Permite revisar el
+diseño sin Hyprland. No es una prueba automática (no compara imágenes): sirve para mirar.
+
 ### Pendiente
 
 - [ ] **Cerrar una ventana desde el overview** (clic central o botón): hay que traducir
@@ -79,6 +101,9 @@ tests); el dibujo en `overview.rs` y `overview_collection.rs`. Comandos: `overvi
       se escalan con el tamaño del actual.
 - [ ] Arrastrar una ventana a otro workspace.
 - [ ] Miniaturas en vivo (Fase 3 de arriba) y hot corner.
-- [ ] Verificación visual en el R7 (el fundido, el deslizamiento de las franjas y el atenuado de
-      la búsqueda no se han visto en pantalla).
+- [ ] Verificación en el R7 de lo que la vista previa no cubre: el fundido y el deslizamiento
+      (son animaciones), el teclado exclusivo y el comportamiento con varios monitores. El
+      aspecto estático ya se revisó con `just preview`.
+- [ ] El mockup tiene ventanas de color (variante azul) y desenfoque del fondo
+      (`backdrop-filter`): no se hicieron; el desenfoque necesitaría captura del escritorio.
 

@@ -19,6 +19,20 @@ pub fn workspace_ids(occupied: &[u32], current: u32, max: usize) -> Vec<u32> {
     ids
 }
 
+/// Rellena `ids` con los workspaces libres de menor número (hasta `max_id`) para que haya al
+/// menos `min_total`. Así las rejillas muestran también workspaces vacíos, como el mockup.
+pub fn pad_workspace_ids(mut ids: Vec<u32>, min_total: usize, max_id: u32) -> Vec<u32> {
+    let mut candidate = 1;
+    while ids.len() < min_total && candidate <= max_id {
+        if !ids.contains(&candidate) {
+            ids.push(candidate);
+        }
+        candidate += 1;
+    }
+    ids.sort_unstable();
+    ids
+}
+
 /// Posición de `current` en `ids` (0 si no está).
 pub fn initial_selection(ids: &[u32], current: u32) -> usize {
     ids.iter().position(|id| *id == current).unwrap_or(0)
@@ -329,6 +343,17 @@ mod tests {
         assert_eq!(workspace_ids(&[1, 2, 3, 4, 5, 6, 7], 1, 3), [1, 2, 3]);
         assert_eq!(initial_selection(&[1, 3, 5], 3), 1);
         assert_eq!(initial_selection(&[1, 3, 5], 9), 0);
+    }
+
+    #[test]
+    fn padding_fills_the_lowest_free_workspaces() {
+        // Ocupados 1, 3 y 5: se completan 2, 4 y 6 hasta llegar a 6.
+        assert_eq!(pad_workspace_ids(vec![1, 3, 5], 6, 10), [1, 2, 3, 4, 5, 6]);
+        // Ya hay suficientes: no se toca.
+        assert_eq!(pad_workspace_ids(vec![2, 4, 9], 3, 10), [2, 4, 9]);
+        // Sin ids libres hasta `max_id`: se queda corto.
+        assert_eq!(pad_workspace_ids(vec![1, 2], 6, 3), [1, 2, 3]);
+        assert_eq!(pad_workspace_ids(vec![], 0, 10), Vec::<u32>::new());
     }
 
     #[test]

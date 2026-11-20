@@ -86,10 +86,11 @@ test:
     cargo test
 
 # Sin colores fijos fuera de `theme.rs`: todo sale de los tokens del esquema base16.
+# (`ui/preview.rs` está exento: pinta un escritorio falso solo para las vistas previas.)
 # (Los velos sobre imágenes usan `Palette::scrim`/`sheen`; `Color32::BLACK/WHITE/TRANSPARENT`
 # se permiten para datos del usuario, como las muestras de color.)
 lint-colors:
-    @! grep -rnE 'Color32::(from_gray|from_rgb|from_rgba|from_black_alpha|from_white_alpha)' src | grep -v '^src/theme.rs' || { echo "colores fijos fuera de theme.rs: usa tokens (docs/DESIGN_TOKENS.md)"; exit 1; }
+    @! grep -rnE 'Color32::(from_gray|from_rgb|from_rgba|from_black_alpha|from_white_alpha)' src | grep -v -e '^src/theme.rs' -e '^src/ui/preview.rs' || { echo "colores fijos fuera de theme.rs: usa tokens (docs/DESIGN_TOKENS.md)"; exit 1; }
     @echo "colores: sin literales fuera de theme.rs"
 
 # Todo lo que debe pasar antes de un commit
@@ -110,6 +111,11 @@ lint-matrix:
 # Binario release mínimo: solo la barra (sin zbus, image ni iconos)
 build-minimal:
     cargo build --release --no-default-features --features bar
+
+# Renderiza los overviews a PNG con la UI real, sin compositor (necesita GPU).
+# Salida: target/ui-preview/*.png
+preview:
+    cargo test ui_preview -- --ignored --nocapture
 
 # Limpiar artefactos
 clean:

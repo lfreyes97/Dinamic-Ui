@@ -115,10 +115,13 @@ impl Notifications {
         }
         let shared = Arc::new(Mutex::new(state));
         let listener = Arc::clone(&shared);
-        thread::Builder::new()
-            .name("dinamic-ui-notifications".into())
-            .spawn(move || serve(listener))
-            .ok();
+        // Los tests (y las vistas previas) no deben reclamar el nombre D-Bus del sistema.
+        if !cfg!(test) {
+            thread::Builder::new()
+                .name("dinamic-ui-notifications".into())
+                .spawn(move || serve(listener))
+                .ok();
+        }
         Self { shared }
     }
 

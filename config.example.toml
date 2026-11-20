@@ -33,6 +33,8 @@ bar_w = 640                 # se amplía sola si los workspaces no caben
 
 [workspaces]
 count = 10                  # 4..20
+# Nombres que muestran los overviews (el primero es el workspace 1).
+# names = ["Principal", "Desarrollo", "Navegación", "Música", "Lectura"]
 
 [notifications]
 ttl_secs = 6                # tiempo que la notificación queda en la isla

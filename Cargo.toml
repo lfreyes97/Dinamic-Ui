@@ -45,3 +45,7 @@ command-menu = ["icons"]
 notifications = ["dep:zbus"]
 # Pestaña Wallpaper del panel (vive en el panel, de ahí `bar`) y sus miniaturas.
 wallpaper = ["bar", "dep:image"]
+
+[dev-dependencies]
+# Renderiza la UI a PNG sin compositor (`cargo test ui_preview -- --ignored`).
+egui_kittest = { version = "0.37", features = ["wgpu"] }

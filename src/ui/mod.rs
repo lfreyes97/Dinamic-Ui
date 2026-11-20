@@ -12,6 +12,8 @@ use crate::{config, theme::Palette};
 mod bar;
 mod bar_state;
 mod component;
+#[cfg(all(test, feature = "overview"))]
+mod preview;
 
 pub use component::{
     dispatch_command, dispatch_key, input_rects, update_components, wants_keyboard, UpdateCtx,

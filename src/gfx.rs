@@ -308,7 +308,7 @@ impl From<RequestDeviceError> for GfxError {
 /// Inter como fuente principal (Regular) y semibold como familia aparte.
 /// egui 0.37 no tiene peso en `FontId`: `.strong()` solo cambia el color, así
 /// que los textos destacados usan explícitamente `inter-semibold`.
-fn install_fonts(ctx: &Context) {
+pub(crate) fn install_fonts(ctx: &Context) {
     use egui::{text::FontData, FontDefinitions, FontFamily};
 
     let mut fonts = FontDefinitions::default();

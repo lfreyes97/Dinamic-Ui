@@ -210,10 +210,20 @@ pub struct WallpaperConfig {
     pub dir: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Workspaces {
     pub count: u32,
+    /// Nombres opcionales: el primero es el workspace 1 (`["Principal", "Desarrollo"]`).
+    pub names: Vec<String>,
+}
+
+impl Workspaces {
+    /// Nombre configurado del workspace `id`, si lo hay.
+    pub fn name_of(&self, id: u32) -> Option<&str> {
+        let name = self.names.get(id.checked_sub(1)? as usize)?.trim();
+        (!name.is_empty()).then_some(name)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -275,7 +285,10 @@ impl Default for Sizes {
 
 impl Default for Workspaces {
     fn default() -> Self {
-        Self { count: 10 }
+        Self {
+            count: 10,
+            names: Vec::new(),
+        }
     }
 }
 
