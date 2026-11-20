@@ -2,6 +2,14 @@
 
 use super::*;
 
+/// Estado del overview (modo pantalla completa).
+#[derive(Default)]
+pub struct OverviewState {
+    pub overview: bool,
+    pub overview_focus: Option<String>,
+    pub overview_workspace: Option<u32>,
+}
+
 /// Overview: rejilla de workspaces con las ventanas en su posición relativa.
 pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
@@ -18,7 +26,7 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
         egui::Sense::click(),
     );
     if backdrop.clicked() {
-        state.overview = false;
+        state.overview.overview = false;
     }
 
     let mut ids: Vec<u32> = state.snapshot.occupied.clone();
@@ -84,7 +92,7 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
             egui::Sense::click(),
         );
         if card_response.clicked() {
-            state.overview_workspace = Some(*id);
+            state.overview.overview_workspace = Some(*id);
         }
 
         // Cabecera reservada: las ventanas nunca tapan el título del workspace.
@@ -174,7 +182,7 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             }
             if response.clicked() {
-                state.overview_focus = Some(win.address.clone());
+                state.overview.overview_focus = Some(win.address.clone());
             }
         }
     }

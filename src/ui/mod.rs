@@ -20,6 +20,7 @@ mod menu;
 mod notifications;
 mod overview;
 pub mod panel;
+pub mod wallpaper;
 
 use bar::*;
 use dock::*;
@@ -27,6 +28,7 @@ use menu::*;
 use notifications::*;
 use overview::*;
 use panel::*;
+use wallpaper::*;
 
 /// Ancho mínimo de la tarjeta del panel (con la isla) y separación respecto a la barra.
 /// Con la barra expandida el panel crece hasta `bar_w`: ver `panel_width`.
@@ -130,79 +132,30 @@ pub fn metrics() -> Metrics {
     }
 }
 
+/// Estado de la UI. Conserva solo datos compartidos; el estado de cada
+/// componente vive en su módulo (`bar`, `dock`, `menu`, `notifications`, ...).
 pub struct UiState {
-    /// 0.0 = isla, 1.0 = barra.
-    pub expansion: f32,
-    pub expanded: bool,
-    pub show_panel: bool,
-    /// Progreso del panel (0 cerrado, 1 abierto), animado por `main`.
-    pub panel_progress: f32,
+    pub bar: bar::BarState,
+    pub dock: dock::DockState,
+    pub menu: menu::MenuState,
+    pub notifications: notifications::NotificationState,
+    pub overview: overview::OverviewState,
+    pub wallpaper: wallpaper::WallpaperState,
+
     /// Destello breve cuando cambia el workspace/ventana.
     pub pulse: f32,
-    pub notification: Option<Notification>,
-    pub notification_count: usize,
-    pub notification_progress: f32,
-    pub dismiss_notification: bool,
-    /// Pestaña activa del panel de control.
-    pub panel_tab: usize,
-    pub dnd: bool,
-    pub notification_list: Vec<Notification>,
-    pub dismiss_notification_id: Option<u32>,
-    pub clear_all_notifications: bool,
-    pub toggle_dnd: bool,
-    pub wallpaper_color: Option<String>,
-    /// Fondo marcado en la rejilla de Wallpaper (solo visual; el cambio real va por `wallpaper_color`).
-    pub wallpaper_selected: Option<usize>,
-    /// Imagen marcada en la lista de Wallpaper (optimista; `main` la sincroniza
-    /// con `awww query`) y petición pendiente de aplicarla con `awww img`.
-    pub wallpaper_image: Option<std::path::PathBuf>,
-    /// Imagen bajo el puntero en la galería: manda en el preview grande.
-    pub wallpaper_hover: Option<std::path::PathBuf>,
-    pub wallpaper_image_request: Option<std::path::PathBuf>,
-    /// Vista de la galería: false = lista, true = grid de miniaturas.
-    pub wallpaper_grid: bool,
-    /// Imágenes de la carpeta configurada, con la carpeta y el instante del último escaneo.
-    pub wallpaper_files: Vec<std::path::PathBuf>,
-    pub wallpaper_scan: Option<(std::path::PathBuf, std::time::Instant)>,
-    /// Generador de miniaturas (hilo propio) y sus texturas ya subidas a egui.
-    pub thumbs: crate::thumbs::Thumbnails,
-    pub thumb_textures: std::collections::HashMap<std::path::PathBuf, egui::TextureHandle>,
-    /// Preset de layout marcado en la pestaña Workspace. `main` lo sincroniza
-    /// con `general:layout` de Hyprland; el clic lo aplica con `hyprctl eval`.
-    pub layout_preset: usize,
     pub battery: BatteryState,
     /// Wi-Fi, Bluetooth, niveles y dispositivos (hilo de `sysinfo.rs`).
     pub system: SystemInfo,
-    /// Comandos externos (argv) que `main` lanza sin esperar: `hyprctl eval`, `xdg-open`…
+    /// Comandos externos (argv) que `main` lanza sin esperar.
     pub pending_spawns: Vec<Vec<String>>,
     pub snapshot: HyprlandSnapshot,
     pub should_exit: bool,
     /// Comandos `dispatch` pendientes de enviar al IPC de Hyprland.
     pub pending_commands: Vec<String>,
-    /// Command menu (lanzador / archivos / …).
-    pub menu_open: bool,
-    pub menu_mode: crate::launcher::MenuMode,
-    pub menu_query: String,
-    pub menu_selected: usize,
-    pub menu_entries: Vec<crate::launcher::Entry>,
-    pub menu_action: Option<crate::launcher::EntryAction>,
-    /// Modo overview (vista de todos los workspaces).
-    pub overview: bool,
-    pub overview_focus: Option<String>,
-    pub overview_workspace: Option<u32>,
-    /// Isla tipo notch: visible unos px, se despliega al acercar el cursor.
-    pub island_progress: f32,
-    pub island_active: bool,
-    /// Compacto enganchado por clic (el hover es temporal).
-    pub island_compact: bool,
-    /// Dock inferior con autohide.
-    pub dock_progress: f32,
-    pub dock_visible: bool,
+    /// Clientes de Hyprland, compartidos por dock y overview (Fase 2: `Shared.clients`).
     pub dock_clients: Vec<crate::ipc::ClientInfo>,
-    pub dock_action: Option<DockAction>,
-    /// Ítem del dock cuyo menú de ventanas está abierto.
-    pub dock_menu: Option<usize>,
-    /// Iconos reales de apps del dock (desde .desktop + temas de iconos).
+    /// Iconos reales y sus texturas, compartidos por dock, overview y command menu.
     pub app_icons: crate::appicons::AppIcons,
     pub app_icon_textures: std::collections::HashMap<String, egui::TextureHandle>,
 }
@@ -216,67 +169,20 @@ pub enum DockAction {
 impl UiState {
     pub fn new() -> Self {
         Self {
-            expansion: 0.0,
-            expanded: std::env::var_os("DINAMIC_UI_EXPANDED").is_some(),
-            show_panel: std::env::var_os("DINAMIC_UI_PANEL").is_some(),
-            panel_progress: if std::env::var_os("DINAMIC_UI_PANEL").is_some() {
-                1.0
-            } else {
-                0.0
-            },
+            bar: bar::BarState::new(),
+            dock: dock::DockState::new(),
+            menu: menu::MenuState::default(),
+            notifications: notifications::NotificationState::default(),
+            overview: overview::OverviewState::default(),
+            wallpaper: wallpaper::WallpaperState::default(),
             pulse: 0.0,
-            notification: None,
-            notification_count: 0,
-            notification_progress: 0.0,
-            dismiss_notification: false,
-            panel_tab: std::env::var("DINAMIC_UI_PANEL_TAB")
-                .ok()
-                .and_then(|v| v.parse::<usize>().ok())
-                .unwrap_or(0)
-                .min(PANEL_TABS.len() - 1),
-            dnd: false,
-            notification_list: Vec::new(),
-            dismiss_notification_id: None,
-            clear_all_notifications: false,
-            toggle_dnd: false,
-            wallpaper_color: None,
-            wallpaper_selected: None,
-            wallpaper_image: None,
-            wallpaper_hover: None,
-            wallpaper_image_request: None,
-            wallpaper_grid: false,
-            wallpaper_files: Vec::new(),
-            wallpaper_scan: None,
-            thumbs: crate::thumbs::Thumbnails::new(),
-            thumb_textures: std::collections::HashMap::new(),
-            layout_preset: 0,
             battery: BatteryState::default(),
             system: SystemInfo::default(),
             pending_spawns: Vec::new(),
             snapshot: HyprlandSnapshot::default(),
             should_exit: false,
             pending_commands: Vec::new(),
-            menu_open: false,
-            menu_mode: crate::launcher::MenuMode::default(),
-            menu_query: String::new(),
-            menu_selected: 0,
-            menu_entries: Vec::new(),
-            menu_action: None,
-            overview: false,
-            overview_focus: None,
-            overview_workspace: None,
-            island_progress: 0.0,
-            island_active: std::env::var_os("DINAMIC_UI_ISLAND").is_some(),
-            island_compact: false,
-            dock_progress: if std::env::var_os("DINAMIC_UI_DOCK").is_some() {
-                1.0
-            } else {
-                0.0
-            },
-            dock_visible: std::env::var_os("DINAMIC_UI_DOCK").is_some(),
             dock_clients: Vec::new(),
-            dock_action: None,
-            dock_menu: None,
             app_icons: crate::appicons::AppIcons::new(),
             app_icon_textures: std::collections::HashMap::new(),
         }
@@ -355,7 +261,7 @@ pub fn draw(
     // El surface es ancho completo y fijo; los elementos se dibujan centrados.
     let screen = ui.max_rect();
     // Caída con aceleración (gravedad), no lineal: la gota cae y se posa.
-    let p = state.island_progress;
+    let p = state.bar.island_progress;
     let island_t = p * p;
     let in_island_mode = t < 0.5;
     let pill = if in_island_mode {
@@ -441,11 +347,11 @@ pub fn draw(
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         }
         if response.clicked() {
-            if state.island_compact {
-                state.expanded = true;
-                state.island_compact = false;
+            if state.bar.island_compact {
+                state.bar.expanded = true;
+                state.bar.island_compact = false;
             } else {
-                state.island_compact = true;
+                state.bar.island_compact = true;
             }
         }
     }
@@ -461,8 +367,8 @@ pub fn draw(
     }
 
     // Notificación: tarjeta propia, separada de la barra. Se oculta al abrir el panel.
-    let notif_t = smoothstep(0.0, 1.0, state.notification_progress);
-    if notif_t > 0.01 && panel_t < 0.5 && state.notification.is_some() {
+    let notif_t = smoothstep(0.0, 1.0, state.notifications.notification_progress);
+    if notif_t > 0.01 && panel_t < 0.5 && state.notifications.notification.is_some() {
         // Slide in desde arriba / slide out hacia arriba: la tarjeta se desplaza
         // desde detrás de la barra hasta su sitio (y viceversa al salir).
         let base = notification_card(screen.width());
@@ -474,7 +380,11 @@ pub fn draw(
                 .id_salt("notification-layer"),
         );
         child.set_clip_rect(card.intersect(ui.clip_rect()));
-        child.set_opacity(smoothstep(0.0, 0.6, state.notification_progress));
+        child.set_opacity(smoothstep(
+            0.0,
+            0.6,
+            state.notifications.notification_progress,
+        ));
         draw_notification_card(&mut child, card, state, palette);
     }
 
@@ -516,10 +426,10 @@ pub fn draw(
     }
 
     draw_dock(ui, state, palette);
-    if state.overview {
+    if state.overview.overview {
         draw_overview(ui, state, palette);
     }
-    if state.menu_open {
+    if state.menu.menu_open {
         draw_command_menu(ui, state, palette);
     }
 }
@@ -564,7 +474,7 @@ fn occupied_color(palette: Palette, active: bool) -> Color32 {
 /// Botón de la cuadrícula: abre/cierra el panel de control. Se usa en la isla
 /// y en la barra; resaltado mientras el panel está abierto.
 fn panel_toggle_button(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
-    let active = state.show_panel;
+    let active = state.bar.show_panel;
     let (fg, bg) = if active {
         (Color32::from_gray(17), palette.text)
     } else {
@@ -580,7 +490,7 @@ fn panel_toggle_button(ui: &mut egui::Ui, state: &mut UiState, palette: Palette)
         .on_hover_cursor(CursorIcon::PointingHand)
         .on_hover_text("Panel de control");
     if response.clicked() {
-        state.show_panel = !state.show_panel;
+        state.bar.show_panel = !state.bar.show_panel;
     }
 }
 

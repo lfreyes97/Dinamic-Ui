@@ -2,6 +2,17 @@
 
 use super::*;
 
+/// Estado del command menu.
+#[derive(Default)]
+pub struct MenuState {
+    pub menu_open: bool,
+    pub menu_mode: crate::launcher::MenuMode,
+    pub menu_query: String,
+    pub menu_selected: usize,
+    pub menu_entries: Vec<crate::launcher::Entry>,
+    pub menu_action: Option<crate::launcher::EntryAction>,
+}
+
 /// Command menu: lanzador y buscador, con pestañas de modo.
 pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     use crate::launcher::{filter, MenuMode};
@@ -36,27 +47,27 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
         icon_font(ICON_MD),
         palette.muted,
     );
-    let query = if state.menu_query.is_empty() {
+    let query = if state.menu.menu_query.is_empty() {
         "Busca apps, archivos, comandos…".to_string()
     } else {
-        state.menu_query.clone()
+        state.menu.menu_query.clone()
     };
     ui.painter().text(
         egui::pos2(x + 28.0, y + 9.0),
         egui::Align2::LEFT_CENTER,
         query,
         egui::FontId::new(15.0, egui::FontFamily::Proportional),
-        if state.menu_query.is_empty() {
+        if state.menu.menu_query.is_empty() {
             palette.border
         } else {
             palette.text
         },
     );
     // Cursor parpadeante simple.
-    if !state.menu_query.is_empty() {
+    if !state.menu.menu_query.is_empty() {
         ui.painter().rect_filled(
             egui::Rect::from_min_size(
-                egui::pos2(x + 30.0 + state.menu_query.len() as f32 * 7.6, y + 2.0),
+                egui::pos2(x + 30.0 + state.menu.menu_query.len() as f32 * 7.6, y + 2.0),
                 egui::vec2(1.5, 14.0),
             ),
             CornerRadius::same(0),
@@ -87,7 +98,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             egui::pos2(x + i as f32 * (chip_w + 5.0), y),
             egui::vec2(chip_w, 28.0),
         );
-        let active = *mode == state.menu_mode;
+        let active = *mode == state.menu.menu_mode;
         if active {
             ui.painter()
                 .rect_filled(rect, CornerRadius::same(8), Color32::from_gray(0x1c));
@@ -109,9 +120,9 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         }
         if r.clicked() {
-            state.menu_mode = *mode;
-            state.menu_query.clear();
-            state.menu_entries.clear();
+            state.menu.menu_mode = *mode;
+            state.menu.menu_query.clear();
+            state.menu.menu_entries.clear();
         }
     }
     y += 40.0;
@@ -125,15 +136,15 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
 
     // ── Resultados ──
     y += 10.0;
-    if state.menu_entries.is_empty() {
-        state.menu_entries = match state.menu_mode {
+    if state.menu.menu_entries.is_empty() {
+        state.menu.menu_entries = match state.menu.menu_mode {
             MenuMode::Apps => crate::launcher::apps(),
             MenuMode::Files => crate::launcher::files(&config::get().menu.file_dirs),
             MenuMode::Workspaces => crate::launcher::workspaces(&state.snapshot.occupied),
             MenuMode::Commands => crate::launcher::commands(),
         };
     }
-    let results = filter(&state.menu_entries, &state.menu_query);
+    let results = filter(&state.menu.menu_entries, &state.menu.menu_query);
     let row_h = 48.0;
     let max_rows = ((card.max.y - 52.0 - y) / row_h).floor() as usize;
     for (i, entry) in results.iter().take(max_rows).enumerate() {
@@ -141,7 +152,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             egui::pos2(card.min.x + 9.0, y + i as f32 * row_h),
             egui::vec2(w - 18.0, row_h - 4.0),
         );
-        let selected = i == state.menu_selected;
+        let selected = i == state.menu.menu_selected;
         if selected {
             ui.painter().rect_filled(
                 rect,
@@ -211,12 +222,12 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             egui::Sense::click(),
         );
         if r.hovered() {
-            state.menu_selected = i;
+            state.menu.menu_selected = i;
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         }
         if r.clicked() {
-            state.menu_action = Some(entry.action.clone());
-            state.menu_open = false;
+            state.menu.menu_action = Some(entry.action.clone());
+            state.menu.menu_open = false;
         }
     }
 

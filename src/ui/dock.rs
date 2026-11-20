@@ -2,6 +2,26 @@
 
 use super::*;
 
+/// Estado del dock: animación, visibilidad y menú de ventanas.
+#[derive(Default)]
+pub struct DockState {
+    pub dock_progress: f32,
+    pub dock_visible: bool,
+    pub dock_action: Option<DockAction>,
+    pub dock_menu: Option<usize>,
+}
+
+impl DockState {
+    pub fn new() -> Self {
+        let shown = std::env::var_os("DINAMIC_UI_DOCK").is_some();
+        Self {
+            dock_progress: if shown { 1.0 } else { 0.0 },
+            dock_visible: shown,
+            ..Self::default()
+        }
+    }
+}
+
 struct DockItem {
     name: String,
     command: String,
@@ -32,7 +52,7 @@ pub(super) fn dock_icon(name: &str) -> &'static str {
 /// Dock inferior: se desliza desde abajo cuando el cursor llega al borde.
 pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let cfg = &config::get().dock;
-    if !cfg.enabled || state.dock_progress <= 0.01 {
+    if !cfg.enabled || state.dock.dock_progress <= 0.01 {
         return;
     }
     let screen = ui.max_rect();
@@ -99,7 +119,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
     const H: f32 = 56.0;
     const BOTTOM: f32 = 10.0;
     let w = 14.0 + items.len() as f32 * (ITEM + GAP) - GAP;
-    let hidden = (1.0 - state.dock_progress) * (H + BOTTOM + 12.0);
+    let hidden = (1.0 - state.dock.dock_progress) * (H + BOTTOM + 12.0);
     let dock = egui::Rect::from_min_size(
         egui::pos2(
             ((screen.width() - w) / 2.0).round(),
@@ -117,7 +137,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
     );
 
     // Rectángulos absolutos: el centro vertical es exactamente dock.h / 2.
-    ui.set_opacity(state.dock_progress);
+    ui.set_opacity(state.dock.dock_progress);
     let icon_y = dock.center().y - ITEM / 2.0;
     for (i, item) in items.iter().enumerate() {
         let name = &item.name;
@@ -197,9 +217,9 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
 
         if response.clicked() {
             if item.windows.is_empty() {
-                state.dock_action = Some(DockAction::Launch(item.command.clone()));
+                state.dock.dock_action = Some(DockAction::Launch(item.command.clone()));
             } else if item.windows.len() == 1 {
-                state.dock_action = Some(DockAction::Focus(item.windows[0].address.clone()));
+                state.dock.dock_action = Some(DockAction::Focus(item.windows[0].address.clone()));
             } else if active {
                 // Ya está activa: ciclar a la siguiente ventana.
                 let current = item
@@ -208,9 +228,10 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                     .position(|w| w.address == state.snapshot.window_address)
                     .unwrap_or(0);
                 let next = (current + 1) % item.windows.len();
-                state.dock_action = Some(DockAction::Focus(item.windows[next].address.clone()));
+                state.dock.dock_action =
+                    Some(DockAction::Focus(item.windows[next].address.clone()));
             } else {
-                state.dock_menu = if state.dock_menu == Some(i) {
+                state.dock.dock_menu = if state.dock.dock_menu == Some(i) {
                     None
                 } else {
                     Some(i)
@@ -218,15 +239,15 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             }
         }
         if response.secondary_clicked() && running {
-            state.dock_menu = Some(i);
+            state.dock.dock_menu = Some(i);
         }
         if response.middle_clicked() {
-            state.dock_action = Some(DockAction::Launch(item.command.clone()));
+            state.dock.dock_action = Some(DockAction::Launch(item.command.clone()));
         }
     }
 
     // Menú de ventanas de la app (se dibuja sobre el dock).
-    if let Some(index) = state.dock_menu {
+    if let Some(index) = state.dock.dock_menu {
         if let Some(item) = items.get(index) {
             let row_h = 24.0;
             let menu_w = 200.0;
@@ -277,8 +298,8 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                     palette.text,
                 );
                 if r.clicked() {
-                    state.dock_action = Some(DockAction::Focus(win.address.clone()));
-                    state.dock_menu = None;
+                    state.dock.dock_action = Some(DockAction::Focus(win.address.clone()));
+                    state.dock.dock_menu = None;
                 }
             }
             let new_row = egui::Rect::from_min_size(
@@ -303,8 +324,8 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                 palette.muted,
             );
             if r.clicked() {
-                state.dock_action = Some(DockAction::Launch(item.command.clone()));
-                state.dock_menu = None;
+                state.dock.dock_action = Some(DockAction::Launch(item.command.clone()));
+                state.dock.dock_menu = None;
             }
         }
     }

@@ -2,6 +2,20 @@
 
 use super::*;
 
+/// Estado de la tarjeta de notificaciones y la cola DND.
+#[derive(Default)]
+pub struct NotificationState {
+    pub notification: Option<Notification>,
+    pub notification_count: usize,
+    pub notification_progress: f32,
+    pub dismiss_notification: bool,
+    pub dnd: bool,
+    pub notification_list: Vec<Notification>,
+    pub dismiss_notification_id: Option<u32>,
+    pub clear_all_notifications: bool,
+    pub toggle_dnd: bool,
+}
+
 /// La isla solo muestra workspace, reloj y batería, con `space-between`.
 pub(super) fn draw_notification_card(
     ui: &mut egui::Ui,
@@ -28,7 +42,7 @@ pub(super) fn draw_notification_card(
         ui.horizontal(|ui| {
             ui.label(icon_bold(ic::BELL, ICON_SM, palette.accent));
             ui.add_space(SP_S);
-            if let Some(notification) = &state.notification {
+            if let Some(notification) = &state.notifications.notification {
                 ui.label(
                     RichText::new(truncate(&notification.app, 20))
                         .size(TEXT_CAPTION)
@@ -42,9 +56,9 @@ pub(super) fn draw_notification_card(
                 );
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if state.notification_count > 0 {
+                if state.notifications.notification_count > 0 {
                     ui.label(
-                        RichText::new(format!("×{}", state.notification_count))
+                        RichText::new(format!("×{}", state.notifications.notification_count))
                             .size(TEXT_CAPTION)
                             .family(egui::FontFamily::Name(FONT_SEMIBOLD.into()))
                             .color(palette.accent),
@@ -55,11 +69,11 @@ pub(super) fn draw_notification_card(
                     .frame(false)
                     .corner_radius(5.0);
                 if ui.add(close).clicked() {
-                    state.dismiss_notification = true;
+                    state.notifications.dismiss_notification = true;
                 }
             });
         });
-        if let Some(notification) = &state.notification {
+        if let Some(notification) = &state.notifications.notification {
             ui.label(
                 RichText::new(truncate(&notification.summary, 38))
                     .size(TEXT_BODY)
