@@ -32,6 +32,8 @@ pub struct OverviewState {
     pub progress: f32,
     pub kind: OverviewKind,
     pub strip_offset: usize,
+    /// Miniaturas que caben en la franja (lo fija el dibujo según el espacio; 0 = aún no).
+    pub strip_visible: usize,
     /// Búsqueda (vistas modales).
     pub query: String,
     /// Elemento seleccionado con el teclado o el cursor.
@@ -41,6 +43,15 @@ pub struct OverviewState {
 }
 
 impl OverviewState {
+    /// Miniaturas visibles de la franja para navegar con el teclado.
+    pub fn strip_window(&self) -> usize {
+        if self.strip_visible == 0 {
+            5
+        } else {
+            self.strip_visible
+        }
+    }
+
     /// ¿Hay algo que dibujar? (también mientras se desvanece al cerrar).
     pub fn visible(&self) -> bool {
         self.overview || self.progress > 0.005
@@ -93,7 +104,8 @@ pub(super) fn open(state: &mut UiState, kind: OverviewKind) {
         OverviewKind::StripH | OverviewKind::StripV => {
             let ids = strip_ids(state);
             let selected = model::initial_selection(&ids, current_ws(state));
-            state.overview.strip_offset = model::scroll_to(0, selected, 5);
+            state.overview.strip_offset =
+                model::scroll_to(0, selected, state.overview.strip_window());
             selected
         }
         OverviewKind::Activities => 0,
@@ -165,7 +177,7 @@ fn navigate(state: &mut UiState, dir: Dir) {
             let cols = ACTIVITY_COLS.min(count.max(1));
             state.overview.selected = model::step(selected, dir, cols, count);
         }
-        kind @ (OverviewKind::StripH | OverviewKind::StripV) => {
+        OverviewKind::StripH | OverviewKind::StripV => {
             // En una franja solo hay un eje: arriba/izquierda retrocede, abajo/derecha avanza.
             let dir = match dir {
                 Dir::Left | Dir::Up => Dir::Left,
@@ -173,7 +185,7 @@ fn navigate(state: &mut UiState, dir: Dir) {
             };
             let count = strip_ids(state).len();
             let next = model::step(selected, dir, count, count);
-            let visible = if kind == OverviewKind::StripH { 5 } else { 6 };
+            let visible = state.overview.strip_window();
             state.overview.selected = next;
             state.overview.strip_offset =
                 model::scroll_to(state.overview.strip_offset, next, visible);

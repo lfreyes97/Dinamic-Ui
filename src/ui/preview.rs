@@ -61,7 +61,12 @@ fn apps() -> Vec<desktop::DesktopApp> {
     ]
 }
 
-fn sample_state() -> UiState {
+/// Estado de ejemplo para una pantalla `k` veces mayor que 1280×720.
+fn sample_state(k: f32) -> UiState {
+    let g = |x: i32, y: i32, w: i32, h: i32| {
+        let s = |v: i32| (v as f32 * k).round() as i32;
+        (s(x), s(y), s(w), s(h))
+    };
     let mut state = UiState::new();
     let s = &mut state.shared;
     s.snapshot.workspace = "1".into();
@@ -73,26 +78,36 @@ fn sample_state() -> UiState {
             "Rust — Mozilla Firefox",
             "0x1",
             1,
-            (40, 60, 700, 560),
+            g(40, 60, 700, 560),
         ),
-        client("kitty", "zsh — ~/Projects", "0x2", 1, (760, 60, 480, 300)),
-        client("kitty", "htop", "0x3", 1, (760, 380, 480, 260)),
+        client("kitty", "zsh — ~/Projects", "0x2", 1, g(760, 60, 480, 300)),
+        client("kitty", "htop", "0x3", 1, g(760, 380, 480, 260)),
         client(
             "code",
             "main.rs — Dinamic-Ui",
             "0x4",
             2,
-            (80, 50, 1120, 620),
+            g(80, 50, 1120, 620),
         ),
-        client("spotify", "Spotify Premium", "0x5", 3, (200, 120, 880, 480)),
-        client("firefox", "Hyprland wiki", "0x6", 5, (60, 60, 600, 540)),
-        client("code", "Cargo.toml", "0x7", 5, (700, 60, 540, 540)),
+        client(
+            "spotify",
+            "Spotify Premium",
+            "0x5",
+            3,
+            g(200, 120, 880, 480),
+        ),
+        client("firefox", "Hyprland wiki", "0x6", 5, g(60, 60, 600, 540)),
+        client("code", "Cargo.toml", "0x7", 5, g(700, 60, 540, 540)),
     ];
     state
 }
 
 /// Fondo de escritorio de mentira, para ver bien las transparencias.
 fn fake_desktop(ui: &egui::Ui, with_windows: bool) {
+    let (w, h) = (
+        ui.ctx().content_rect().width(),
+        ui.ctx().content_rect().height(),
+    );
     let p = ui.painter();
     let screen = ui.ctx().content_rect();
     p.rect_filled(screen, 0.0, egui::Color32::from_rgb(0x14, 0x17, 0x1f));
@@ -102,7 +117,7 @@ fn fake_desktop(ui: &egui::Ui, with_windows: bool) {
         egui::Color32::from_rgba_unmultiplied(221, 153, 153, 26),
     );
     p.circle_filled(
-        egui::pos2(W - 120.0, H),
+        egui::pos2(w - 120.0 * (w / W), h),
         380.0,
         egui::Color32::from_rgba_unmultiplied(127, 200, 255, 22),
     );
@@ -127,10 +142,14 @@ fn fake_desktop(ui: &egui::Ui, with_windows: bool) {
     }
 }
 
-fn render(name: &str, windows_behind: bool, mut state: UiState) {
+fn render(name: &str, windows_behind: bool, state: UiState) {
+    render_sized(name, (W, H), windows_behind, state);
+}
+
+fn render_sized(name: &str, size: (f32, f32), windows_behind: bool, mut state: UiState) {
     let mut fonts_ready = false;
     let mut harness = Harness::builder()
-        .with_size(egui::vec2(W, H))
+        .with_size(egui::vec2(size.0, size.1))
         .with_pixels_per_point(1.0)
         .build_ui_state(
             move |ui, state: &mut UiState| {
@@ -164,8 +183,8 @@ fn render(name: &str, windows_behind: bool, mut state: UiState) {
     );
 }
 
-fn open_overview(kind: overview::OverviewKind, query: &str) -> UiState {
-    let mut state = sample_state();
+fn open_overview(kind: overview::OverviewKind, query: &str, k: f32) -> UiState {
+    let mut state = sample_state(k);
     state.overview.apps = apps();
     overview::open(&mut state, kind);
     // `open` relee los `.desktop` del sistema: aquí queremos los de ejemplo.
@@ -178,8 +197,8 @@ fn open_overview(kind: overview::OverviewKind, query: &str) -> UiState {
     state
 }
 
-fn strip_state(kind: overview::OverviewKind, h: Side, v: Side) -> UiState {
-    let mut state = open_overview(kind, "");
+fn strip_state(kind: overview::OverviewKind, h: Side, v: Side, k: f32) -> UiState {
+    let mut state = open_overview(kind, "", k);
     let mut cfg = crate::config::Config::default();
     cfg.overview.strip_h_side = h;
     cfg.overview.strip_v_side = v;
@@ -191,36 +210,71 @@ fn strip_state(kind: overview::OverviewKind, h: Side, v: Side) -> UiState {
 #[ignore = "genera PNG en target/ui-preview (necesita GPU)"]
 fn ui_preview_overviews() {
     use overview::OverviewKind::*;
-    render("overview-workspaces", false, open_overview(Workspaces, ""));
+    render(
+        "overview-workspaces",
+        false,
+        open_overview(Workspaces, "", 1.0),
+    );
     render(
         "overview-workspaces-search",
         false,
-        open_overview(Workspaces, "code"),
+        open_overview(Workspaces, "code", 1.0),
     );
-    render("overview-activities", false, open_overview(Activities, ""));
+    render(
+        "overview-activities",
+        false,
+        open_overview(Activities, "", 1.0),
+    );
     render(
         "overview-activities-search",
         false,
-        open_overview(Activities, "term"),
+        open_overview(Activities, "term", 1.0),
     );
     render(
         "strip-h-top",
         true,
-        strip_state(StripH, Side::Top, Side::Right),
+        strip_state(StripH, Side::Top, Side::Right, 1.0),
     );
     render(
         "strip-h-bottom",
         true,
-        strip_state(StripH, Side::Bottom, Side::Right),
+        strip_state(StripH, Side::Bottom, Side::Right, 1.0),
     );
     render(
         "strip-v-left",
         true,
-        strip_state(StripV, Side::Top, Side::Left),
+        strip_state(StripV, Side::Top, Side::Left, 1.0),
     );
     render(
         "strip-v-right",
         true,
-        strip_state(StripV, Side::Top, Side::Right),
+        strip_state(StripV, Side::Top, Side::Right, 1.0),
+    );
+
+    // Pantalla de 1080p: las dimensiones derivadas deben crecer con ella.
+    let big = (1920.0, 1080.0);
+    render_sized(
+        "overview-workspaces-1080p",
+        big,
+        false,
+        open_overview(Workspaces, "", 1.5),
+    );
+    render_sized(
+        "overview-activities-1080p",
+        big,
+        false,
+        open_overview(Activities, "", 1.5),
+    );
+    render_sized(
+        "strip-h-top-1080p",
+        big,
+        true,
+        strip_state(StripH, Side::Top, Side::Right, 1.5),
+    );
+    render_sized(
+        "strip-v-right-1080p",
+        big,
+        true,
+        strip_state(StripV, Side::Top, Side::Right, 1.5),
     );
 }

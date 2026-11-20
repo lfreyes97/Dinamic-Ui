@@ -115,6 +115,10 @@ impl Default for TopbarConfig {
 pub struct OverviewConfig {
     pub strip_h_side: Side,
     pub strip_v_side: Side,
+    /// Alto de la franja horizontal en px; 0 = automático según la pantalla.
+    pub strip_h_height: u32,
+    /// Ancho de la franja vertical en px; 0 = automático según la pantalla.
+    pub strip_v_width: u32,
 }
 
 impl Default for OverviewConfig {
@@ -122,6 +126,8 @@ impl Default for OverviewConfig {
         Self {
             strip_h_side: Side::Top,
             strip_v_side: Side::Right,
+            strip_h_height: 0,
+            strip_v_width: 0,
         }
     }
 }

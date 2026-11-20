@@ -84,12 +84,25 @@ tests); el dibujo en `overview.rs` y `overview_collection.rs`. Comandos: `overvi
   y un bloque «Overview» (icono + etiqueta) tras un separador.
 - **Barra de ayuda** inferior con las teclas dibujadas como chips.
 
+### Dimensiones: el mockup es una guía, no una medida
+
+Las medidas del mockup (franjas de 68/78 px, tiles de 56 px…) valen para 720p; en pantallas
+mayores se quedaban pequeñas. Ahora se **derivan de la pantalla** (`overview_model.rs`, con tests):
+
+- **Grosor de las franjas:** `[overview] strip_h_height` / `strip_v_width`; con `0` (por defecto)
+  es automático: ~8,5 % del alto (68–120 px) y ~5 % del ancho (78–130 px).
+- **Miniaturas de franja:** conservan la proporción del monitor y envuelven su imagen, así las
+  ventanas aprovechan todo el espacio. **Cuántas caben** sale del espacio libre (3–8).
+- **Actividades:** tiles, separación, iconos y tira de ventanas escalan entre 1× y 1,6× respecto
+  a 720p; los textos crecen con la raíz de esa escala.
+
 ### Vista previa sin compositor
 
 `just preview` (`cargo test ui_preview -- --ignored`) renderiza la **UI real** a PNG en
 `target/ui-preview/` usando la GPU y `egui_kittest` (dependencia solo de desarrollo), con datos
 de ejemplo y la config por defecto: `overview-workspaces`, `…-search`, `overview-activities`,
-`…-search`, `strip-h-top`, `strip-h-bottom`, `strip-v-left`, `strip-v-right`. Permite revisar el
+`…-search`, `strip-h-top`, `strip-h-bottom`, `strip-v-left`, `strip-v-right`, y las versiones
+`-1080p` de rejilla, Actividades y franjas para comprobar el escalado. Permite revisar el
 diseño sin Hyprland. No es una prueba automática (no compara imágenes): sirve para mirar.
 
 ### Pendiente
