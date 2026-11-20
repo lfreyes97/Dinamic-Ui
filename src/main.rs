@@ -25,6 +25,9 @@ mod launcher;
 #[cfg(feature = "notifications")]
 mod notifications;
 mod power;
+// Criterio de búsqueda compartido por el command menu y Actividades.
+#[cfg(any(feature = "command-menu", feature = "activities"))]
+mod search;
 mod shared;
 mod sysinfo;
 mod theme;

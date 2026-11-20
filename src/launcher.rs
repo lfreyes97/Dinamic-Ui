@@ -1,8 +1,11 @@
 //! Datos del command menu: apps (.desktop), archivos y comandos.
 //!
-//! Una sola fuente de verdad; la UI solo filtra y ejecuta acciones.
+//! Una sola fuente de verdad; la UI solo filtra y ejecuta acciones. El criterio de búsqueda
+//! es el de `search.rs`, compartido con Actividades.
 
 use std::{fs, path::PathBuf};
+
+use crate::search;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MenuMode {
@@ -49,49 +52,28 @@ pub enum EntryAction {
 pub struct Entry {
     pub title: String,
     pub subtitle: String,
+    /// Identificador para la búsqueda: el `id` del `.desktop` en apps, la clave en comandos;
+    /// vacío si no aplica (archivos, workspaces).
+    pub id: String,
     /// Clase/nombre para resolver el icono en `app_icon_textures`.
     pub icon_key: String,
     pub action: EntryAction,
 }
 
-/// Puntuación simple: substring puntúa alto; subsecuencia, bajo.
-fn score(query: &str, text: &str) -> i32 {
-    if query.is_empty() {
-        return 1;
-    }
-    let q = query.to_lowercase();
-    let t = text.to_lowercase();
-    if let Some(pos) = t.find(&q) {
-        return 100 - pos.min(50) as i32;
-    }
-    let mut qi = q.chars();
-    let Some(mut current) = qi.next() else {
-        return 0;
-    };
-    let mut points = 0;
-    for c in t.chars() {
-        if c == current {
-            points += 1;
-            if let Some(next) = qi.next() {
-                current = next;
-            } else {
-                return points;
-            }
-        }
-    }
-    0
-}
-
+/// Filtra y ordena por puntuación (criterio de `search::score` sobre título, id y subtítulo).
+/// Consulta vacía: todas las entradas, en su orden.
 pub fn filter(entries: &[Entry], query: &str) -> Vec<Entry> {
-    let mut scored: Vec<(i32, Entry)> = entries
+    let query = query.trim();
+    if query.is_empty() {
+        return entries.to_vec();
+    }
+    let mut scored: Vec<(i32, &Entry)> = entries
         .iter()
-        .filter_map(|e| {
-            let s = score(query, &format!("{} {}", e.title, e.subtitle));
-            (s > 0).then(|| (s, e.clone()))
-        })
+        .filter_map(|e| search::score(query, &e.title, &e.id, &e.subtitle).map(|s| (s, e)))
         .collect();
-    scored.sort_by_key(|(s, _)| -s);
-    scored.into_iter().map(|(_, e)| e).collect()
+    // Estable: a igualdad de puntuación se mantiene el orden original.
+    scored.sort_by_key(|(s, _)| std::cmp::Reverse(*s));
+    scored.into_iter().map(|(_, e)| e.clone()).collect()
 }
 
 /// Apps de los `.desktop` del sistema y del usuario.
@@ -106,6 +88,7 @@ pub fn apps() -> Vec<Entry> {
                 app.comment
             },
             title: app.name,
+            id: app.id.clone(),
             // El `id` siempre está en el mapa de iconos (el nombre del icono solo a veces).
             icon_key: app.id,
             action: EntryAction::Launch(app.exec),
@@ -160,6 +143,7 @@ fn push_file(out: &mut Vec<Entry>, path: PathBuf) {
     out.push(Entry {
         title: name.to_string(),
         subtitle,
+        id: String::new(),
         icon_key: if path.is_dir() {
             "folder".into()
         } else {
@@ -183,6 +167,7 @@ pub fn workspaces(ids: &[u32]) -> Vec<Entry> {
         .map(|id| Entry {
             title: format!("Workspace {id}"),
             subtitle: "Cambiar de workspace".into(),
+            id: String::new(),
             icon_key: "workspace".into(),
             action: EntryAction::Workspace(*id),
         })
@@ -201,8 +186,88 @@ pub fn commands() -> Vec<Entry> {
     .map(|(title, subtitle, key)| Entry {
         title: title.into(),
         subtitle: subtitle.into(),
+        id: key.into(),
         icon_key: key.into(),
         action: EntryAction::Command(key.into()),
     })
     .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(title: &str, subtitle: &str, id: &str) -> Entry {
+        Entry {
+            title: title.into(),
+            subtitle: subtitle.into(),
+            id: id.into(),
+            icon_key: String::new(),
+            action: EntryAction::Command(String::new()),
+        }
+    }
+
+    fn titles(entries: &[Entry]) -> Vec<&str> {
+        entries.iter().map(|e| e.title.as_str()).collect()
+    }
+
+    #[test]
+    fn empty_query_keeps_everything_in_order() {
+        let entries = vec![
+            entry("Zeta", "", ""),
+            entry("Alfa", "", ""),
+            entry("Beta", "", ""),
+        ];
+        assert_eq!(titles(&filter(&entries, "")), ["Zeta", "Alfa", "Beta"]);
+        assert_eq!(titles(&filter(&entries, "   ")), ["Zeta", "Alfa", "Beta"]);
+    }
+
+    #[test]
+    fn query_ranks_by_score_and_drops_non_matches() {
+        let entries = vec![
+            entry("Visor de imágenes", "Ver fotos", ""),
+            entry("Firefox", "Navegador", ""),
+            entry("Fotos", "Galería", ""),
+        ];
+        // «fo»: «Fotos» (prefijo del nombre, 100) > «Firefox» (contiene, 60) > «Visor» (solo
+        // aparece en el subtítulo «Ver fotos», 20). Es la única coincidencia de «Visor».
+        let found = filter(&entries, "fo");
+        assert_eq!(titles(&found), ["Fotos", "Firefox", "Visor de imágenes"]);
+        assert!(filter(&entries, "zzz").is_empty());
+    }
+
+    #[test]
+    fn matching_is_strict_no_subsequence() {
+        let entries = vec![entry("Firefox", "Navegador", "firefox")];
+        // Antes, la subsecuencia encontraba «frfx»; el criterio compartido no.
+        assert!(filter(&entries, "frfx").is_empty());
+        assert_eq!(titles(&filter(&entries, "fox")), ["Firefox"]);
+    }
+
+    #[test]
+    fn every_word_must_match_some_field() {
+        let entries = vec![
+            entry("Panel de control", "Abrir/cerrar el panel", "panel"),
+            entry("Overview", "Vista de workspaces", "overview"),
+        ];
+        assert_eq!(
+            titles(&filter(&entries, "panel control")),
+            ["Panel de control"]
+        );
+        assert!(filter(&entries, "panel workspaces zzz").is_empty());
+    }
+
+    #[test]
+    fn id_and_subtitle_count_as_fallback_fields() {
+        let entries = vec![
+            entry("Firefox", "Navegador", "org.mozilla.firefox"),
+            entry("Salir del shell", "Cerrar Dinamic UI", "quit"),
+            entry("Documento", "/home/usuario/Documentos", ""),
+        ];
+        // Por id (apps y comandos).
+        assert_eq!(titles(&filter(&entries, "mozilla")), ["Firefox"]);
+        assert_eq!(titles(&filter(&entries, "quit")), ["Salir del shell"]);
+        // Por subtítulo (ruta de un archivo).
+        assert_eq!(titles(&filter(&entries, "documentos")), ["Documento"]);
+    }
 }

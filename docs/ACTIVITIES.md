@@ -18,7 +18,8 @@ con tests).
 
 - **Apps reales** (`desktop::scan`, leídas al abrir y soltadas al cerrar). Sin búsqueda: primero las
   abiertas, luego las ancladas (`[dock] pinned`) y el resto por nombre. Con búsqueda, por
-  puntuación (prefijo > inicio de palabra > contiene > id > comentario). Máximo 24.
+  puntuación (prefijo > inicio de palabra > contiene > id > comentario), con el criterio de
+  `src/search.rs` que comparte el command menu. Máximo 24.
 - **Activar** (`↵` o clic): si la app tiene ventanas abiertas las enfoca (con varias, cicla entre
   ellas); si no, la lanza. Una ventana sin `.desktop` aparece igualmente (se enfoca, no se lanza).
 - **Tira de ventanas abiertas** abajo, con una vista esquemática de cada una y su título.
@@ -38,5 +39,3 @@ respecto a 720p, y los textos con la raíz de esa escala.
 - [ ] Verificación en el R7: el fundido y el teclado exclusivo no se pueden ver con `just preview`.
 - [ ] Iconos SVG (hoy solo PNG, ver `docs/MODULARIZATION_PLAN.md`): las apps con icono solo SVG
       muestran un glifo de reserva.
-- [ ] Unificar la búsqueda con la del command menu (`launcher::score` y `app_score` son dos
-      implementaciones del mismo criterio).

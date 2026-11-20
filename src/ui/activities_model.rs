@@ -1,41 +1,7 @@
 //! Modelo de Actividades (lanzador de apps y ventanas): tiles, búsqueda y activación, sin
 //! dibujo y con tests. El dibujo vive en `activities.rs`.
 
-use crate::{desktop::DesktopApp, ipc::ClientInfo};
-
-/// Puntuación de una app para la búsqueda; `None` si alguna palabra no coincide.
-/// Prefijo del nombre > inicio de palabra > contiene > `id` > comentario.
-pub fn app_score(query: &str, name: &str, id: &str, comment: &str) -> Option<i32> {
-    let (name, id, comment) = (
-        name.to_lowercase(),
-        id.to_lowercase(),
-        comment.to_lowercase(),
-    );
-    let mut total = 0;
-    let mut any = false;
-    for word in query.split_whitespace() {
-        any = true;
-        let word = word.to_lowercase();
-        let score = if name.starts_with(&word) {
-            100
-        } else if name
-            .split([' ', '-', '_', '.'])
-            .any(|w| w.starts_with(&word))
-        {
-            80
-        } else if name.contains(&word) {
-            60
-        } else if id.contains(&word) {
-            40
-        } else if comment.contains(&word) {
-            20
-        } else {
-            return None;
-        };
-        total += score;
-    }
-    any.then_some(total)
-}
+use crate::{desktop::DesktopApp, ipc::ClientInfo, search};
 
 /// Una app de la cuadrícula de Actividades.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +98,9 @@ pub fn build_tiles(
     } else {
         candidates
             .into_iter()
-            .filter_map(|c| app_score(query, &c.tile.name, &c.tile.id, &c.comment).map(|s| (s, c)))
+            .filter_map(|c| {
+                search::score(query, &c.tile.name, &c.tile.id, &c.comment).map(|s| (s, c))
+            })
             .collect()
     };
 
@@ -218,20 +186,6 @@ mod tests {
             exec: exec.into(),
             ..Default::default()
         }
-    }
-
-    #[test]
-    fn app_score_prefers_prefix_then_word_start_then_substring() {
-        let prefix = app_score("fire", "Firefox", "org.mozilla.firefox", "").unwrap();
-        let word = app_score("web", "Epiphany Web", "epiphany", "").unwrap();
-        let contains = app_score("fox", "Firefox", "firefox", "").unwrap();
-        let comment = app_score("navega", "Otra", "otra", "Navega por la web").unwrap();
-        assert!(prefix > word && word > contains && contains > comment);
-        assert_eq!(app_score("zzz", "Firefox", "firefox", "web"), None);
-        assert_eq!(app_score("   ", "Firefox", "firefox", ""), None);
-        // Con varias palabras deben coincidir todas.
-        assert!(app_score("fire fox", "Firefox", "firefox", "").is_some());
-        assert_eq!(app_score("fire zzz", "Firefox", "firefox", ""), None);
     }
 
     fn sample() -> (Vec<DesktopApp>, Vec<ClientInfo>) {
