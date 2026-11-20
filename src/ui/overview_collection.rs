@@ -8,8 +8,8 @@ use super::overview_model as model;
 use super::*;
 use crate::config::Side;
 
-/// Rect de la franja horizontal o vertical. El grosor sale de la config o, si es 0, de la
-/// pantalla. Con `progress < 1` se desliza fuera de pantalla hacia el borde en el que está
+/// Rect de la franja horizontal o vertical. El grosor es una fracción de la pantalla (1/5 del
+/// alto, 1/6 del ancho) o los píxeles que fije la config. Con `progress < 1` se desliza fuera de pantalla hacia el borde en el que está
 /// acoplada.
 pub fn strip_rect(state: &UiState, screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
     let hidden = 1.0 - crate::smootherstep(state.overview.progress);
@@ -17,14 +17,14 @@ pub fn strip_rect(state: &UiState, screen_w: i32, screen_h: i32) -> (i32, i32, i
     let cfg = &state.shared.config.overview;
     match state.overview.kind {
         OverviewKind::StripH => {
-            let h = model::strip_h_height(cfg.strip_h_height, screen_h as f32);
+            let h = cfg.strip_h_height.resolve(screen_h as f32);
             match cfg.strip_h_side {
                 Side::Bottom => (0, screen_h - h + slide(h), screen_w, h),
                 _ => (0, -slide(h), screen_w, h),
             }
         }
         OverviewKind::StripV => {
-            let w = model::strip_v_width(cfg.strip_v_width, screen_w as f32);
+            let w = cfg.strip_v_width.resolve(screen_w as f32);
             match cfg.strip_v_side {
                 Side::Left => (-slide(w), 0, w, screen_h),
                 _ => (screen_w - w + slide(w), 0, w, screen_h),
@@ -286,7 +286,13 @@ pub(super) fn draw_activities(ui: &mut egui::Ui, state: &mut UiState, palette: P
 }
 
 /// Botón cuadrado con borde de las franjas (anterior / siguiente).
-fn nav_button(ui: &mut egui::Ui, rect: egui::Rect, glyph: &str, id: &'static str) -> bool {
+fn nav_button(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    glyph: &str,
+    id: &'static str,
+    scale: f32,
+) -> bool {
     let p = pal();
     let resp = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     ui.painter().rect(
@@ -304,7 +310,7 @@ fn nav_button(ui: &mut egui::Ui, rect: egui::Rect, glyph: &str, id: &'static str
         ui,
         rect.center(),
         glyph,
-        11.0,
+        11.0 * scale,
         if resp.hovered() { p.text } else { p.muted },
     );
     if resp.hovered() {
@@ -366,7 +372,8 @@ fn thumb(
 
     let monitor = ui.max_rect().size();
     let aspect = monitor.x.max(1.0) / monitor.y.max(1.0);
-    let fk = model::ui_scale(monitor.y).sqrt();
+    // Los textos crecen con la miniatura (que crece con el grosor de la franja).
+    let fk = (rect.height() / 46.0).sqrt().clamp(1.0, 1.9);
     let mon = monitor_rect(rect.shrink2(egui::vec2(5.0, 7.0)), aspect);
     let active_address = state.shared.snapshot.window_address.clone();
     let windows: Vec<crate::ipc::ClientInfo> = state
@@ -415,23 +422,23 @@ fn thumb(
 }
 
 /// Bloque "Overview": icono y etiqueta; abre la vista de pantalla completa.
-fn overview_button(ui: &mut egui::Ui, rect: egui::Rect, id: &'static str) -> bool {
+fn overview_button(ui: &mut egui::Ui, rect: egui::Rect, id: &'static str, scale: f32) -> bool {
     let p = pal();
     let resp = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     let color = if resp.hovered() { p.text } else { p.muted };
     icon_at(
         ui,
-        egui::pos2(rect.center().x, rect.center().y - 7.0),
+        egui::pos2(rect.center().x, rect.center().y - 7.0 * scale),
         ic::FRAME_CORNERS,
-        ICON_MD,
+        ICON_MD * scale,
         color,
     );
     text_at(
         ui,
-        egui::pos2(rect.center().x, rect.center().y + 12.0),
+        egui::pos2(rect.center().x, rect.center().y + 12.0 * scale),
         egui::Align2::CENTER_CENTER,
         "Overview",
-        8.5,
+        8.5 * scale,
         color,
     );
     if resp.hovered() {
@@ -486,9 +493,11 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
 
     let aspect = screen.width().max(1.0) / screen.height().max(1.0);
     let thumb_sz = thumb_size_h(strip.height(), aspect);
-    let (gap, nav) = (8.0, 20.0);
+    // Los controles crecen con el grosor de la franja (1× a 68 px; ~1,5× a 154 px).
+    let sc = (strip.height() / 68.0).sqrt().clamp(1.0, 1.6);
+    let (gap, nav, ovw) = (8.0, 20.0 * sc, 56.0 * sc);
     // Controles fijos: ‹ › | Overview (y el margen de los extremos).
-    let controls = nav + gap + gap + nav + 14.0 + 1.0 + 14.0 + 56.0;
+    let controls = nav + gap + gap + nav + 14.0 + 1.0 + 14.0 + ovw;
     let capacity = model::fit_count(strip.width() - 48.0 - controls, thumb_sz.x, gap, 3, 8);
     state.overview.strip_visible = capacity;
 
@@ -509,6 +518,7 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         egui::Rect::from_min_size(egui::pos2(cursor, cy - nav / 2.0), egui::vec2(nav, nav)),
         ic::CARET_LEFT,
         "ov-h-prev",
+        sc,
     ) {
         state.overview.strip_offset = state.overview.strip_offset.saturating_sub(1);
     }
@@ -535,6 +545,7 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         egui::Rect::from_min_size(egui::pos2(cursor, cy - nav / 2.0), egui::vec2(nav, nav)),
         ic::CARET_RIGHT,
         "ov-h-next",
+        sc,
     ) {
         let max_offset = all.len().saturating_sub(capacity);
         state.overview.strip_offset = (state.overview.strip_offset + 1).min(max_offset);
@@ -552,9 +563,10 @@ pub(super) fn draw_strip_h(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         ui,
         egui::Rect::from_min_size(
             egui::pos2(cursor, cy - thumb_sz.y / 2.0),
-            egui::vec2(56.0, thumb_sz.y),
+            egui::vec2(ovw, thumb_sz.y),
         ),
         "ov-h-expand",
+        sc,
     ) {
         overview::open(state, OverviewKind::Workspaces);
     }
@@ -581,8 +593,9 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
 
     let aspect = screen.width().max(1.0) / screen.height().max(1.0);
     let thumb_sz = thumb_size_v(strip.width(), aspect);
-    let (gap, nav) = (8.0, 20.0);
-    let controls = nav + gap + gap + nav + 14.0 + 1.0 + 14.0 + 40.0;
+    let sc = (strip.width() / 78.0).sqrt().clamp(1.0, 1.6);
+    let (gap, nav, ovh) = (8.0, 20.0 * sc, 40.0 * sc);
+    let controls = nav + gap + gap + nav + 14.0 + 1.0 + 14.0 + ovh;
     let capacity = model::fit_count(strip.height() - 24.0 - controls, thumb_sz.y, gap, 3, 8);
     state.overview.strip_visible = capacity;
 
@@ -603,6 +616,7 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         egui::Rect::from_min_size(egui::pos2(cx - nav / 2.0, cursor), egui::vec2(nav, nav)),
         ic::CARET_UP,
         "ov-v-prev",
+        sc,
     ) {
         state.overview.strip_offset = state.overview.strip_offset.saturating_sub(1);
     }
@@ -629,6 +643,7 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         egui::Rect::from_min_size(egui::pos2(cx - nav / 2.0, cursor), egui::vec2(nav, nav)),
         ic::CARET_DOWN,
         "ov-v-next",
+        sc,
     ) {
         let max_offset = all.len().saturating_sub(capacity);
         state.overview.strip_offset = (state.overview.strip_offset + 1).min(max_offset);
@@ -644,8 +659,12 @@ pub(super) fn draw_strip_v(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
     cursor += 1.0 + 14.0;
     if overview_button(
         ui,
-        egui::Rect::from_min_size(egui::pos2(cx - 28.0, cursor), egui::vec2(56.0, 40.0)),
+        egui::Rect::from_min_size(
+            egui::pos2(cx - 28.0 * sc, cursor),
+            egui::vec2(56.0 * sc, ovh),
+        ),
         "ov-v-expand",
+        sc,
     ) {
         overview::open(state, OverviewKind::Workspaces);
     }

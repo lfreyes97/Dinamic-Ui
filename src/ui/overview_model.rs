@@ -77,28 +77,11 @@ pub fn step(selected: usize, dir: Dir, cols: usize, count: usize) -> usize {
 }
 
 // ── Dimensiones: se derivan de la pantalla (el mockup es una guía, no una medida) ──
+// El grosor de las franjas (fracción o píxeles) lo resuelve `config::StripSize`.
 
 /// Escala de la UI de los overviews respecto a 720p, entre 1× y 1,6×.
 pub fn ui_scale(screen_h: f32) -> f32 {
     (screen_h / 720.0).clamp(1.0, 1.6)
-}
-
-/// Alto de la franja horizontal: el configurado, o ~8,5 % del alto de pantalla (68–120 px).
-pub fn strip_h_height(configured: u32, screen_h: f32) -> i32 {
-    if configured > 0 {
-        configured.clamp(40, 240) as i32
-    } else {
-        (screen_h * 0.085).round().clamp(68.0, 120.0) as i32
-    }
-}
-
-/// Ancho de la franja vertical: el configurado, o ~5 % del ancho de pantalla (78–130 px).
-pub fn strip_v_width(configured: u32, screen_w: f32) -> i32 {
-    if configured > 0 {
-        configured.clamp(48, 240) as i32
-    } else {
-        (screen_w * 0.05).round().clamp(78.0, 130.0) as i32
-    }
 }
 
 /// Cuántos elementos de `item` px (con `gap` entre ellos) caben en `avail` px.
@@ -402,18 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn dimensions_follow_the_screen_and_respect_overrides() {
-        // Automático: crece con la pantalla dentro de unos límites.
-        assert_eq!(strip_h_height(0, 720.0), 68);
-        assert_eq!(strip_h_height(0, 1080.0), 92);
-        assert_eq!(strip_h_height(0, 2160.0), 120);
-        assert_eq!(strip_v_width(0, 1280.0), 78);
-        assert_eq!(strip_v_width(0, 1920.0), 96);
-        assert_eq!(strip_v_width(0, 3840.0), 130);
-        // Configurado: manda, con límites razonables.
-        assert_eq!(strip_h_height(100, 720.0), 100);
-        assert_eq!(strip_h_height(5, 720.0), 40);
-        assert_eq!(strip_v_width(999, 1920.0), 240);
+    fn ui_scale_is_clamped() {
         assert_eq!(ui_scale(720.0), 1.0);
         assert_eq!(ui_scale(360.0), 1.0);
         assert!((ui_scale(1080.0) - 1.5).abs() < 1e-6);

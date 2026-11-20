@@ -86,13 +86,20 @@ tests); el dibujo en `overview.rs` y `overview_collection.rs`. Comandos: `overvi
 
 ### Dimensiones: el mockup es una guía, no una medida
 
-Las medidas del mockup (franjas de 68/78 px, tiles de 56 px…) valen para 720p; en pantallas
-mayores se quedaban pequeñas. Ahora se **derivan de la pantalla** (`overview_model.rs`, con tests):
+Las franjas del mockup (68/78 px) eran una barra de estado, no un panel de escritorios. Ahora son
+**paneles proporcionales a la pantalla** (`config::StripSize`: fracción o píxeles):
 
-- **Grosor de las franjas:** `[overview] strip_h_height` / `strip_v_width`; con `0` (por defecto)
-  es automático: ~8,5 % del alto (68–120 px) y ~5 % del ancho (78–130 px).
-- **Miniaturas de franja:** conservan la proporción del monitor y envuelven su imagen, así las
-  ventanas aprovechan todo el espacio. **Cuántas caben** sale del espacio libre (3–8).
+| Franja | Por defecto | En 1366×768 | En 1920×1080 |
+|---|---|---|---|
+| Horizontal (alto) | 1/5 del alto | **154 px** | 216 px |
+| Vertical (ancho) | 1/6 del ancho | **228 px** | 320 px |
+
+- **Configuración:** `[overview] strip_h_height = 0.25` (fracción, de 0,05 a 0,5) o `= 200`
+  (píxeles enteros); igual con `strip_v_width`. Siempre entre 40 px y la mitad de la pantalla.
+- **Miniaturas:** conservan la proporción del monitor y envuelven su imagen, así las ventanas se
+  leen (en 1366×768 miden ~220×130 px). Cuántas caben sale del espacio libre (3–8) y el
+  teclado lo respeta.
+- **Controles y textos** (flechas, bloque «Overview», número y nombre) crecen con el grosor.
 - **Actividades:** tiles, separación, iconos y tira de ventanas escalan entre 1× y 1,6× respecto
   a 720p; los textos crecen con la raíz de esa escala.
 
@@ -102,7 +109,8 @@ mayores se quedaban pequeñas. Ahora se **derivan de la pantalla** (`overview_mo
 `target/ui-preview/` usando la GPU y `egui_kittest` (dependencia solo de desarrollo), con datos
 de ejemplo y la config por defecto: `overview-workspaces`, `…-search`, `overview-activities`,
 `…-search`, `strip-h-top`, `strip-h-bottom`, `strip-v-left`, `strip-v-right`, y las versiones
-`-1080p` de rejilla, Actividades y franjas para comprobar el escalado. Permite revisar el
+`-1080p` de rejilla, Actividades y franjas, y `strip-h-top-1366` / `strip-v-right-1366` con la
+resolución del R3 (1366×768). Permite revisar el
 diseño sin Hyprland. No es una prueba automática (no compara imágenes): sirve para mirar.
 
 ### Pendiente

@@ -277,4 +277,20 @@ fn ui_preview_overviews() {
         true,
         strip_state(StripV, Side::Top, Side::Right, 1.5),
     );
+
+    // La pantalla del R3: 1366×768. Aquí las franjas miden 154 px (1/5) y 228 px (1/6).
+    let r3 = (1366.0, 768.0);
+    let k = 1366.0 / 1280.0;
+    render_sized(
+        "strip-h-top-1366",
+        r3,
+        true,
+        strip_state(StripH, Side::Top, Side::Right, k),
+    );
+    render_sized(
+        "strip-v-right-1366",
+        r3,
+        true,
+        strip_state(StripV, Side::Top, Side::Right, k),
+    );
 }

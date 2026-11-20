@@ -115,10 +115,12 @@ impl Default for TopbarConfig {
 pub struct OverviewConfig {
     pub strip_h_side: Side,
     pub strip_v_side: Side,
-    /// Alto de la franja horizontal en px; 0 = automático según la pantalla.
-    pub strip_h_height: u32,
-    /// Ancho de la franja vertical en px; 0 = automático según la pantalla.
-    pub strip_v_width: u32,
+    /// Alto de la franja horizontal: fracción del alto de pantalla (`0.2` = 1/5, por defecto)
+    /// o píxeles (`154`).
+    pub strip_h_height: StripSize,
+    /// Ancho de la franja vertical: fracción del ancho de pantalla (`0.1667` = 1/6, por
+    /// defecto) o píxeles (`228`).
+    pub strip_v_width: StripSize,
 }
 
 impl Default for OverviewConfig {
@@ -126,9 +128,28 @@ impl Default for OverviewConfig {
         Self {
             strip_h_side: Side::Top,
             strip_v_side: Side::Right,
-            strip_h_height: 0,
-            strip_v_width: 0,
+            strip_h_height: StripSize::Fraction(1.0 / 5.0),
+            strip_v_width: StripSize::Fraction(1.0 / 6.0),
         }
+    }
+}
+
+/// Tamaño de una franja: píxeles fijos (`154`, entero) o fracción de la pantalla (`0.2`).
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum StripSize {
+    Pixels(u32),
+    Fraction(f32),
+}
+
+impl StripSize {
+    /// Píxeles que ocupa sobre `total` (alto o ancho de pantalla): entre 40 px y la mitad.
+    pub fn resolve(self, total: f32) -> i32 {
+        let px = match self {
+            Self::Pixels(p) => p as f32,
+            Self::Fraction(f) => total * f.clamp(0.05, 0.5),
+        };
+        px.round().clamp(40.0, (total * 0.5).max(40.0)) as i32
     }
 }
 
@@ -353,4 +374,34 @@ pub fn path() -> Option<PathBuf> {
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(env::var("HOME").unwrap_or_default()).join(".config"));
     Some(base.join("dinamic-ui").join("config.toml"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_size_resolves_fractions_and_pixels() {
+        // 1366×768: 1/5 del alto = 154 px y 1/6 del ancho = 228 px.
+        assert_eq!(StripSize::Fraction(0.2).resolve(768.0), 154);
+        assert_eq!(StripSize::Fraction(1.0 / 6.0).resolve(1366.0), 228);
+        assert_eq!(StripSize::Fraction(0.25).resolve(1080.0), 270);
+        assert_eq!(StripSize::Pixels(200).resolve(768.0), 200);
+        // Límites: nunca menos de 40 px ni más de la mitad de la pantalla.
+        assert_eq!(StripSize::Pixels(5).resolve(768.0), 40);
+        assert_eq!(StripSize::Pixels(9999).resolve(768.0), 384);
+        assert_eq!(StripSize::Fraction(0.9).resolve(1000.0), 500);
+        assert_eq!(StripSize::Fraction(0.0).resolve(1000.0), 50);
+    }
+
+    #[test]
+    fn overview_config_parses_fraction_and_pixels_and_has_defaults() {
+        let cfg: Config =
+            toml::from_str("[overview]\nstrip_h_height = 0.25\nstrip_v_width = 240\n").unwrap();
+        assert_eq!(cfg.overview.strip_h_height, StripSize::Fraction(0.25));
+        assert_eq!(cfg.overview.strip_v_width, StripSize::Pixels(240));
+        let default: Config = toml::from_str("").unwrap();
+        assert_eq!(default.overview.strip_h_height, StripSize::Fraction(0.2));
+        assert_eq!(default.overview.strip_h_side, Side::Top);
+    }
 }
