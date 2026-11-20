@@ -85,8 +85,14 @@ fmt:
 test:
     cargo test
 
+# Los archivos ya migrados a tokens no deben volver a pintar con colores fijos.
+# (Los velos sobre imágenes usan `Palette::scrim`/`sheen`.) Pendientes de migrar: el resto de `ui/`.
+lint-colors:
+    @! grep -nE 'Color32::(from_gray|from_rgb|from_rgba|from_black_alpha|from_white_alpha)' src/ui/panel.rs src/ui/wallpaper.rs src/ui/mod.rs || { echo "colores fijos en archivos migrados: usa tokens de theme.rs"; exit 1; }
+    @echo "colores: panel, wallpaper y mod.rs sin literales"
+
 # Todo lo que debe pasar antes de un commit
-ci: fmt-check check lint test
+ci: fmt-check check lint lint-colors test
 
 # Matriz de features: sin ninguna, cada una sola, combinaciones de referencia y todas.
 check-matrix:

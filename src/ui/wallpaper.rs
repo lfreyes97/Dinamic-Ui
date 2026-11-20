@@ -179,13 +179,13 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
     let base = match (selected, &real) {
         (Some((_, hex)), _) => color_of(hex),
         (None, Some(Wallpaper::Color(hex))) => color_of(hex),
-        _ => Color32::from_gray(0x16),
+        _ => pal().inset,
     };
     ui.painter().rect(
         preview,
         CornerRadius::same(12),
         base,
-        Stroke::new(1.0, Color32::from_gray(0x33)),
+        Stroke::new(1.0, pal().faint),
         StrokeKind::Inside,
     );
     // Si el fondo es una imagen con miniatura, se usa de fondo de la vista previa
@@ -214,11 +214,8 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                 .uv(uv)
                 .corner_radius(12)
                 .paint_at(ui, preview);
-            ui.painter().rect_filled(
-                preview,
-                CornerRadius::same(12),
-                Color32::from_black_alpha(110),
-            );
+            ui.painter()
+                .rect_filled(preview, CornerRadius::same(12), Palette::scrim(110));
             true
         }
         _ => false,
@@ -228,15 +225,19 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
         ui.painter().circle_filled(
             egui::Pos2::new(preview.max.x - 70.0, preview.min.y + 62.0),
             50.0,
-            Color32::from_white_alpha(14),
+            Palette::sheen(14),
         );
         ui.painter().circle_filled(
             egui::Pos2::new(preview.min.x + 80.0, preview.max.y - 30.0),
             26.0,
-            Color32::from_black_alpha(40),
+            Palette::scrim(40),
         );
     }
-    let ink = if is_light(base) { P_INK } else { P_TEXT };
+    let ink = if is_light(base) {
+        pal().solid()
+    } else {
+        pal().text_hi
+    };
     let now = Local::now();
     text_at(
         ui,
@@ -293,8 +294,8 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
     ui.painter().rect(
         menu,
         CornerRadius::same(6),
-        Color32::from_black_alpha(80),
-        Stroke::new(1.0, Color32::from_white_alpha(48)),
+        Palette::scrim(80),
+        Stroke::new(1.0, Palette::sheen(48)),
         StrokeKind::Inside,
     );
     text_at(
@@ -303,7 +304,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::CENTER_CENTER,
         "Preview ↗",
         TEXT_CAPTION,
-        Color32::WHITE,
+        pal().text_hi,
     );
     ui.add_space(15.0);
 
@@ -353,7 +354,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Align2::CENTER_CENTER,
             "Sin imágenes en esta carpeta",
             TEXT_BODY,
-            P_MUTED,
+            pal().muted,
         );
     }
     let mut chosen: Option<std::path::PathBuf> = None;
@@ -379,14 +380,14 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                 ui.painter().rect_stroke(
                     rect,
                     CornerRadius::same(10),
-                    Stroke::new(1.5, P_INVERT),
+                    Stroke::new(1.5, pal().text_hi),
                     StrokeKind::Inside,
                 );
             } else if response.hovered() {
                 ui.painter().rect_stroke(
                     rect,
                     CornerRadius::same(10),
-                    Stroke::new(1.0, Color32::from_gray(0x44)),
+                    Stroke::new(1.0, pal().faint),
                     StrokeKind::Inside,
                 );
             }
@@ -404,8 +405,8 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                 }
                 None => {
                     ui.painter()
-                        .rect_filled(thumb, CornerRadius::same(6), P_ICON_BOX);
-                    icon_at(ui, thumb.center(), ic::IMAGE, ICON_MD, P_MUTED);
+                        .rect_filled(thumb, CornerRadius::same(6), pal().badge);
+                    icon_at(ui, thumb.center(), ic::IMAGE, ICON_MD, pal().muted);
                 }
             }
             let text_x = thumb.max.x + 10.0;
@@ -415,7 +416,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                 egui::Align2::LEFT_CENTER,
                 truncate(&title, 28),
                 TEXT_TITLE,
-                P_TEXT,
+                pal().text_hi,
             );
             text_at(
                 ui,
@@ -423,12 +424,12 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                 egui::Align2::LEFT_CENTER,
                 &subtitle,
                 TEXT_CAPTION,
-                P_MUTED,
+                pal().muted,
             );
             if current {
                 let check = egui::Pos2::new(rect.max.x - 18.0, rect.center().y);
-                ui.painter().circle_filled(check, 8.5, P_INVERT);
-                icon_at(ui, check, ic::CHECK, ICON_XS - 2.0, P_INK);
+                ui.painter().circle_filled(check, 8.5, pal().text_hi);
+                icon_at(ui, check, ic::CHECK, ICON_XS - 2.0, pal().solid());
             }
             if response.clicked() {
                 chosen = Some(path.clone());
@@ -476,25 +477,25 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                 }
                 None => {
                     ui.painter()
-                        .rect_filled(image_rect, CornerRadius::same(8), P_ICON_BOX);
-                    icon_at(ui, image_rect.center(), ic::IMAGE, ICON_MD, P_MUTED);
+                        .rect_filled(image_rect, CornerRadius::same(8), pal().badge);
+                    icon_at(ui, image_rect.center(), ic::IMAGE, ICON_MD, pal().muted);
                 }
             }
             if current {
                 ui.painter().rect_stroke(
                     image_rect,
                     CornerRadius::same(8),
-                    Stroke::new(2.0, P_INVERT),
+                    Stroke::new(2.0, pal().text_hi),
                     StrokeKind::Inside,
                 );
                 let check = egui::pos2(image_rect.max.x - 12.0, image_rect.min.y + 12.0);
-                ui.painter().circle_filled(check, 8.0, P_INVERT);
-                icon_at(ui, check, ic::CHECK, ICON_XS - 2.0, P_INK);
+                ui.painter().circle_filled(check, 8.0, pal().text_hi);
+                icon_at(ui, check, ic::CHECK, ICON_XS - 2.0, pal().solid());
             } else if response.hovered() {
                 ui.painter().rect_stroke(
                     image_rect,
                     CornerRadius::same(8),
-                    Stroke::new(1.0, Color32::from_gray(0x66)),
+                    Stroke::new(1.0, pal().dim),
                     StrokeKind::Inside,
                 );
             }
@@ -505,7 +506,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                 egui::Align2::LEFT_TOP,
                 truncate(&title, 20),
                 TEXT_CAPTION,
-                P_TEXT,
+                pal().text_hi,
             );
             if response.clicked() {
                 chosen = Some(path.clone());
@@ -554,24 +555,24 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
             rect,
             CornerRadius::same(9),
             color,
-            Stroke::new(1.0, Color32::from_gray(0x33)),
+            Stroke::new(1.0, pal().faint),
             StrokeKind::Inside,
         );
         ui.painter().circle_filled(
             egui::Pos2::new(rect.min.x + rect.width() * 0.68, rect.min.y + 20.0),
             12.0,
-            Color32::from_white_alpha(16),
+            Palette::sheen(16),
         );
         if state.wallpaper.wallpaper_selected == Some(i) {
             ui.painter().rect_stroke(
                 rect.expand(3.0),
                 CornerRadius::same(11),
-                Stroke::new(2.0, Color32::from_gray(0xdd)),
+                Stroke::new(2.0, pal().text_hi),
                 StrokeKind::Middle,
             );
             let check = egui::Pos2::new(rect.max.x - 14.5, rect.min.y + 14.5);
-            ui.painter().circle_filled(check, 8.5, P_INVERT);
-            icon_at(ui, check, ic::CHECK, ICON_XS - 2.0, P_INK);
+            ui.painter().circle_filled(check, 8.5, pal().text_hi);
+            icon_at(ui, check, ic::CHECK, ICON_XS - 2.0, pal().solid());
         }
         if response.clicked() {
             state.wallpaper.wallpaper_selected = Some(i);
@@ -620,14 +621,14 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Align2::LEFT_CENTER,
             name,
             TEXT_BODY,
-            P_TEXT,
+            pal().text_hi,
         );
         icon_at(
             ui,
             egui::Pos2::new(rect.max.x - 16.0, y),
             ic::CARET_RIGHT,
             ICON_XS,
-            Color32::from_gray(0x88),
+            pal().muted,
         );
         text_at(
             ui,
@@ -635,7 +636,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Align2::RIGHT_CENTER,
             value,
             TEXT_CAPTION,
-            Color32::from_gray(0x88),
+            pal().muted,
         );
     }
 

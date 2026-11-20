@@ -92,7 +92,7 @@ pub(super) fn draw_panel(ui: &mut egui::Ui, state: &mut UiState, palette: Palett
         egui::Align2::LEFT_CENTER,
         "Control Center",
         TEXT_DISPLAY_SM,
-        P_TEXT,
+        pal().text_hi,
     );
     let button = egui::Vec2::splat(header.height());
     let slot = |i: f32| {
@@ -123,8 +123,8 @@ pub(super) fn draw_panel(ui: &mut egui::Ui, state: &mut UiState, palette: Palett
     ui.painter().rect(
         bar,
         CornerRadius::same(10),
-        P_TABBAR,
-        Stroke::new(1.0, P_BORDER),
+        pal().inset,
+        Stroke::new(1.0, pal().border),
         StrokeKind::Inside,
     );
     let inner = bar.shrink(3.0);
@@ -145,12 +145,12 @@ pub(super) fn draw_panel(ui: &mut egui::Ui, state: &mut UiState, palette: Palett
         let active = i == state.bar.panel_tab;
         if active {
             ui.painter()
-                .rect_filled(rect, CornerRadius::same(7), P_BORDER);
+                .rect_filled(rect, CornerRadius::same(7), pal().border);
         }
         let color = if active || response.hovered() {
-            P_TEXT
+            pal().text_hi
         } else {
-            P_MUTED
+            pal().muted
         };
         text_at(
             ui,
@@ -250,11 +250,11 @@ pub(super) fn panel_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: 
         let active = state.shared.snapshot.workspace == n.to_string();
         let occupied = state.shared.snapshot.occupied.contains(&(n as u32));
         let (fill, stroke, fg) = if active {
-            (P_INVERT, P_INVERT, P_INK)
+            (pal().text_hi, pal().text_hi, pal().solid())
         } else if response.hovered() {
-            (P_SURFACE, Color32::from_gray(0x44), P_SOFT)
+            (pal().solid(), pal().faint, pal().text)
         } else {
-            (P_SURFACE, P_BORDER, P_SOFT)
+            (pal().solid(), pal().border, pal().text)
         };
         ui.painter().rect(
             rect,
@@ -337,9 +337,9 @@ pub(super) fn panel_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: 
         };
         let active = state.bar.layout_preset == i;
         let (fill, stroke) = if active {
-            (P_BORDER, P_MUTED)
+            (pal().border, pal().muted)
         } else {
-            (P_SURFACE, P_BORDER)
+            (pal().solid(), pal().border)
         };
         ui.painter().rect(
             rect,
@@ -349,7 +349,7 @@ pub(super) fn panel_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: 
             StrokeKind::Inside,
         );
         let inner = rect.shrink(SP_L);
-        let name_color = if active { P_TEXT } else { P_SOFT };
+        let name_color = if active { pal().text_hi } else { pal().text };
         text_at(
             ui,
             egui::Pos2::new(inner.min.x, inner.min.y + 6.0),
@@ -391,8 +391,8 @@ pub(super) fn panel_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: 
 
 /// Mini-vista previa de cada preset.
 pub(super) fn paint_layout_preview(ui: &egui::Ui, rect: egui::Rect, preset: usize) {
-    let dark = Color32::from_gray(0x66);
-    let light = Color32::from_gray(0x99);
+    let dark = pal().dim;
+    let light = pal().muted;
     let gap = 3.0;
     let mut blocks: Vec<(egui::Rect, Color32)> = Vec::new();
     match preset {
@@ -442,7 +442,7 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::CENTER_CENTER,
         now.format("%H:%M:%S"),
         TEXT_HERO,
-        P_TEXT,
+        pal().text_hi,
     );
     let (date, _) = ui.allocate_exact_size(egui::Vec2::new(width, 18.0), egui::Sense::hover());
     text_at(
@@ -451,7 +451,7 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::CENTER_CENTER,
         format!("{}, {} de {month}", capitalize(weekday), now.day()),
         TEXT_CLOCK,
-        Color32::from_gray(0xbb),
+        pal().text,
     );
     let (zone, _) = ui.allocate_exact_size(egui::Vec2::new(width, 18.0), egui::Sense::hover());
     let offset_h = now.offset().local_minus_utc() as f32 / 3600.0;
@@ -461,7 +461,7 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::CENTER_CENTER,
         format!("{} · UTC{}", timezone_name(), format_offset(offset_h)),
         TEXT_BODY,
-        P_MUTED,
+        pal().muted,
     );
     divider(ui);
 
@@ -480,7 +480,7 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::LEFT_CENTER,
         format!("{} {year}", capitalize(MONTHS_LONG[month0 as usize])),
         TEXT_TITLE,
-        P_SOFT,
+        pal().text,
     );
     for (i, (icon, step)) in [(ic::CARET_RIGHT, 1), (ic::CARET_LEFT, -1)]
         .into_iter()
@@ -498,9 +498,9 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
             )
             .on_hover_cursor(CursorIcon::PointingHand);
         let color = if response.hovered() {
-            P_TEXT
+            pal().text_hi
         } else {
-            Color32::from_gray(0x99)
+            pal().muted
         };
         icon_at(ui, rect.center(), icon, ICON_SM, color);
         if response.clicked() {
@@ -540,7 +540,7 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Align2::CENTER_CENTER,
             *day,
             TEXT_CAPTION,
-            P_MUTED,
+            pal().muted,
         );
     }
     for day in 1..=days {
@@ -548,9 +548,9 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
         let is_today = today == Some(day);
         if is_today {
             ui.painter()
-                .rect_filled(rect, CornerRadius::same(6), P_INVERT);
+                .rect_filled(rect, CornerRadius::same(6), pal().text_hi);
         }
-        let color = if is_today { P_INK } else { P_SOFT };
+        let color = if is_today { pal().solid() } else { pal().text };
         text_at(
             ui,
             rect.center(),
@@ -573,9 +573,9 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
         let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(width, 36.0), egui::Sense::hover());
         list_row_at(ui, rect, ic::ALARM, time, &format!("{days} · ejemplo"));
         let (label, color) = if active {
-            ("Activa", P_OK)
+            ("Activa", pal().ok)
         } else {
-            ("Inactiva", P_MUTED)
+            ("Inactiva", pal().muted)
         };
         text_at(
             ui,
@@ -610,7 +610,7 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Align2::LEFT_CENTER,
             &city.name,
             TEXT_TITLE,
-            P_TEXT,
+            pal().text_hi,
         );
         let dst = if summer && city.dst.as_deref() == Some("eu") {
             60
@@ -625,7 +625,7 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Align2::RIGHT_CENTER,
             local.format("%H:%M"),
             TEXT_BODY,
-            Color32::from_gray(0xdd),
+            pal().text_hi,
         );
     }
 
@@ -712,8 +712,8 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
         ic::BATTERY_HIGH
     };
     ui.painter()
-        .rect_filled(icon_rect, CornerRadius::same(10), P_ICON_BOX);
-    icon_at(ui, icon_rect.center(), icon, ICON_LG, P_TEXT);
+        .rect_filled(icon_rect, CornerRadius::same(10), pal().badge);
+    icon_at(ui, icon_rect.center(), icon, ICON_LG, pal().text_hi);
     let status = match (battery.present, battery.charging) {
         (false, _) => "Sin batería detectada".to_string(),
         (true, charging) => {
@@ -732,7 +732,7 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::LEFT_CENTER,
         "Battery",
         TEXT_CLOCK,
-        P_TEXT,
+        pal().text_hi,
     );
     text_at(
         ui,
@@ -740,7 +740,7 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::LEFT_CENTER,
         status,
         TEXT_CAPTION,
-        P_MUTED,
+        pal().muted,
     );
     let tone = battery_tone(battery.percent, battery.charging);
     let percent = if battery.present {
@@ -760,7 +760,7 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Pos2::new(inner.min.x, inner.max.y - 5.0),
         egui::Vec2::new(inner.width(), 5.0),
     );
-    bar_at(ui, bar, battery.percent as f32 / 100.0, P_TRACK, tone);
+    bar_at(ui, bar, battery.percent as f32 / 100.0, pal().track, tone);
     ui.add_space(15.0);
 
     // Wi-Fi (nmcli) y Bluetooth (bluetoothctl), leídos por `sysinfo.rs`.
@@ -799,13 +799,13 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
             inner.min + egui::Vec2::new(8.0, 8.0),
             icon,
             ICON_LG,
-            Color32::from_gray(0xdd),
+            pal().text_hi,
         );
         // Punto: verde activo, gris oscuro apagado, gris medio desconocido.
         let dot = match on {
-            Some(true) => P_OK,
-            Some(false) => Color32::from_gray(0x44),
-            None => Color32::from_gray(0x33),
+            Some(true) => pal().ok,
+            Some(false) => pal().faint,
+            None => pal().faint,
         };
         ui.painter().circle_filled(
             egui::Pos2::new(inner.max.x - 3.0, inner.min.y + 8.0),
@@ -818,7 +818,7 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Align2::LEFT_CENTER,
             name,
             TEXT_TITLE,
-            P_TEXT,
+            pal().text_hi,
         );
         text_at(
             ui,
@@ -826,7 +826,7 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Align2::LEFT_CENTER,
             detail,
             TEXT_CAPTION,
-            P_MUTED,
+            pal().muted,
         );
     }
     ui.add_space(15.0);
@@ -857,7 +857,7 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Pos2::new(rect.min.x + 8.0, y),
             icon,
             ICON_MD,
-            P_HEADING,
+            pal().muted,
         );
         let track = egui::Rect::from_min_max(
             egui::Pos2::new(rect.min.x + 27.0, y - 2.5),
@@ -868,20 +868,14 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
             Some((percent, false)) => (percent as f32 / 100.0, format!("{percent}%")),
             None => (0.0, "--".to_string()),
         };
-        bar_at(
-            ui,
-            track,
-            fraction,
-            Color32::from_gray(0x33),
-            Color32::from_gray(0xdd),
-        );
+        bar_at(ui, track, fraction, pal().faint, pal().text_hi);
         text_at(
             ui,
             egui::Pos2::new(rect.max.x, y),
             egui::Align2::RIGHT_CENTER,
             label,
             TEXT_CAPTION,
-            Color32::from_gray(0x99),
+            pal().muted,
         );
     }
     ui.add_space(15.0);
@@ -912,7 +906,7 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
         );
         if i > 0 {
             ui.painter()
-                .hline(rect.x_range(), rect.min.y, Stroke::new(1.0, P_BORDER));
+                .hline(rect.x_range(), rect.min.y, Stroke::new(1.0, pal().border));
         }
         list_row_at(ui, rect, icon, name, &detail);
         icon_at(
@@ -920,7 +914,7 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Pos2::new(rect.max.x - 6.0, rect.center().y),
             ic::CARET_RIGHT,
             ICON_SM,
-            P_DIM,
+            pal().dim,
         );
     }
 
@@ -950,7 +944,7 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Pos2::new(card.min.x + 12.0 + 14.0, card.center().y),
         egui::Vec2::splat(28.0),
     );
-    icon_box_at(ui, icon_rect, ic::MOON, P_BORDER);
+    icon_box_at(ui, icon_rect, ic::MOON, pal().border);
     let x = icon_rect.max.x + 9.0;
     text_at(
         ui,
@@ -958,7 +952,7 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::LEFT_CENTER,
         "Do Not Disturb",
         TEXT_BODY,
-        P_TEXT,
+        pal().text_hi,
     );
     text_at(
         ui,
@@ -966,7 +960,7 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::LEFT_CENTER,
         "Silence incoming notifications",
         TEXT_CAPTION,
-        P_MUTED,
+        pal().muted,
     );
     let toggle = egui::Rect::from_center_size(
         egui::Pos2::new(card.max.x - 12.0 - 17.0, card.center().y),
@@ -980,9 +974,9 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
         )
         .on_hover_cursor(CursorIcon::PointingHand);
     let (track, knob, knob_x) = if state.notifications.dnd {
-        (P_HEADING, P_INK, toggle.max.x - 9.5)
+        (pal().muted, pal().solid(), toggle.max.x - 9.5)
     } else {
-        (Color32::from_gray(0x44), P_INVERT, toggle.min.x + 9.5)
+        (pal().faint, pal().text_hi, toggle.min.x + 9.5)
     };
     ui.painter()
         .rect_filled(toggle, CornerRadius::same(10), track);
@@ -1005,7 +999,7 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
             .to_string()
             .to_uppercase(),
         TEXT_BODY,
-        P_HEADING,
+        pal().muted,
     );
     let clear = egui::Rect::from_min_size(
         egui::Pos2::new(header.max.x - header.height(), header.min.y),
@@ -1020,7 +1014,7 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
         egui::Align2::RIGHT_CENTER,
         format!("{} new", state.notifications.notification_list.len()),
         TEXT_BODY,
-        P_DIM,
+        pal().dim,
     );
     ui.add_space(SP_L + 1.0);
 
@@ -1031,7 +1025,7 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
             rect.center() - egui::Vec2::new(0.0, 10.0),
             ic::MOON,
             ICON_XL,
-            P_MUTED,
+            pal().muted,
         );
         text_at(
             ui,
@@ -1039,7 +1033,7 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
             egui::Align2::CENTER_CENTER,
             "You're all caught up.",
             TEXT_BODY,
-            P_MUTED,
+            pal().muted,
         );
     }
 
@@ -1047,8 +1041,8 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
     let mut open = None;
     for notification in &state.notifications.notification_list {
         Frame::new()
-            .fill(P_SURFACE)
-            .stroke(Stroke::new(1.0, P_BORDER))
+            .fill(pal().solid())
+            .stroke(Stroke::new(1.0, pal().border))
             .corner_radius(11.0)
             .inner_margin(Margin::symmetric(11, 7))
             .show(ui, |ui| {
@@ -1057,30 +1051,30 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
                 ui.horizontal(|ui| {
                     let (icon_rect, _) =
                         ui.allocate_exact_size(egui::Vec2::splat(28.0), egui::Sense::hover());
-                    icon_box_at(ui, icon_rect, ic::BELL, P_BORDER);
+                    icon_box_at(ui, icon_rect, ic::BELL, pal().border);
                     ui.label(
                         RichText::new(truncate(&notification.app, 28))
                             .size(TEXT_BODY)
-                            .color(P_TEXT),
+                            .color(pal().text_hi),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
                             RichText::new(&notification.time)
                                 .size(TEXT_CAPTION)
-                                .color(P_DIM),
+                                .color(pal().dim),
                         );
                     });
                 });
                 ui.label(
                     RichText::new(truncate(&notification.summary, 60))
                         .size(TEXT_TITLE)
-                        .color(P_TEXT),
+                        .color(pal().text_hi),
                 );
                 if !notification.body.is_empty() {
                     ui.label(
                         RichText::new(truncate(&notification.body, 140))
                             .size(TEXT_BODY)
-                            .color(Color32::from_gray(0x99)),
+                            .color(pal().muted),
                     );
                 }
                 ui.allocate_ui_with_layout(
@@ -1088,10 +1082,10 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
                         ui.spacing_mut().item_spacing.x = 6.0;
-                        if text_link(ui, "Abrir aplicación ↗", P_INVERT).clicked() {
+                        if text_link(ui, "Abrir aplicación ↗", pal().text_hi).clicked() {
                             open = Some(notification.app.clone());
                         }
-                        if text_link(ui, "Descartar", Color32::from_gray(0x99)).clicked() {
+                        if text_link(ui, "Descartar", pal().muted).clicked() {
                             dismiss = Some(notification.id);
                         }
                     },
@@ -1142,8 +1136,8 @@ pub(super) fn draw_panel_card(
             ),
             egui::Vec2::new(card_w, card_h),
         );
-        let card_fill = Color32::from_rgba_unmultiplied(8, 8, 8, 245);
-        let card_border = Color32::from_rgba_unmultiplied(41, 41, 41, 255);
+        let card_fill = pal().card_fill;
+        let card_border = pal().border;
         ui.painter().rect(
             card,
             CornerRadius::same(18),

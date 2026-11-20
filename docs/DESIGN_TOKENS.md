@@ -74,15 +74,40 @@ Compatibilidad: `name = "bathory"` sigue funcionando (alias de `scheme`), igual 
 ## Estado de la migración
 
 - [x] Capa 1: esquemas incluidos, carga desde archivo, overrides de slot (`theme.rs`, con tests).
-- [x] Capa 2: `Palette` ampliada de 6 a 19 tokens; los seis históricos se derivan del esquema.
+- [x] Capa 2: `Palette` con 22 tokens; los seis históricos se derivan del esquema.
 - [x] Guarda de contraste y corrección opcional.
+- [x] **`panel` y `wallpaper` migrados**: sin colores fijos. Los 13 `P_*` y los grises sueltos
+      pasaron a tokens; `battery_tone` usa `info`/`danger`/`warn`/`ok`.
+- [x] `just lint-colors` (parte de `just ci`): impide que `panel.rs`, `wallpaper.rs` y `mod.rs`
+      vuelvan a pintar con literales.
+- [ ] Pendientes de migrar (literales `Color32::from_*` restantes): `overview_collection` (15), `topbar` (9), `menu` (8), `dock` (7), `taskbar` (5), `bar` (3), `notifications` (2), `overview` (2).
+      Al migrar un archivo, añadirlo a `lint-colors`.
 - [ ] Capa 3: radios, espaciados, tipografía y movimiento centralizados.
-- [ ] **Migrar componentes a tokens.** Hoy `panel` usa la paleta 1 vez y `wallpaper` 0 veces: pintan
-      con grises fijos (`P_*`, `Color32::from_*`). Ahí el tema aún no llega.
-- [ ] Regla de revisión: sin `Color32::from_*` fuera de `theme.rs` (grep en `just lint`).
 
-### Cambio visible que traerá la migración del panel
+### Cómo se usan los tokens
 
-Los `P_*` actuales no salen del esquema (`f5` es más brillante que `base07 = c1c1c1`). Al
-adoptar tokens, el panel pasará a verse algo más tenue y a teñirse con el acento, como el
-resto de la UI.
+El render es de un solo hilo, así que la paleta del frame se fija una vez (`theme::set_current`
+en `ui::draw`) y los helpers la leen con `pal()` en vez de recibirla por parámetro.
+
+| Antes | Ahora |
+|---|---|
+| `P_SURFACE` / `P_INK` | `pal().solid()` |
+| `P_BORDER`, `P_TRACK`, `P_ICON_BOX` | `pal().border`, `.track`, `.badge` |
+| `P_TEXT`, `P_INVERT`, gris `dd` | `pal().text_hi` |
+| `P_SOFT`, gris `bb` | `pal().text` |
+| `P_MUTED`, `P_HEADING`, grises `88`/`99` | `pal().muted` |
+| `P_DIM`, gris `66` | `pal().dim` |
+| `P_TABBAR`, gris `16` | `pal().inset` |
+| grises `33`/`44` | `pal().faint` |
+| velos sobre miniaturas | `Palette::scrim(a)` / `Palette::sheen(a)` |
+
+### Cambios visibles
+
+- Los `P_*` no salían del esquema (`f5` es más brillante que `base07 = c1c1c1`): el texto del
+  panel pasa a verse algo más tenue.
+- `P_MUTED` (`77`), `P_HEADING` (`aa`) y `P_DIM` (`66`) eran tres niveles de gris; el esquema
+  tiene dos (`base04` y `base03`, este último ilegible como texto). Se conservan `muted` y un
+  `dim` derivado, así que `P_MUTED` y `P_HEADING` ahora son el mismo color.
+- La batería ya no es verde/ámbar/rojo/azul: usa los slots de estado. En black-metal son grises
+  y rosas, y el nivel se distingue sobre todo por el relleno del glifo.
+- El panel (y `wallpaper`) cambian con el esquema y el acento, como el resto de la UI.

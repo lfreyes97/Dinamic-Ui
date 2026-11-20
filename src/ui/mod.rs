@@ -190,19 +190,6 @@ impl UiState {
 }
 
 // Los colores del panel son constantes propias (grises fijos), no la paleta base16.
-const P_SURFACE: Color32 = Color32::from_gray(0x15);
-const P_BORDER: Color32 = Color32::from_gray(0x29);
-const P_TEXT: Color32 = Color32::from_gray(0xf5);
-const P_MUTED: Color32 = Color32::from_gray(0x77);
-const P_TABBAR: Color32 = Color32::from_gray(0x10);
-const P_HEADING: Color32 = Color32::from_gray(0xaa);
-const P_DIM: Color32 = Color32::from_gray(0x66);
-const P_SOFT: Color32 = Color32::from_gray(0xcc);
-const P_INVERT: Color32 = Color32::from_gray(0xee);
-const P_INK: Color32 = Color32::from_gray(0x11);
-const P_ICON_BOX: Color32 = Color32::from_gray(0x25);
-const P_TRACK: Color32 = Color32::from_gray(0x30);
-const P_OK: Color32 = Color32::from_rgb(0x8b, 0xe0, 0x9b);
 
 // ── Escala de tipografía: 4 tamaños de texto + display ──────────────────
 /// Etiquetas, metadatos y fechas secundarias.
@@ -249,6 +236,11 @@ fn icon_font(size: f32) -> egui::FontId {
     egui::FontId::new(size, egui::FontFamily::Name(FONT_BOLD.into()))
 }
 
+/// Paleta del frame en curso, para los helpers de dibujo.
+fn pal() -> Palette {
+    crate::theme::current()
+}
+
 pub fn draw(
     ui: &mut egui::Ui,
     state: &mut UiState,
@@ -257,6 +249,7 @@ pub fn draw(
     panel_t: f32,
     pill_w: f32,
 ) {
+    crate::theme::set_current(palette);
     let mut visuals = egui::Visuals::dark();
     visuals.panel_fill = Color32::TRANSPARENT;
     visuals.window_fill = Color32::TRANSPARENT;
@@ -333,7 +326,7 @@ fn occupied_color(palette: Palette, active: bool) -> Color32 {
 fn panel_toggle_button(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let active = state.bar.show_panel;
     let (fg, bg) = if active {
-        (Color32::from_gray(17), palette.text)
+        (palette.solid(), palette.text)
     } else {
         (palette.text, palette.badge)
     };
@@ -360,15 +353,18 @@ fn truncate(text: &str, max: usize) -> String {
     format!("{out}...")
 }
 
-/// Color de la batería según nivel: verde / ámbar / rojo, azul si cargando.
+/// Color de la batería según nivel, con los slots de estado del esquema base16:
+/// `ok` / `warn` / `danger`, y `info` si está cargando. En esquemas monocromos (black-metal)
+/// esos slots apenas se distinguen por tono: el nivel también se lee por el relleno del glifo.
 fn battery_tone(percent: u8, charging: bool) -> Color32 {
+    let p = pal();
     if charging {
-        return Color32::from_rgb(0x7f, 0xc8, 0xff);
+        return p.info;
     }
     match percent {
-        0..=20 => Color32::from_rgb(0xff, 0x7b, 0x72),
-        21..=60 => Color32::from_rgb(0xf5, 0xc2, 0x6b),
-        _ => Color32::from_rgb(0x8b, 0xe0, 0x9b),
+        0..=20 => p.danger,
+        21..=60 => p.warn,
+        _ => p.ok,
     }
 }
 
@@ -463,13 +459,13 @@ fn round_icon_button_at(
     ui.painter().circle(
         rect.center(),
         rect.width() / 2.0 - 0.5,
-        P_SURFACE,
-        Stroke::new(1.0, P_BORDER),
+        pal().solid(),
+        Stroke::new(1.0, pal().border),
     );
     let color = if response.hovered() {
-        P_TEXT
+        pal().text_hi
     } else {
-        P_HEADING
+        pal().muted
     };
     icon_at(ui, rect.center(), icon, ICON_SECONDARY, color);
     response
@@ -478,15 +474,15 @@ fn round_icon_button_at(
 /// Caja redondeada con un icono (`.item-icon`, `.device-icon`, `.app-icon`…).
 fn icon_box_at(ui: &egui::Ui, rect: egui::Rect, icon: &str, fill: Color32) {
     ui.painter().rect_filled(rect, CornerRadius::same(8), fill);
-    icon_at(ui, rect.center(), icon, ICON_MD, Color32::from_gray(0xdd));
+    icon_at(ui, rect.center(), icon, ICON_MD, pal().text_hi);
 }
 
 fn card_at(ui: &egui::Ui, rect: egui::Rect, radius: u8) {
     ui.painter().rect(
         rect,
         CornerRadius::same(radius),
-        P_SURFACE,
-        Stroke::new(1.0, P_BORDER),
+        pal().solid(),
+        Stroke::new(1.0, pal().border),
         StrokeKind::Inside,
     );
 }
@@ -517,7 +513,7 @@ fn section_heading(ui: &mut egui::Ui, left: &str, right: &str) {
         egui::Align2::LEFT_CENTER,
         left,
         TEXT_BODY,
-        P_HEADING,
+        pal().muted,
     );
     text_at(
         ui,
@@ -525,7 +521,7 @@ fn section_heading(ui: &mut egui::Ui, left: &str, right: &str) {
         egui::Align2::RIGHT_CENTER,
         right,
         TEXT_BODY,
-        P_DIM,
+        pal().dim,
     );
     ui.add_space(SP_M);
 }
@@ -542,7 +538,7 @@ fn section_heading_action(ui: &mut egui::Ui, left: &str, icon: &str) -> egui::Re
         egui::Align2::LEFT_CENTER,
         left,
         TEXT_BODY,
-        P_HEADING,
+        pal().muted,
     );
     let button = egui::Rect::from_min_size(
         egui::Pos2::new(rect.max.x - rect.height(), rect.min.y),
@@ -559,7 +555,7 @@ fn divider(ui: &mut egui::Ui) {
         egui::Vec2::new(ui.available_width(), 1.0),
         egui::Sense::hover(),
     );
-    ui.painter().rect_filled(rect, 0.0, P_BORDER);
+    ui.painter().rect_filled(rect, 0.0, pal().border);
     ui.add_space(SP_L);
 }
 
@@ -578,11 +574,8 @@ fn panel_footer(
         egui::Vec2::new(ui.available_width(), 24.0),
         egui::Sense::hover(),
     );
-    ui.painter().hline(
-        rect.x_range(),
-        rect.min.y,
-        Stroke::new(1.0, Color32::from_gray(0x24)),
-    );
+    ui.painter()
+        .hline(rect.x_range(), rect.min.y, Stroke::new(1.0, pal().border));
     let y = rect.min.y + 14.0;
     text_at(
         ui,
@@ -590,7 +583,7 @@ fn panel_footer(
         egui::Align2::LEFT_CENTER,
         left,
         TEXT_CAPTION,
-        P_DIM,
+        pal().dim,
     );
     let hit = egui::Rect::from_min_max(
         egui::Pos2::new(
@@ -609,9 +602,9 @@ fn panel_footer(
         response = response.on_hover_cursor(CursorIcon::PointingHand);
     }
     let right_color = if action && response.hovered() {
-        P_TEXT
+        pal().text_hi
     } else {
-        Color32::from_gray(0x99)
+        pal().muted
     };
     if right_is_icon {
         icon_at(
@@ -641,7 +634,7 @@ fn list_row_at(ui: &egui::Ui, rect: egui::Rect, icon: &str, title: &str, subtitl
         egui::Pos2::new(rect.min.x, rect.center().y - box_size / 2.0),
         egui::Vec2::splat(box_size),
     );
-    icon_box_at(ui, icon_rect, icon, P_ICON_BOX);
+    icon_box_at(ui, icon_rect, icon, pal().badge);
     let x = icon_rect.max.x + 10.0;
     text_at(
         ui,
@@ -649,7 +642,7 @@ fn list_row_at(ui: &egui::Ui, rect: egui::Rect, icon: &str, title: &str, subtitl
         egui::Align2::LEFT_CENTER,
         title,
         TEXT_TITLE,
-        P_TEXT,
+        pal().text_hi,
     );
     text_at(
         ui,
@@ -657,7 +650,7 @@ fn list_row_at(ui: &egui::Ui, rect: egui::Rect, icon: &str, title: &str, subtitl
         egui::Align2::LEFT_CENTER,
         subtitle,
         TEXT_CAPTION,
-        P_MUTED,
+        pal().muted,
     );
 }
 

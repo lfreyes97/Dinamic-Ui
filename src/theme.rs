@@ -56,6 +56,13 @@ pub struct Palette {
     pub pressed: Color32,
     /// Acento translúcido para fondos activos.
     pub accent_soft: Color32,
+    /// Texto atenuado (placeholders, etiquetas apagadas): `muted` hacia `surface`.
+    /// Decorativo: ≈3:1, por debajo del mínimo de texto.
+    pub dim: Color32,
+    /// Zonas hundidas (barra de pestañas, huecos), más oscuras que `surface`.
+    pub inset: Color32,
+    /// Relleno de las tarjetas flotantes (panel, menús).
+    pub card_fill: Color32,
     /// Estados, según la convención base16 (`base08`, `base09`, `base0B`, `base0D`).
     pub danger: Color32,
     pub warn: Color32,
@@ -273,30 +280,82 @@ fn warn_once(message: String) {
 /// Deriva los tokens semánticos de un esquema (sin overrides ni corrección).
 pub fn derive(scheme: &Base16) -> Palette {
     let s = |i: usize| scheme[i];
-    let (bg, base01, base02, base03) = (s(0x00), s(0x01), s(0x02), s(0x03));
-    let (muted, text, text_hi) = (s(0x04), s(0x05), s(0x07));
-    let accent = s(0x0B);
-    // Hover y pulsado se mezclan hacia `text`, no hacia blanco: valen también en esquemas claros.
-    Palette {
+    let base01 = s(0x01);
+    let mut p = Palette {
         surface: Color32::from_rgba_unmultiplied(base01.r(), base01.g(), base01.b(), 238),
-        border: mix(base01, text, 0.15),
-        badge: base02,
-        text,
-        muted,
-        accent,
-        bg,
-        raised: base02,
-        faint: base03,
-        text_hi,
-        track: mix(base01, text, 0.12),
-        selection: base02,
-        hover: mix(base01, text, 0.06),
-        pressed: mix(base01, text, 0.12),
-        accent_soft: Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 41),
+        border: base01,
+        badge: s(0x02),
+        text: s(0x05),
+        muted: s(0x04),
+        accent: s(0x0B),
+        bg: s(0x00),
+        raised: s(0x02),
+        faint: s(0x03),
+        text_hi: s(0x07),
+        track: base01,
+        selection: s(0x02),
+        hover: base01,
+        pressed: base01,
+        accent_soft: Color32::TRANSPARENT,
+        dim: base01,
+        inset: base01,
+        card_fill: base01,
         danger: s(0x08),
         warn: s(0x09),
         ok: s(0x0B),
         info: s(0x0D),
+    };
+    finish(&mut p);
+    p
+}
+
+/// Recalcula los tokens que se derivan de los primarios (`surface`, `text`, `muted`, `accent`,
+/// `bg`). Hover, pulsado y borde se mezclan hacia `text`, no hacia blanco: valen también en
+/// esquemas claros.
+fn finish(p: &mut Palette) {
+    let base = opaque(p.surface);
+    p.border = mix(base, p.text, 0.15);
+    p.track = mix(base, p.text, 0.12);
+    p.hover = mix(base, p.text, 0.06);
+    p.pressed = mix(base, p.text, 0.12);
+    p.accent_soft = Color32::from_rgba_unmultiplied(p.accent.r(), p.accent.g(), p.accent.b(), 41);
+    p.dim = mix(p.muted, base, 0.4);
+    p.inset = mix(p.bg, base, 0.8);
+    let card = mix(p.bg, base, 0.45);
+    p.card_fill = Color32::from_rgba_unmultiplied(card.r(), card.g(), card.b(), 245);
+}
+
+thread_local! {
+    static CURRENT: std::cell::Cell<Option<Palette>> = const { std::cell::Cell::new(None) };
+}
+
+/// Fija la paleta del frame en curso. El render es de un solo hilo: los helpers de dibujo la
+/// leen con `current()` en vez de recibirla por parámetro en cada llamada.
+pub fn set_current(palette: Palette) {
+    CURRENT.with(|c| c.set(Some(palette)));
+}
+
+/// Paleta del frame en curso (el esquema por defecto si aún no se fijó, p. ej. en tests).
+pub fn current() -> Palette {
+    CURRENT
+        .with(|c| c.get())
+        .unwrap_or_else(|| derive(&builtin_scheme(DEFAULT_SCHEME).expect("esquema por defecto")))
+}
+
+impl Palette {
+    /// `surface` sin transparencia (para rellenos que no deben dejar ver el fondo).
+    pub fn solid(&self) -> Color32 {
+        opaque(self.surface)
+    }
+
+    /// Velo oscuro sobre una imagen (miniaturas, rótulos): no es color de tema.
+    pub fn scrim(alpha: u8) -> Color32 {
+        Color32::from_black_alpha(alpha)
+    }
+
+    /// Velo claro sobre una imagen (brillos y bordes sobre miniaturas).
+    pub fn sheen(alpha: u8) -> Color32 {
+        Color32::from_white_alpha(alpha)
     }
 }
 
@@ -322,13 +381,9 @@ impl Palette {
         p.text = override_color(&theme.text, p.text);
         p.muted = override_color(&theme.muted, p.muted);
         p.badge = override_color(&theme.badge, p.badge);
-        let base = opaque(p.surface);
-        p.border = override_color(&theme.border, mix(base, p.text, 0.15));
-        p.track = mix(base, p.text, 0.12);
-        p.hover = mix(base, p.text, 0.06);
-        p.pressed = mix(base, p.text, 0.12);
-        p.accent_soft =
-            Color32::from_rgba_unmultiplied(p.accent.r(), p.accent.g(), p.accent.b(), 41);
+        finish(&mut p);
+        // Un override explícito de borde gana sobre el derivado.
+        p.border = override_color(&theme.border, p.border);
 
         check_contrast(&mut p, theme.contrast_correction);
         p
@@ -377,8 +432,9 @@ fn check_contrast(p: &mut Palette, correct: bool) {
     check("ok", &mut p.ok, MIN_UI);
     check("info", &mut p.info, MIN_UI);
     if correct {
-        p.accent_soft =
-            Color32::from_rgba_unmultiplied(p.accent.r(), p.accent.g(), p.accent.b(), 41);
+        let border = p.border;
+        finish(p);
+        p.border = border;
     }
 }
 
@@ -535,6 +591,41 @@ base0F: "444444"
         light[0x05] = c(0x222222);
         let p = derive(&light);
         assert!(luminance(p.hover) < luminance(c(0xeeeeee)));
+    }
+
+    #[test]
+    fn panel_tokens_keep_their_visual_hierarchy() {
+        let p = derive(&builtin_scheme("black-metal").unwrap());
+        let surface = p.solid();
+        // texto > muted > dim, y dim sigue siendo legible como etiqueta apagada (~3:1).
+        assert!(contrast(p.text_hi, surface) >= contrast(p.muted, surface));
+        assert!(contrast(p.muted, surface) > contrast(p.dim, surface));
+        assert!(contrast(p.dim, surface) > 2.5);
+        // `faint` queda por debajo de cualquier texto.
+        assert!(contrast(p.faint, surface) < 2.0);
+        // Zonas hundidas más oscuras que la superficie; tarjeta casi opaca.
+        assert!(luminance(p.inset) <= luminance(surface));
+        assert_eq!(p.card_fill.a(), 245);
+    }
+
+    #[test]
+    fn correction_keeps_derived_tokens_in_sync() {
+        let mut scheme = builtin_scheme("black-metal-venom").unwrap();
+        scheme[0x0B] = c(0x79241f); // acento que falla (1,9:1)
+        let mut p = derive(&scheme);
+        check_contrast(&mut p, true);
+        assert!(contrast(p.accent, p.solid()) >= MIN_UI);
+        let expected =
+            Color32::from_rgba_unmultiplied(p.accent.r(), p.accent.g(), p.accent.b(), 41);
+        assert_eq!(p.accent_soft, expected);
+    }
+
+    #[test]
+    fn current_palette_roundtrip() {
+        let mut p = derive(&builtin_scheme("black-metal-bathory").unwrap());
+        p.accent = c(0x123456);
+        set_current(p);
+        assert_eq!(hex(current().accent), "123456");
     }
 
     #[test]
