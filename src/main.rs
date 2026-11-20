@@ -1,14 +1,32 @@
+// El kit de UI compartido (`ui/mod.rs`) tiene piezas que solo usa cada componente: en
+// un build parcial es normal que haya código sin usar. Con todo compilado sigue avisando.
+#![cfg_attr(
+    not(all(
+        feature = "bar",
+        feature = "dock",
+        feature = "overview",
+        feature = "command-menu",
+        feature = "notifications",
+        feature = "wallpaper"
+    )),
+    allow(dead_code)
+)]
+
+#[cfg(feature = "icons")]
 mod appicons;
 mod config;
 mod control;
 mod gfx;
 mod ipc;
+#[cfg(feature = "command-menu")]
 mod launcher;
+#[cfg(feature = "notifications")]
 mod notifications;
 mod power;
 mod shared;
 mod sysinfo;
 mod theme;
+#[cfg(feature = "wallpaper")]
 mod thumbs;
 mod ui;
 

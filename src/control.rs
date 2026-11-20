@@ -39,6 +39,22 @@ impl Command {
         }
     }
 
+    /// Feature de Cargo que implementa el comando y si este binario la incluye.
+    /// `None`: lo atiende el núcleo (siempre disponible).
+    pub(crate) fn feature(self) -> Option<(&'static str, bool)> {
+        match self {
+            Self::Toggle
+            | Self::Expand
+            | Self::Collapse
+            | Self::Panel
+            | Self::Compact
+            | Self::Notch => Some(("bar", cfg!(feature = "bar"))),
+            Self::Overview => Some(("overview", cfg!(feature = "overview"))),
+            Self::Menu => Some(("command-menu", cfg!(feature = "command-menu"))),
+            Self::Quit | Self::Reload => None,
+        }
+    }
+
     fn parse(s: &str) -> Option<Self> {
         match s.trim() {
             "toggle" => Some(Self::Toggle),
@@ -66,6 +82,12 @@ pub fn handle_cli() -> Option<i32> {
     let arg = env::args().nth(1)?;
     let arg = arg.trim_start_matches('-');
     let command = Command::parse(arg)?;
+    if let Some((feature, false)) = command.feature() {
+        eprintln!(
+            "[dinamic-ui] `--{arg}` no disponible: este binario se compiló sin la feature `{feature}`"
+        );
+        return Some(1);
+    }
 
     let Some(path) = socket_path() else {
         eprintln!("[dinamic-ui] XDG_RUNTIME_DIR no definido");

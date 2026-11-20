@@ -203,7 +203,12 @@ fn resize_rgba(src: &[u8], w: usize, h: usize, dst: usize) -> Vec<u8> {
         .chunks_exact(4)
         .flat_map(|p| {
             let a = p[3] as f32 / 255.0;
-            [p[0] as f32 * a, p[1] as f32 * a, p[2] as f32 * a, p[3] as f32]
+            [
+                p[0] as f32 * a,
+                p[1] as f32 * a,
+                p[2] as f32 * a,
+                p[3] as f32,
+            ]
         })
         .collect();
     let (xw, yw) = (axis_weights(w, dst), axis_weights(h, dst));

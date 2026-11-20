@@ -19,7 +19,8 @@ use crate::{
     theme::Palette,
 };
 
-/// Acción diferida del dock: `main` la ejecuta fuera del render.
+/// Acción diferida del dock; el propio dock la traduce a órdenes en cola.
+#[cfg(feature = "dock")]
 #[derive(Debug, Clone)]
 pub enum DockAction {
     Focus(String),
@@ -49,9 +50,13 @@ pub struct Shared {
     // ── Colas diferidas ───────────────────────────────────────────────
     pub pending_commands: Vec<String>,
     pub pending_spawns: Vec<Vec<String>>,
+    #[cfg(feature = "dock")]
     pub dock_action: Option<DockAction>,
+    #[cfg(feature = "overview")]
     pub overview_focus: Option<String>,
+    #[cfg(feature = "overview")]
     pub overview_workspace: Option<u32>,
+    #[cfg(feature = "command-menu")]
     pub menu_action: Option<crate::launcher::EntryAction>,
 }
 
@@ -108,9 +113,13 @@ impl Shared {
             pulse: 0.0,
             pending_commands: Vec::new(),
             pending_spawns: Vec::new(),
+            #[cfg(feature = "dock")]
             dock_action: None,
+            #[cfg(feature = "overview")]
             overview_focus: None,
+            #[cfg(feature = "overview")]
             overview_workspace: None,
+            #[cfg(feature = "command-menu")]
             menu_action: None,
         }
     }

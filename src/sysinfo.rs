@@ -40,6 +40,7 @@ pub struct Volume {
 }
 
 /// Fondo de escritorio actual según `awww query`.
+#[cfg(feature = "wallpaper")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Wallpaper {
     Image(String),
@@ -62,6 +63,7 @@ pub struct SystemInfo {
     /// Valor actual de `general:layout` en Hyprland.
     pub layout: Option<String>,
     /// Fondo actual del primer monitor (`awww query`).
+    #[cfg(feature = "wallpaper")]
     pub wallpaper: Option<Wallpaper>,
 }
 
@@ -128,6 +130,7 @@ fn read_all() -> SystemInfo {
         keyboard,
         display,
         layout: read_layout(),
+        #[cfg(feature = "wallpaper")]
         wallpaper: read_wallpaper(),
     }
 }
@@ -271,12 +274,14 @@ fn read_hypr_devices() -> (Option<String>, Option<String>) {
     (keyboard, display)
 }
 
+#[cfg(feature = "wallpaper")]
 /// `awww query` → ": eDP-1: 1366x768, scale: 1, currently displaying: image: /ruta.png"
 /// (o `color: rrggbb`). Solo se lee el primer monitor.
 fn read_wallpaper() -> Option<Wallpaper> {
     parse_wallpaper(&run("awww", &["query"])?)
 }
 
+#[cfg(feature = "wallpaper")]
 fn parse_wallpaper(out: &str) -> Option<Wallpaper> {
     let shown = out
         .lines()
@@ -297,7 +302,7 @@ fn read_layout() -> Option<String> {
     json["str"].as_str().map(|s| s.trim().to_string())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wallpaper"))]
 mod tests {
     use super::*;
 

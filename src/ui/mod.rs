@@ -2,11 +2,13 @@
 //! Colores: base16 Black Metal (o Bathory) desde `theme.rs`.
 
 use chrono::{Datelike, Local};
+#[allow(unused_imports)]
 use egui::{Color32, CornerRadius, CursorIcon, Frame, Margin, RichText, Stroke, StrokeKind};
 use egui_phosphor::regular as ic;
 
-use crate::{config, notifications::Notification, sysinfo::Wallpaper, theme::Palette};
+use crate::{config, theme::Palette};
 
+#[cfg(feature = "bar")]
 mod bar;
 mod bar_state;
 mod component;
@@ -15,12 +17,20 @@ pub use component::{
     dispatch_command, dispatch_key, input_rects, update_components, wants_keyboard, UpdateCtx,
 };
 
+#[cfg(feature = "bar")]
+#[allow(unused_imports)] // lo usan los módulos hermanos vía `use super::*`
 use panel::*;
+#[cfg(feature = "dock")]
 mod dock;
+#[cfg(feature = "command-menu")]
 mod menu;
+#[cfg(feature = "notifications")]
 mod notifications;
+#[cfg(feature = "overview")]
 mod overview;
+#[cfg(feature = "bar")]
 pub mod panel;
+#[cfg(feature = "wallpaper")]
 pub mod wallpaper;
 
 /// Ancho mínimo de la tarjeta del panel (con la isla) y separación respecto a la barra.
@@ -129,10 +139,15 @@ pub fn metrics() -> Metrics {
 /// componente vive en su módulo (`bar`, `dock`, `menu`, `notifications`, ...).
 pub struct UiState {
     pub bar: bar_state::BarState,
+    #[cfg(feature = "dock")]
     pub dock: dock::DockState,
+    #[cfg(feature = "command-menu")]
     pub menu: menu::MenuState,
+    #[cfg(feature = "notifications")]
     pub notifications: notifications::NotificationState,
+    #[cfg(feature = "overview")]
     pub overview: overview::OverviewState,
+    #[cfg(feature = "wallpaper")]
     pub wallpaper: wallpaper::WallpaperState,
 
     pub shared: crate::shared::Shared,
@@ -144,16 +159,36 @@ impl UiState {
     pub fn new() -> Self {
         Self {
             bar: bar_state::BarState::new(),
+            #[cfg(feature = "dock")]
             dock: dock::DockState::new(),
+            #[cfg(feature = "command-menu")]
             menu: menu::MenuState::default(),
+            #[cfg(feature = "notifications")]
             notifications: notifications::NotificationState::new(),
+            #[cfg(feature = "overview")]
             overview: overview::OverviewState::default(),
+            #[cfg(feature = "wallpaper")]
             wallpaper: wallpaper::WallpaperState::default(),
             shared: crate::shared::Shared::new(),
             should_exit: false,
         }
     }
 }
+
+// Los colores del panel son constantes propias (grises fijos), no la paleta base16.
+const P_SURFACE: Color32 = Color32::from_gray(0x15);
+const P_BORDER: Color32 = Color32::from_gray(0x29);
+const P_TEXT: Color32 = Color32::from_gray(0xf5);
+const P_MUTED: Color32 = Color32::from_gray(0x77);
+const P_TABBAR: Color32 = Color32::from_gray(0x10);
+const P_HEADING: Color32 = Color32::from_gray(0xaa);
+const P_DIM: Color32 = Color32::from_gray(0x66);
+const P_SOFT: Color32 = Color32::from_gray(0xcc);
+const P_INVERT: Color32 = Color32::from_gray(0xee);
+const P_INK: Color32 = Color32::from_gray(0x11);
+const P_ICON_BOX: Color32 = Color32::from_gray(0x25);
+const P_TRACK: Color32 = Color32::from_gray(0x30);
+const P_OK: Color32 = Color32::from_rgb(0x8b, 0xe0, 0x9b);
 
 // ── Escala de tipografía: 4 tamaños de texto + display ──────────────────
 /// Etiquetas, metadatos y fechas secundarias.

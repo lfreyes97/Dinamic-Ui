@@ -1,6 +1,7 @@
 //! Pestaña Wallpaper: galería, miniaturas y colores sólidos.
 
 use super::*;
+use crate::sysinfo::Wallpaper;
 
 /// Estado de la pestaña Wallpaper (galería, miniaturas y selección).
 pub struct WallpaperState {

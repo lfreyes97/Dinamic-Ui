@@ -1,6 +1,7 @@
 //! Tarjeta de notificación bajo la barra.
 
 use super::*;
+use crate::notifications::Notification;
 
 /// Estado de la tarjeta de notificaciones y la cola DND. Posee el servicio DBus.
 pub struct NotificationState {

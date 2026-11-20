@@ -5,6 +5,7 @@
 //! decide qué componentes existen; el orden del vector es el z-order.
 
 use super::*;
+#[allow(unused_imports)]
 use crate::{approach, config::BarMaxState, theme::Palette};
 use smithay_client_toolkit::seat::keyboard::Keysym;
 
@@ -72,7 +73,7 @@ pub trait Component {
 
 /// Único lugar donde se decide qué componentes existen según las features
 /// compiladas. El orden del vector es el z-order (de abajo arriba).
-#[allow(clippy::vec_init_then_push)] // con `--no-default-features` no hay ningún push
+#[allow(clippy::vec_init_then_push, unused_mut)] // con `--no-default-features` no hay ningún push
 pub fn build_components() -> Vec<Box<dyn Component>> {
     let mut components: Vec<Box<dyn Component>> = Vec::new();
     #[cfg(feature = "bar")]
@@ -320,9 +321,9 @@ impl Component for NotificationCard {
         // Notificaciones DBus (cola alimentada por un hilo propio).
         let n = &mut state.notifications;
         let mut dirty = false;
-        let (notification, _count, revision) = n
-            .service
-            .poll(std::time::Duration::from_secs(config::get().notifications.ttl_secs));
+        let (notification, _count, revision) = n.service.poll(std::time::Duration::from_secs(
+            config::get().notifications.ttl_secs,
+        ));
         if revision != n.last_revision {
             n.last_revision = revision;
             dirty = true;
@@ -552,7 +553,10 @@ impl Component for Overview {
             dirty = true;
         }
         if let Some(id) = state.shared.overview_workspace.take() {
-            state.shared.pending_commands.push(format!("workspace {id}"));
+            state
+                .shared
+                .pending_commands
+                .push(format!("workspace {id}"));
             state.overview.overview = false;
             dirty = true;
         }
@@ -612,7 +616,10 @@ impl Component for CommandMenu {
             let menu = &mut state.menu;
             menu.menu_open = !menu.menu_open;
             if menu.menu_open {
-                state.overview.overview = false;
+                #[cfg(feature = "overview")]
+                {
+                    state.overview.overview = false;
+                }
                 state.bar.show_panel = false;
                 menu.menu_query.clear();
                 menu.menu_selected = 0;
@@ -638,9 +645,10 @@ impl Component for CommandMenu {
                 .shared
                 .pending_spawns
                 .push(vec!["xdg-open".into(), path.to_string_lossy().into_owned()]),
-            EntryAction::Workspace(id) => {
-                state.shared.pending_commands.push(format!("workspace {id}"))
-            }
+            EntryAction::Workspace(id) => state
+                .shared
+                .pending_commands
+                .push(format!("workspace {id}")),
             EntryAction::Command(command) => match command.as_str() {
                 "reload" => state.shared.reload_requested = true,
                 "quit" => state.should_exit = true,

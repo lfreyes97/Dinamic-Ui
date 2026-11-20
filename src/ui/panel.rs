@@ -5,20 +5,6 @@ use super::wallpaper::panel_wallpaper;
 use super::*;
 
 // ── Panel de control ────────────────────────────────────────────────────
-// Los colores del panel son constantes propias (grises fijos), no la paleta base16.
-pub(super) const P_SURFACE: Color32 = Color32::from_gray(0x15);
-pub(super) const P_BORDER: Color32 = Color32::from_gray(0x29);
-pub(super) const P_TEXT: Color32 = Color32::from_gray(0xf5);
-pub(super) const P_MUTED: Color32 = Color32::from_gray(0x77);
-pub(super) const P_TABBAR: Color32 = Color32::from_gray(0x10);
-pub(super) const P_HEADING: Color32 = Color32::from_gray(0xaa);
-pub(super) const P_DIM: Color32 = Color32::from_gray(0x66);
-pub(super) const P_SOFT: Color32 = Color32::from_gray(0xcc);
-pub(super) const P_INVERT: Color32 = Color32::from_gray(0xee);
-pub(super) const P_INK: Color32 = Color32::from_gray(0x11);
-pub(super) const P_ICON_BOX: Color32 = Color32::from_gray(0x25);
-pub(super) const P_TRACK: Color32 = Color32::from_gray(0x30);
-pub(super) const P_OK: Color32 = Color32::from_rgb(0x8b, 0xe0, 0x9b);
 
 /// Pestañas del panel. Las de componentes opcionales solo existen si se compilaron.
 #[derive(Clone, Copy, PartialEq, Eq)]
