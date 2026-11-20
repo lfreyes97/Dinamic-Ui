@@ -23,6 +23,9 @@ pub struct BarState {
     pub island_active: bool,
     pub island_compact: bool,
     pub layout_preset: usize,
+    /// Otro componente (el topbar) ocupa el borde superior: la barra no se dibuja ni reclama
+    /// entrada, pero el panel sigue disponible. Lo fija ese componente en cada frame.
+    pub suppressed: bool,
     /// Última distribución de teclado vista, para aplicar el preset solo al cambiar.
     pub last_layout: Option<String>,
 }

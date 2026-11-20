@@ -297,6 +297,16 @@ fn ui_preview_overviews() {
     render_sized("topbar", r3, true, topbar_state(false, false, k));
     render_sized("topbar-quick", r3, true, topbar_state(true, false, k));
     render_sized("topbar-calendar", r3, true, topbar_state(false, true, k));
+    #[cfg(feature = "notifications")]
+    {
+        let mut many = topbar_state(false, true, k);
+        many.notifications.notification_list = sample_notifications(5);
+        many.notifications.dnd = true;
+        render_sized("topbar-calendar-many", r3, true, many);
+        let mut empty = topbar_state(false, true, k);
+        empty.notifications.notification_list.clear();
+        render_sized("topbar-calendar-empty", r3, true, empty);
+    }
 }
 
 fn topbar_state(quick: bool, calendar: bool, k: f32) -> UiState {
@@ -304,6 +314,10 @@ fn topbar_state(quick: bool, calendar: bool, k: f32) -> UiState {
     state.topbar.enabled = true;
     state.topbar.quick_open = quick;
     state.topbar.calendar_open = calendar;
+    #[cfg(feature = "notifications")]
+    {
+        state.notifications.notification_list = sample_notifications(2);
+    }
     state.shared.snapshot.window_title = "Rust — Mozilla Firefox".into();
     // Datos del sistema de ejemplo (los que leería `sysinfo`).
     let system = &mut state.shared.system;
@@ -328,4 +342,30 @@ fn topbar_state(quick: bool, calendar: bool, k: f32) -> UiState {
         minutes_left: Some(215),
     };
     state
+}
+
+#[cfg(feature = "notifications")]
+fn sample_notifications(n: usize) -> Vec<crate::notifications::Notification> {
+    let items = [
+        ("Firefox", "Descarga completada", "14:52"),
+        ("Kitty", "El proceso terminó con código 0", "14:40"),
+        ("Spotify", "Siguiente: Mastodon — Blood Mountain", "14:21"),
+        ("Hyprland", "Configuración recargada", "13:58"),
+        ("Sistema", "Batería al 64 %", "13:30"),
+    ];
+    items
+        .iter()
+        .take(n)
+        .enumerate()
+        .map(
+            |(i, (app, summary, time))| crate::notifications::Notification {
+                id: i as u32 + 1,
+                app: app.to_string(),
+                summary: summary.to_string(),
+                body: String::new(),
+                time: time.to_string(),
+                received: std::time::Instant::now(),
+            },
+        )
+        .collect()
 }

@@ -211,6 +211,9 @@ impl Component for BarShell {
         if super::taskbar_active(state) {
             return;
         }
+        if state.bar.suppressed {
+            return;
+        }
         bar::draw_bar_shell(ui, state, palette, ctx.t, ctx.pill_w);
     }
 
@@ -223,6 +226,9 @@ impl Component for BarShell {
         #[cfg(feature = "taskbar")]
         if super::taskbar_active(state) {
             return Vec::new();
+        }
+        if state.bar.suppressed {
+            return vec![card_rect(state, screen_w)];
         }
         vec![bar_rect(state, screen_w), card_rect(state, screen_w)]
     }
@@ -268,7 +274,9 @@ impl Component for BarShell {
         let mut dirty = false;
         let bar = &mut state.bar;
         // Zona del notch: franja superior centrada.
-        if let Some((x, y)) = ctx.cursor {
+        if bar.suppressed {
+            bar.island_active = false;
+        } else if let Some((x, y)) = ctx.cursor {
             let near_top = std::env::var_os("DINAMIC_UI_ISLAND").is_some()
                 || (y <= 18 && (x - ctx.screen_w / 2).abs() <= 100);
             if near_top != bar.island_active {
@@ -540,6 +548,12 @@ impl Component for Topbar {
         } else {
             false
         }
+    }
+
+    fn update(&mut self, state: &mut UiState, _ctx: &UpdateCtx) -> bool {
+        // Mientras el topbar está activo, la barra (notch/isla) cede el borde superior.
+        state.bar.suppressed = state.topbar.enabled;
+        false
     }
 
     fn wants_system(&self, state: &UiState) -> bool {

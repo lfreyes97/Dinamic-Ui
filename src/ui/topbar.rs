@@ -1,6 +1,6 @@
-//! Topbar estilo GNOME (feature `topbar`): Actividades y la app enfocada a la izquierda, reloj
-//! en el centro y estado a la derecha. El reloj abre el calendario y el estado abre un resumen
-//! del sistema, cada uno anclado bajo su botón.
+//! Topbar estilo GNOME (feature `topbar`): Actividades, los workspaces y la app enfocada a la
+//! izquierda, reloj en el centro y estado a la derecha. El reloj abre el calendario (con las
+//! notificaciones debajo) y el estado abre un resumen del sistema, cada uno anclado bajo su botón.
 //!
 //! Los datos son los reales de `Shared` (`sysinfo` y batería). El resumen del sistema es de
 //! **solo lectura**: actuar sobre wifi, volumen o brillo exige lanzar comandos del sistema
@@ -94,6 +94,39 @@ pub fn calendar_grid(year: i32, month: u32) -> (usize, u32, usize) {
     (offset, days, (offset + days as usize).div_ceil(7))
 }
 
+/// Workspaces que muestra la barra: los ocupados y el actual, ordenados, hasta 8.
+pub fn visible_workspaces(occupied: &[u32], current: u32) -> Vec<u32> {
+    let mut ids = occupied.to_vec();
+    if !ids.contains(&current) {
+        ids.push(current);
+    }
+    ids.sort_unstable();
+    ids.dedup();
+    ids.truncate(8);
+    ids
+}
+
+/// Alto de la sección de notificaciones del calendario (0 si no está compilada).
+#[cfg(feature = "notifications")]
+fn notifications_height(state: &UiState) -> f32 {
+    let n = state.notifications.notification_list.len();
+    let body = if n == 0 {
+        40.0
+    } else {
+        n.min(MAX_NOTIFICATIONS) as f32 * 46.0 + if n > MAX_NOTIFICATIONS { 18.0 } else { 0.0 }
+    };
+    38.0 + body + 10.0
+}
+
+#[cfg(not(feature = "notifications"))]
+fn notifications_height(_state: &UiState) -> f32 {
+    0.0
+}
+
+/// Notificaciones que caben en el desplegable (el resto se resume en «+N más»).
+#[cfg(feature = "notifications")]
+const MAX_NOTIFICATIONS: usize = 3;
+
 fn viewed_month(state: &UiState) -> (i32, u32) {
     let now = Local::now();
     shift_month(now.year(), now.month(), state.topbar.month_offset)
@@ -107,11 +140,15 @@ fn calendar_card(state: &UiState, screen_w: f32) -> egui::Rect {
             (screen_w - POPOVER_W) / 2.0,
             bar_height(state) + POPOVER_GAP,
         ),
-        egui::vec2(POPOVER_W, 74.0 + rows as f32 * 24.0),
+        egui::vec2(
+            POPOVER_W,
+            74.0 + rows as f32 * 24.0 + notifications_height(state),
+        ),
     )
 }
 
-/// Rect del calendario (anclado al centro). Su alto depende de las semanas del mes.
+/// Rect del calendario con las notificaciones (anclado al centro). Su alto depende de las
+/// semanas del mes y de cuántas notificaciones hay.
 pub fn calendar_rect(state: &UiState, screen_w: i32) -> (i32, i32, i32, i32) {
     as_ints(calendar_card(state, screen_w as f32))
 }
@@ -197,11 +234,46 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
             super::dispatch_command("overview", state);
         }
     }
+
+    // Workspaces: puntos, con el actual alargado. Un clic cambia de workspace.
+    let current = state.shared.snapshot.workspace.parse::<u32>().unwrap_or(1);
+    let mut wx = act.max.x + 12.0;
+    for id in visible_workspaces(&state.shared.snapshot.occupied, current) {
+        let is_current = id == current;
+        let w = if is_current { 22.0 } else { 8.0 };
+        let hit =
+            egui::Rect::from_min_size(egui::pos2(wx - 4.0, cy - 12.0), egui::vec2(w + 8.0, 24.0));
+        let resp = ui
+            .interact(hit, ui.scope_id().with(("tb-ws", id)), egui::Sense::click())
+            .on_hover_text(format!("Workspace {id}"));
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+        ui.painter().rect_filled(
+            egui::Rect::from_min_size(egui::pos2(wx, cy - 4.0), egui::vec2(w, 8.0)),
+            CornerRadius::same(4),
+            if is_current {
+                palette.accent
+            } else if resp.hovered() {
+                palette.text
+            } else {
+                palette.muted
+            },
+        );
+        if resp.clicked() && !is_current {
+            state
+                .shared
+                .pending_commands
+                .push(format!("workspace {id}"));
+        }
+        wx += w + 6.0;
+    }
+
     let focus = state.shared.snapshot.window_title.clone();
     if !focus.is_empty() {
         text_at(
             ui,
-            egui::pos2(act.max.x + 14.0, cy),
+            egui::pos2(wx + 10.0, cy),
             egui::Align2::LEFT_CENTER,
             truncate(&focus, 28),
             TEXT_BODY,
@@ -634,6 +706,203 @@ fn draw_calendar(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
             },
         );
     }
+
+    #[cfg(feature = "notifications")]
+    {
+        let (_, _, rows) = calendar_grid(year, month);
+        let top = card.min.y + 74.0 + rows as f32 * 24.0;
+        draw_notifications(ui, state, palette, card, top);
+    }
+}
+
+/// Notificaciones bajo el calendario: cabecera con «No molestar» y vaciar, y las más recientes.
+#[cfg(feature = "notifications")]
+fn draw_notifications(
+    ui: &mut egui::Ui,
+    state: &mut UiState,
+    palette: Palette,
+    card: egui::Rect,
+    top: f32,
+) {
+    ui.painter().line_segment(
+        [
+            egui::pos2(card.min.x + 14.0, top + 2.0),
+            egui::pos2(card.max.x - 14.0, top + 2.0),
+        ],
+        Stroke::new(1.0, palette.border),
+    );
+    let hy = top + 20.0;
+    text_at(
+        ui,
+        egui::pos2(card.min.x + 16.0, hy),
+        egui::Align2::LEFT_CENTER,
+        "Notificaciones",
+        TEXT_BODY,
+        palette.text,
+    );
+
+    // No molestar: interruptor a la derecha, con su etiqueta.
+    let switch = egui::Rect::from_center_size(
+        egui::pos2(card.max.x - 16.0 - 15.0, hy),
+        egui::vec2(30.0, 17.0),
+    );
+    let switch_resp = ui
+        .interact(switch, ui.scope_id().with("tb-dnd"), egui::Sense::click())
+        .on_hover_cursor(CursorIcon::PointingHand);
+    let dnd = state.notifications.dnd;
+    ui.painter().rect_filled(
+        switch,
+        CornerRadius::same(9),
+        if dnd { palette.accent } else { palette.faint },
+    );
+    ui.painter().circle_filled(
+        egui::pos2(
+            if dnd {
+                switch.max.x - 8.5
+            } else {
+                switch.min.x + 8.5
+            },
+            switch.center().y,
+        ),
+        6.5,
+        if dnd {
+            palette.solid()
+        } else {
+            palette.text_hi
+        },
+    );
+    if switch_resp.clicked() {
+        state.notifications.toggle_dnd = true;
+    }
+    text_at(
+        ui,
+        egui::pos2(switch.min.x - 8.0, hy),
+        egui::Align2::RIGHT_CENTER,
+        "No molestar",
+        TEXT_CAPTION,
+        if dnd { palette.text } else { palette.muted },
+    );
+
+    let list: Vec<crate::notifications::Notification> =
+        state.notifications.notification_list.clone();
+    let mut y = top + 38.0;
+    if list.is_empty() {
+        icon_at(
+            ui,
+            egui::pos2(card.center().x - 52.0, y + 16.0),
+            ic::BELL_SLASH,
+            ICON_SM,
+            palette.dim,
+        );
+        text_at(
+            ui,
+            egui::pos2(card.center().x - 38.0, y + 16.0),
+            egui::Align2::LEFT_CENTER,
+            "Sin notificaciones",
+            TEXT_BODY,
+            palette.muted,
+        );
+        return;
+    }
+    for notification in list.iter().take(MAX_NOTIFICATIONS) {
+        let row = egui::Rect::from_min_size(
+            egui::pos2(card.min.x + 12.0, y),
+            egui::vec2(card.width() - 24.0, 42.0),
+        );
+        ui.painter()
+            .rect_filled(row, CornerRadius::same(9), palette.badge);
+        icon_at(
+            ui,
+            egui::pos2(row.min.x + 18.0, row.center().y),
+            ic::BELL,
+            ICON_SM,
+            palette.accent,
+        );
+        text_at(
+            ui,
+            egui::pos2(row.min.x + 36.0, row.min.y + 13.0),
+            egui::Align2::LEFT_CENTER,
+            format!(
+                "{} · {}",
+                truncate(&notification.app, 18),
+                notification.time
+            ),
+            TEXT_CAPTION,
+            palette.muted,
+        );
+        text_at(
+            ui,
+            egui::pos2(row.min.x + 36.0, row.min.y + 29.0),
+            egui::Align2::LEFT_CENTER,
+            truncate(&notification.summary, 34),
+            TEXT_BODY,
+            palette.text,
+        );
+        // Cerrar esta notificación.
+        let close = egui::Rect::from_center_size(
+            egui::pos2(row.max.x - 16.0, row.center().y),
+            egui::vec2(20.0, 20.0),
+        );
+        let close_resp = ui
+            .interact(
+                close,
+                ui.scope_id().with(("tb-notif-close", notification.id)),
+                egui::Sense::click(),
+            )
+            .on_hover_cursor(CursorIcon::PointingHand);
+        icon_at(
+            ui,
+            close.center(),
+            ic::X,
+            ICON_XS,
+            if close_resp.hovered() {
+                palette.text
+            } else {
+                palette.muted
+            },
+        );
+        if close_resp.clicked() {
+            state.notifications.dismiss_notification_id = Some(notification.id);
+        }
+        y += 46.0;
+    }
+    if list.len() > MAX_NOTIFICATIONS {
+        let more = list.len() - MAX_NOTIFICATIONS;
+        let clear = egui::Rect::from_center_size(
+            egui::pos2(card.max.x - 56.0, y + 9.0),
+            egui::vec2(96.0, 16.0),
+        );
+        let clear_resp = ui
+            .interact(
+                clear,
+                ui.scope_id().with("tb-notif-clear"),
+                egui::Sense::click(),
+            )
+            .on_hover_cursor(CursorIcon::PointingHand);
+        text_at(
+            ui,
+            egui::pos2(card.min.x + 16.0, y + 9.0),
+            egui::Align2::LEFT_CENTER,
+            format!("+{more} más"),
+            TEXT_CAPTION,
+            palette.dim,
+        );
+        text_at(
+            ui,
+            clear.center(),
+            egui::Align2::CENTER_CENTER,
+            "Borrar todo",
+            TEXT_CAPTION,
+            if clear_resp.hovered() {
+                palette.text
+            } else {
+                palette.muted
+            },
+        );
+        if clear_resp.clicked() {
+            state.notifications.clear_all_notifications = true;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -648,6 +917,16 @@ mod tests {
         assert_eq!(shift_month(2026, 1, -1), (2025, 12));
         assert_eq!(shift_month(2026, 3, -15), (2024, 12));
         assert_eq!(shift_month(2026, 12, 25), (2029, 1));
+    }
+
+    #[test]
+    fn workspaces_are_sorted_unique_and_include_the_current_one() {
+        assert_eq!(visible_workspaces(&[3, 1, 3], 2), [1, 2, 3]);
+        assert_eq!(visible_workspaces(&[], 4), [4]);
+        assert_eq!(visible_workspaces(&[1, 2], 2), [1, 2]);
+        // Tope de 8 puntos.
+        let many: Vec<u32> = (1..=12).collect();
+        assert_eq!(visible_workspaces(&many, 1).len(), 8);
     }
 
     #[test]
