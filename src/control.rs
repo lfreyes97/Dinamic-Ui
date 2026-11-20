@@ -20,6 +20,11 @@ pub enum Command {
     Compact,
     Notch,
     Overview,
+    OverviewActivities,
+    OverviewStripH,
+    OverviewStripV,
+    Taskbar,
+    Topbar,
     Menu,
 }
 
@@ -35,6 +40,11 @@ impl Command {
             Self::Compact => "compact",
             Self::Notch => "notch",
             Self::Overview => "overview",
+            Self::OverviewActivities => "overview-activities",
+            Self::OverviewStripH => "overview-strip-h",
+            Self::OverviewStripV => "overview-strip-v",
+            Self::Taskbar => "taskbar",
+            Self::Topbar => "topbar",
             Self::Menu => "menu",
         }
     }
@@ -49,7 +59,12 @@ impl Command {
             | Self::Panel
             | Self::Compact
             | Self::Notch => Some(("bar", cfg!(feature = "bar"))),
-            Self::Overview => Some(("overview", cfg!(feature = "overview"))),
+            Self::Overview
+            | Self::OverviewActivities
+            | Self::OverviewStripH
+            | Self::OverviewStripV => Some(("overview", cfg!(feature = "overview"))),
+            Self::Taskbar => Some(("taskbar", cfg!(feature = "taskbar"))),
+            Self::Topbar => Some(("topbar", cfg!(feature = "topbar"))),
             Self::Menu => Some(("command-menu", cfg!(feature = "command-menu"))),
             Self::Quit | Self::Reload => None,
         }
@@ -66,6 +81,11 @@ impl Command {
             "compact" => Some(Self::Compact),
             "notch" => Some(Self::Notch),
             "overview" => Some(Self::Overview),
+            "overview-activities" => Some(Self::OverviewActivities),
+            "overview-strip-h" => Some(Self::OverviewStripH),
+            "overview-strip-v" => Some(Self::OverviewStripV),
+            "taskbar" => Some(Self::Taskbar),
+            "topbar" => Some(Self::Topbar),
             "menu" => Some(Self::Menu),
             _ => None,
         }

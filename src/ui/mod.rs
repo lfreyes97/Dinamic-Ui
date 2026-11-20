@@ -28,8 +28,14 @@ mod menu;
 mod notifications;
 #[cfg(feature = "overview")]
 mod overview;
+#[cfg(feature = "overview")]
+mod overview_collection;
 #[cfg(feature = "bar")]
 pub mod panel;
+#[cfg(feature = "taskbar")]
+mod taskbar;
+#[cfg(feature = "topbar")]
+mod topbar;
 #[cfg(feature = "wallpaper")]
 pub mod wallpaper;
 
@@ -141,6 +147,10 @@ pub struct UiState {
     pub bar: bar_state::BarState,
     #[cfg(feature = "dock")]
     pub dock: dock::DockState,
+    #[cfg(feature = "taskbar")]
+    pub taskbar: taskbar::TaskbarState,
+    #[cfg(feature = "topbar")]
+    pub topbar: topbar::TopbarState,
     #[cfg(feature = "command-menu")]
     pub menu: menu::MenuState,
     #[cfg(feature = "notifications")]
@@ -161,6 +171,10 @@ impl UiState {
             bar: bar_state::BarState::new(),
             #[cfg(feature = "dock")]
             dock: dock::DockState::new(),
+            #[cfg(feature = "taskbar")]
+            taskbar: taskbar::TaskbarState::new(),
+            #[cfg(feature = "topbar")]
+            topbar: topbar::TopbarState::new(),
             #[cfg(feature = "command-menu")]
             menu: menu::MenuState::default(),
             #[cfg(feature = "notifications")]
@@ -689,4 +703,10 @@ fn capitalize(text: &str) -> String {
         Some(first) => first.to_uppercase().chain(chars).collect(),
         None => String::new(),
     }
+}
+
+/// `true` mientras la taskbar esté desplegada: la barra y el dock se ocultan.
+#[cfg(feature = "taskbar")]
+pub fn taskbar_active(state: &UiState) -> bool {
+    state.taskbar.enabled && state.taskbar.progress > 0.5
 }

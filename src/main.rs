@@ -240,6 +240,19 @@ impl DinamicUi {
             eprintln!("[dinamic-ui] reload: {e}");
         }
         self.palette = Palette::load();
+        // Los componentes leen la config desde `Shared`: hay que refrescarla.
+        self.ui_state.shared.config = config::get();
+        self.ui_state.shared.palette = self.palette;
+        #[cfg(feature = "taskbar")]
+        {
+            let enabled = self.ui_state.shared.config.taskbar.enabled;
+            self.ui_state.taskbar.enabled = enabled;
+            self.ui_state.taskbar.visible = enabled;
+        }
+        #[cfg(feature = "topbar")]
+        {
+            self.ui_state.topbar.enabled = self.ui_state.shared.config.topbar.enabled;
+        }
     }
 
     fn draw(&mut self, qh: &QueueHandle<Self>) {

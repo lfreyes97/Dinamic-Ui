@@ -175,6 +175,23 @@ notch: need-release
 overview: need-release
     ./{{rel_bin}} --overview
 
+# Taskbar Windows-like y topbar GNOME-like
+taskbar: need-release
+    ./{{rel_bin}} --taskbar
+
+topbar: need-release
+    ./{{rel_bin}} --topbar
+
+# Resto de vistas del overview
+overview-activities: need-release
+    ./{{rel_bin}} --overview-activities
+
+overview-strip-h: need-release
+    ./{{rel_bin}} --overview-strip-h
+
+overview-strip-v: need-release
+    ./{{rel_bin}} --overview-strip-v
+
 menu: need-release
     ./{{rel_bin}} --menu
 

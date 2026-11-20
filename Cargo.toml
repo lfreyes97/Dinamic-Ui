@@ -29,9 +29,11 @@ lto = "thin"
 
 # Componentes compilables por separado. Ver docs/MODULARIZATION_PLAN.md.
 [features]
-default = ["bar", "dock", "taskbar", "overview", "command-menu", "notifications", "wallpaper"]
+default = ["bar", "dock", "taskbar", "topbar", "overview", "command-menu", "notifications", "wallpaper"]
 # Isla / píldora / barra / panel (un solo componente con estados de expansión).
 bar = []
+# Topbar GNOME-like: reloj, estado y desplegables.
+topbar = ["bar"]
 # Iconos reales de app (tema freedesktop, solo PNG). La activan sus consumidores.
 icons = ["dep:freedesktop-icons", "dep:png"]
 dock = ["icons"]

@@ -51,13 +51,32 @@ El binario expone un socket en `$XDG_RUNTIME_DIR/dinamic-ui.sock` y un modo CLI:
 ./target/release/dinamic-ui --panel      # abre/cierra el panel
 ./target/release/dinamic-ui --compact    # fija el modo compacto (reloj)
 ./target/release/dinamic-ui --notch      # vuelve al notch
-./target/release/dinamic-ui --overview   # abre/cierra el overview
+./target/release/dinamic-ui --overview   # overview de workspaces
+./target/release/dinamic-ui --overview-activities  # apps + ventanas
+./target/release/dinamic-ui --overview-strip-h     # franja horizontal
+./target/release/dinamic-ui --overview-strip-v     # franja vertical
+./target/release/dinamic-ui --taskbar     # taskbar Windows-like (4 lados)
+./target/release/dinamic-ui --topbar      # topbar GNOME-like
 ./target/release/dinamic-ui --menu       # command menu (lanzador/archivos)
 ./target/release/dinamic-ui --quit
 ./target/release/dinamic-ui --reload    # recarga config.toml sin reiniciar
 ```
 
 Así puedes enlazarlos en Hyprland (ver `hyprland/dinamic-ui.conf`, con `SUPER+I`).
+
+### Barras y overviews
+
+La **taskbar** (`--taskbar`) es una vista sobre el modelo del dock, acoplable a los
+cuatro lados con `[taskbar] side = "bottom" | "top" | "left" | "right"`, con
+`autohide` opcional. La **topbar** (`--topbar`) muestra Actividades, reloj y estado
+con desplegables de ajustes rápidos y calendario; su altura se configura en
+`[topbar] height`. Ambas son mutuamente excluyentes y sustituyen a la isla/barra
+mientras están activas.
+
+Los overviews son cuatro (`--overview`, `--overview-activities`, `--overview-strip-h`,
+`--overview-strip-v`). Las franjas se acoplan con `[overview] strip_h_side` y
+`strip_v_side`, y su botón de expandir abre la rejilla a pantalla completa.
+Las maquetas de referencia están en `docs/*-mockup.html`.
 
 ### Archivo de configuración
 

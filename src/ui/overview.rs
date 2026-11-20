@@ -1,15 +1,27 @@
-//! Overview de workspaces con ventanas en posición relativa.
+//! Colección de overviews: rejilla, actividades y franjas horizontales/verticales.
 
 use super::*;
 
-/// Estado del overview (modo pantalla completa).
+/// Las cuatro vistas de overview.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum OverviewKind {
+    #[default]
+    Workspaces,
+    Activities,
+    StripH,
+    StripV,
+}
+
+/// Estado del overview.
 #[derive(Default)]
 pub struct OverviewState {
     pub overview: bool,
+    pub kind: OverviewKind,
+    pub strip_offset: usize,
 }
 
 /// Overview: rejilla de workspaces con las ventanas en su posición relativa.
-pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
+fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
     let painter = ui.painter();
     painter.rect_filled(
@@ -185,5 +197,15 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
                 state.shared.overview_focus = Some(win.address.clone());
             }
         }
+    }
+}
+
+/// Punto de entrada: despacha a la vista de overview elegida.
+pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
+    match state.overview.kind {
+        OverviewKind::Workspaces => draw_workspaces(ui, state, palette),
+        OverviewKind::Activities => super::overview_collection::draw_activities(ui, state, palette),
+        OverviewKind::StripH => super::overview_collection::draw_strip_h(ui, state, palette),
+        OverviewKind::StripV => super::overview_collection::draw_strip_v(ui, state, palette),
     }
 }

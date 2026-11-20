@@ -24,6 +24,9 @@ pub struct Config {
     pub dock: DockConfig,
     pub menu: MenuConfig,
     pub icons: IconsConfig,
+    pub taskbar: TaskbarConfig,
+    pub topbar: TopbarConfig,
+    pub overview: OverviewConfig,
 }
 
 /// Techo de expansión de la barra: notch → compacto → barra → panel.
@@ -47,6 +50,78 @@ impl Default for BarConfig {
     fn default() -> Self {
         Self {
             max_state: BarMaxState::Panel,
+        }
+    }
+}
+
+/// Lado de acople de una barra o franja.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Side {
+    #[default]
+    Bottom,
+    Top,
+    Left,
+    Right,
+}
+
+impl Side {
+    pub fn is_horizontal(self) -> bool {
+        matches!(self, Self::Top | Self::Bottom)
+    }
+}
+
+/// Taskbar estilo Windows (feature `taskbar`).
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(default)]
+pub struct TaskbarConfig {
+    pub enabled: bool,
+    pub side: Side,
+    pub size: u32,
+    pub autohide: bool,
+}
+
+impl Default for TaskbarConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            side: Side::Bottom,
+            size: 48,
+            autohide: false,
+        }
+    }
+}
+
+/// Topbar estilo GNOME (feature `topbar`).
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(default)]
+pub struct TopbarConfig {
+    pub enabled: bool,
+    pub height: u32,
+}
+
+impl Default for TopbarConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            height: 34,
+        }
+    }
+}
+
+/// Estilo y acople de los overviews de franja (feature `overview`).
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(default)]
+pub struct OverviewConfig {
+    pub strip_h_side: Side,
+    pub strip_v_side: Side,
+}
+
+impl Default for OverviewConfig {
+    fn default() -> Self {
+        Self {
+            strip_h_side: Side::Top,
+            strip_v_side: Side::Right,
         }
     }
 }
@@ -238,6 +313,8 @@ pub fn reload() -> Result<(), String> {
     config.sizes.bar_h = config.sizes.bar_h.clamp(24, 48);
     config.sizes.panel_h = config.sizes.panel_h.clamp(80, 480);
     config.workspaces.count = config.workspaces.count.clamp(4, 20);
+    config.taskbar.size = config.taskbar.size.clamp(40, 72);
+    config.topbar.height = config.topbar.height.clamp(24, 48);
 
     *CONFIG.write().expect("config lock envenenado") = Some(Arc::new(config));
     Ok(())

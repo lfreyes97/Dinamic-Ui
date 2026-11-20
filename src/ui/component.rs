@@ -84,6 +84,10 @@ pub fn build_components() -> Vec<Box<dyn Component>> {
     components.push(Box::new(Panel));
     #[cfg(feature = "wallpaper")]
     components.push(Box::new(WallpaperHost));
+    #[cfg(feature = "topbar")]
+    components.push(Box::new(Topbar));
+    #[cfg(feature = "taskbar")]
+    components.push(Box::new(Taskbar));
     #[cfg(feature = "dock")]
     components.push(Box::new(Dock));
     #[cfg(feature = "overview")]
@@ -188,6 +192,10 @@ impl Component for BarShell {
     }
 
     fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, ctx: DrawCtx, palette: Palette) {
+        #[cfg(feature = "taskbar")]
+        if super::taskbar_active(state) {
+            return;
+        }
         bar::draw_bar_shell(ui, state, palette, ctx.t, ctx.pill_w);
     }
 
@@ -197,6 +205,10 @@ impl Component for BarShell {
         screen_w: i32,
         _screen_h: i32,
     ) -> Vec<(i32, i32, i32, i32)> {
+        #[cfg(feature = "taskbar")]
+        if super::taskbar_active(state) {
+            return Vec::new();
+        }
         vec![bar_rect(state, screen_w), card_rect(state, screen_w)]
     }
 
@@ -369,6 +381,10 @@ impl Component for Panel {
     }
 
     fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, ctx: DrawCtx, palette: Palette) {
+        #[cfg(feature = "taskbar")]
+        if super::taskbar_active(state) {
+            return;
+        }
         panel::draw_panel_card(ui, state, palette, ctx.t, ctx.panel_t);
     }
 
@@ -458,6 +474,143 @@ impl Component for WallpaperHost {
     }
 }
 
+#[cfg(feature = "topbar")]
+struct Topbar;
+#[cfg(feature = "topbar")]
+impl Component for Topbar {
+    fn name(&self) -> &'static str {
+        "topbar"
+    }
+
+    fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, _ctx: DrawCtx, palette: Palette) {
+        topbar::draw_topbar(ui, state, palette);
+    }
+
+    fn input_rects(
+        &self,
+        state: &UiState,
+        screen_w: i32,
+        _screen_h: i32,
+    ) -> Vec<(i32, i32, i32, i32)> {
+        if !state.topbar.enabled {
+            return Vec::new();
+        }
+        let mut rects = vec![topbar::topbar_rect(state, screen_w)];
+        if state.topbar.quick_open {
+            let h = state.shared.config.topbar.height as i32;
+            rects.push((screen_w - 292, h + 6, 280, 218));
+        }
+        if state.topbar.calendar_open {
+            let h = state.shared.config.topbar.height as i32;
+            rects.push((screen_w / 2 - 150, h + 6, 300, 224));
+        }
+        rects
+    }
+
+    fn on_command(&mut self, command: &str, state: &mut UiState) -> bool {
+        if command == "topbar" {
+            let enabled = !state.topbar.enabled;
+            state.topbar.enabled = enabled;
+            state.topbar.quick_open = false;
+            state.topbar.calendar_open = false;
+            #[cfg(feature = "taskbar")]
+            if enabled {
+                state.taskbar.enabled = false;
+                state.taskbar.progress = 0.0;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        if key == Keysym::Escape && (state.topbar.quick_open || state.topbar.calendar_open) {
+            state.topbar.quick_open = false;
+            state.topbar.calendar_open = false;
+            return true;
+        }
+        false
+    }
+}
+
+#[cfg(feature = "taskbar")]
+struct Taskbar;
+#[cfg(feature = "taskbar")]
+impl Component for Taskbar {
+    fn name(&self) -> &'static str {
+        "taskbar"
+    }
+
+    fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, _ctx: DrawCtx, palette: Palette) {
+        taskbar::draw_taskbar(ui, state, palette);
+    }
+
+    fn input_rects(
+        &self,
+        state: &UiState,
+        screen_w: i32,
+        screen_h: i32,
+    ) -> Vec<(i32, i32, i32, i32)> {
+        if !state.taskbar.enabled {
+            return Vec::new();
+        }
+        if state.taskbar.progress > 0.5 {
+            vec![taskbar::taskbar_rect(state, screen_w, screen_h)]
+        } else {
+            vec![taskbar::hot_rect(state, screen_w, screen_h)]
+        }
+    }
+
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        let cfg = state.shared.config.taskbar;
+        let tb = &mut state.taskbar;
+        let near = if let Some((x, y)) = ctx.cursor {
+            match cfg.side {
+                crate::config::Side::Bottom => y >= ctx.screen_h - 24,
+                crate::config::Side::Top => y <= 24,
+                crate::config::Side::Left => x <= 24,
+                crate::config::Side::Right => x >= ctx.screen_w - 24,
+            }
+        } else {
+            false
+        };
+        let visible = tb.enabled && (!cfg.autohide || near);
+        let before = tb.visible;
+        tb.visible = visible;
+        let before_progress = tb.progress;
+        let target = if visible { 1.0 } else { 0.0 };
+        tb.progress = approach(tb.progress, target, ctx.dt * 6.0);
+        before != visible || (tb.progress - before_progress).abs() > 0.0005
+    }
+
+    fn on_command(&mut self, command: &str, state: &mut UiState) -> bool {
+        if command == "taskbar" {
+            let tb = &mut state.taskbar;
+            tb.enabled = !tb.enabled;
+            tb.visible = tb.enabled;
+            tb.progress = if tb.enabled { 1.0 } else { 0.0 };
+            state.bar.expanded = false;
+            state.bar.show_panel = false;
+            #[cfg(feature = "dock")]
+            {
+                state.dock.dock_visible = false;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        if key == Keysym::Escape && state.taskbar.menu.is_some() {
+            state.taskbar.menu = None;
+            return true;
+        }
+        false
+    }
+}
+
 #[cfg(feature = "dock")]
 struct Dock;
 #[cfg(feature = "dock")]
@@ -467,6 +620,10 @@ impl Component for Dock {
     }
 
     fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, _ctx: DrawCtx, palette: Palette) {
+        #[cfg(feature = "taskbar")]
+        if super::taskbar_active(state) {
+            return;
+        }
         dock::draw_dock(ui, state, palette);
     }
 
@@ -535,10 +692,17 @@ impl Component for Overview {
         screen_w: i32,
         screen_h: i32,
     ) -> Vec<(i32, i32, i32, i32)> {
-        if state.overview.overview {
-            vec![(0, 0, screen_w, screen_h)]
-        } else {
-            Vec::new()
+        if !state.overview.overview {
+            return Vec::new();
+        }
+        use super::overview::OverviewKind;
+        match state.overview.kind {
+            OverviewKind::Workspaces | OverviewKind::Activities => vec![(0, 0, screen_w, screen_h)],
+            OverviewKind::StripH | OverviewKind::StripV => {
+                vec![super::overview_collection::strip_rect(
+                    state, screen_w, screen_h,
+                )]
+            }
         }
     }
 
@@ -572,15 +736,23 @@ impl Component for Overview {
     }
 
     fn on_command(&mut self, command: &str, state: &mut UiState) -> bool {
-        if command == "overview" {
-            state.overview.overview = !state.overview.overview;
-            if state.overview.overview {
-                state.bar.show_panel = false;
-            }
-            true
+        use super::overview::OverviewKind;
+        let (kind, toggle) = match command {
+            "overview" => (OverviewKind::Workspaces, true),
+            "overview-activities" => (OverviewKind::Activities, false),
+            "overview-strip-h" => (OverviewKind::StripH, false),
+            "overview-strip-v" => (OverviewKind::StripV, false),
+            _ => return false,
+        };
+        let ov = &mut state.overview;
+        if toggle && ov.overview && ov.kind == kind {
+            ov.overview = false;
         } else {
-            false
+            ov.kind = kind;
+            ov.overview = true;
+            state.bar.show_panel = false;
         }
+        true
     }
 }
 

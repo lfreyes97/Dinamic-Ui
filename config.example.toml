@@ -53,3 +53,20 @@ ttl_secs = 6                # tiempo que la notificación queda en la isla
 enabled = true
 pinned = ["firefox", "code", "kitty"]
 
+
+# Taskbar estilo Windows. Lados: bottom | top | left | right.
+# [taskbar]
+# enabled = true
+# side = "bottom"
+# size = 48
+# autohide = false
+
+# Topbar estilo GNOME (actividades, reloj, estado y desplegables).
+# [topbar]
+# enabled = true
+# height = 34
+
+# Vistas de overview: rejilla, actividades y franjas acoplables.
+# [overview]
+# strip_h_side = "top"     # top | bottom
+# strip_v_side = "right"   # left | right
