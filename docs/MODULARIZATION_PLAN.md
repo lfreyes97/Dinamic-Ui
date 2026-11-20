@@ -87,33 +87,68 @@ hilos de lo demás.
 - [x] `input_region` = unión de `input_rects` de los componentes activos. `main.rs` ya no
       calcula rects: llama a `ui::input_rects()`.
 
-## Fase 3 — Features de Cargo
+## Fase 3 — Features de Cargo ✅ (pendientes de ejecución marcados)
 
-- [ ] Declarar features según la tabla; `default` = todas. `taskbar = ["dock"]`; `dock`,
-      `overview`, `command-menu` → `icons`.
-- [ ] Dependencias opcionales: `zbus` → `notifications`; `image` → `wallpaper` (`thumbs.rs`);
+- [x] Features según la tabla; `default` = todas. `taskbar = ["dock"]` (reservada: aún sin
+      código propio); `dock`, `overview`, `command-menu` → `icons`; `wallpaper` → `bar` + `image`.
+- [x] Dependencias opcionales: `zbus` → `notifications`; `image` → `wallpaper` (`thumbs.rs`);
       `freedesktop-icons` y `png` → `icons` (`appicons.rs`).
-- [ ] `appicons.rs`: sustituir `icon_path()` por `freedesktop-icons`; quitar la rama SVG y
-      `magick`; decodificar PNG con `png`. Usar `with_size(48).with_scale(scale)` para que en
-      HiDPI busque el PNG a 96 px y luego lo reescale a 48.
-      `find()` **prioriza PNG pero admite SVG**: comprobar la extensión de la ruta devuelta y
-      caer al glifo Phosphor si es `.svg`, para que el fallback sea determinista y no dependa
-      de que falle el decoder.
-- [ ] Clave `icon_theme` en config; si falta, usar `freedesktop_icons::default_theme_gtk()`;
-      si no hay tema GTK, `hicolor`.
+- [x] `appicons.rs`: `icon_path()` sustituido por `freedesktop-icons` (con herencia de tema y
+      caché); sin SVG ni `magick`; PNG con `png` y reescalado propio a 48 px (filtro triangular
+      en alfa premultiplicado, con tests). Los `.svg` devuelven `None` → glifo Phosphor.
+      No se usó `with_scale`: las texturas son de 48 px fijos, así que pedir más resolución
+      solo añadiría un reescalado.
+- [x] Clave `[icons] theme`; si falta, `default_theme_gtk()` (ejecuta `gsettings` una vez, en el
+      hilo de carga); si no, `hicolor`. Ojo: ese helper devuelve el `Name=` de `index.theme`,
+      que normalmente coincide con el nombre del directorio, pero no siempre.
 - [ ] Medir qué porcentaje de apps reales cae al fallback Phosphor por ser solo SVG; si es
       alto, implementar `svg-icons` (`resvg` con `default-features = false`) y medir RSS.
-- [ ] `#[cfg]` en los `mod` de `main.rs` y en `build_components()`.
-- [ ] `control.rs`: comandos de componentes no compilados responden "no compilado".
-- [ ] El panel de ajustes oculta/deshabilita lo no compilado.
-- [ ] Resolver dependencias ocultas que aparezcan al compilar cada feature sola.
+      *Necesita ejecutar el shell.*
+- [x] `#[cfg]` en los `mod`, en los campos de `UiState`/`Shared` y en `build_components()`.
+      Para no esparcir `cfg` por `main.rs`, el trait `Component` ganó `update`, `on_key` y
+      `wants_keyboard`: cada componente lleva su lógica de host (servicio DBus, cursor del dock,
+      acciones diferidas, teclado del menú). `main.rs` solo recorre el registro.
+- [x] `control.rs`: el CLI rechaza (exit 1) comandos de componentes no compilados con un mensaje
+      que nombra la feature; el servidor los registra en el log.
+- [ ] El panel de ajustes oculta/deshabilita lo no compilado. *Aplaza a `config-panel`
+      (futuro). Mientras tanto, las pestañas del panel (`Wallpaper`, `Alertas`) ya se generan
+      según lo compilado.*
+- [x] Dependencias ocultas resueltas al compilar cada feature sola:
+  - `overview` y `command-menu` **no pedían** iconos (solo los leía el dock): la carga y
+    subida de texturas pasó a `Shared::icon()`.
+  - `overview` importaba `dock_icon` de `dock.rs`: movido a `ui/mod.rs`.
+  - `BarState` (y el clamp de pestañas) dependían de `panel`: `BarState` vive ahora en el núcleo.
+  - Los colores `P_*` del panel eran tokens de diseño de `ui/mod.rs`: movidos allí.
+  - `command-menu` cerraba el overview tocando su estado: ahora con `cfg` puntual.
+- Decisiones: `BarState` es núcleo; `notifications` es independiente de `bar`; `wallpaper`
+  implica `bar` (es una pestaña del panel).
+- Cambio de comportamiento menor: los lanzamientos del dock y del menú pasan por
+  `pending_spawns` (`spawn_detached`: stdio a `/dev/null`, hilo que espera al proceso) en vez
+  de `Command::spawn` directo.
+- Verificado: clippy `-D warnings` en 9 combinaciones (`just lint-matrix`), `cargo check` de
+  la matriz (`just check-matrix`), `cargo test`, `cargo fmt --check`. **No se ejecutó el
+  shell**: una segunda instancia sustituiría el socket de control de la que esté en marcha.
+  Falta una pasada manual por modo (isla, barra, panel, dock, overview, menú, notificaciones).
+
+### Medición (release, `opt-level = 2`, `lto = "thin"`, sin `strip`)
+
+| Build | Binario | Crates |
+|---|---|---|
+| `--no-default-features` | — | 173 |
+| solo `bar` | **15,2 MB** | 173 |
+| `dock` / `overview` / `command-menu` | — | 193 (+iconos) |
+| `wallpaper` | — | 190 (+`image`) |
+| `notifications` | — | 232 (+`zbus`) |
+| completo (default) | **19,4 MB** | 258 |
 
 ## Fase 4 — Verificación y CI
 
-- [ ] Matriz mínima: `--no-default-features`, cada feature sola, y `--all-features`.
-- [ ] Combinaciones de referencia: `dock+bar`, `taskbar+overview`, `bar` sola.
-- [ ] Comparar RSS y tamaño de binario por perfil contra la línea base.
-- [ ] `justfile`: `just build-minimal`, `just check-matrix`.
+- [x] Matriz mínima: `--no-default-features`, cada feature sola, y `--all-features`
+      (`just check-matrix`, `just lint-matrix`). Falta llevarla a CI.
+- [x] Combinaciones de referencia: `dock+bar`, `taskbar+overview`, `bar` sola.
+- [ ] Comparar RSS por perfil contra la línea base (tamaño de binario ya medido arriba).
+      *Necesita ejecutar el shell.*
+- [x] `justfile`: `just build-minimal`, `just check-matrix`, `just lint-matrix`.
 
 ## Fase 5 — Documentación
 
