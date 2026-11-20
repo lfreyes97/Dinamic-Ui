@@ -6,8 +6,13 @@ hilos de lo demás.
 
 ## Decisiones tomadas
 
-- **Features de Cargo** para componentes grandes: `topbar`, `island`, `dock`, `taskbar`,
-  `overview`, `notifications`, `wallpaper`, `command-menu`.
+- **`bar` es un solo componente con estados de expansión**, no varios: notch → compacto →
+  píldora → barra full width → panel. Comparten surface, animación y geometría. El máximo
+  al que sube es config en runtime (`bar.max_state`), no compilación.
+- **Features de Cargo** solo para componentes independientes: `bar`, `dock`, `taskbar`
+  (por confirmar si es un modo de `dock`), `overview`, `notifications`, `wallpaper`.
+  Las que arrastran dependencias pesadas (`notifications`, `wallpaper`, `overview`) son
+  las prioritarias.
 - **Config en runtime** para apariencia y comportamiento (tamaños, `pinned`, autohide, colores).
 - **Núcleo siempre compilado** (sin feature): `gfx`, `ipc`, `config`, `theme`, `control`.
 - Todos los `#[cfg(feature)]` se concentran en un único registro de componentes y en
@@ -23,8 +28,9 @@ hilos de lo demás.
 ## Fase 1 — Partir `ui.rs` (3130 líneas), sin cambio de comportamiento
 
 - [ ] Crear `src/ui/mod.rs` con lo compartido (`Metrics`, geometría, `UiState` común).
-- [ ] Extraer un módulo por componente: `island`, `topbar`, `panel`, `dock`, `overview`,
-      `notifications` (tarjeta), `wallpaper` (pestaña), `command_menu`.
+- [ ] Extraer un módulo por componente: `bar` (notch/isla/píldora/barra/panel como una
+      máquina de estados), `dock`, `overview`, `notifications` (tarjeta), `wallpaper`
+      (pestaña), `command_menu`.
 - [ ] Cada módulo con su propio estado, `draw()` y rects de entrada.
 - [ ] Verificar: `cargo build` + capturas idénticas a la Fase 0.
 - [ ] Un commit por componente extraído.
@@ -33,6 +39,7 @@ hilos de lo demás.
 
 - [ ] Definir `Shared` en el núcleo: clientes/workspaces/monitores (`ipc`), config, paleta,
       iconos. Ningún componente depende de otro; solo de `Shared`.
+- [ ] `bar`: enum de estados + interpolación entre rects; `max_state` en config.
 - [ ] Trait `Component` con `draw`, `input_rects` y `on_command`.
 - [ ] `build_components()` como único lugar de registro.
 - [ ] `input_region` = unión de `input_rects` de los componentes activos.
@@ -52,7 +59,7 @@ hilos de lo demás.
 ## Fase 4 — Verificación y CI
 
 - [ ] Matriz mínima: `--no-default-features`, cada feature sola, y `--all-features`
-      (no las 128 combinaciones).
+      (no todas las combinaciones).
 - [ ] Combinaciones nombradas de referencia: `dock+topbar`, `taskbar+overview`, `island` sola.
 - [ ] Comparar RSS y tamaño de binario por perfil contra la línea base.
 - [ ] `justfile`: recetas `just build-minimal`, `just check-matrix`.
@@ -65,6 +72,7 @@ hilos de lo demás.
 
 ## Pendiente por revisar
 
+- ¿`taskbar` es un modo de `dock` o un componente aparte? Decidir al revisar su mockup.
 - Los mockups `taskbar-mockup.html`, `topbar-mockup.html`, `dashboard-mockup.html`,
   `command-menu-mockup.html` y `config-panel-mockup.html` no se han analizado en detalle:
   confirmar qué dependencias entre componentes asumen antes de cerrar la lista de features.
