@@ -437,6 +437,20 @@ fn drop_shadow(ui: &egui::Ui, rect: egui::Rect, radius: u8, offset: i8, blur: u8
         .add(shadow.as_shape(rect, CornerRadius::same(radius)));
 }
 
+/// Icono de batería según el nivel (o «cargando»). Lo comparten el topbar y la taskbar.
+fn battery_icon(percent: u8, charging: bool) -> &'static str {
+    if charging {
+        return ic::BATTERY_CHARGING;
+    }
+    match percent {
+        85..=100 => ic::BATTERY_FULL,
+        60..=84 => ic::BATTERY_HIGH,
+        35..=59 => ic::BATTERY_MEDIUM,
+        10..=34 => ic::BATTERY_LOW,
+        _ => ic::BATTERY_EMPTY,
+    }
+}
+
 /// Icono, color y descripción del Wi-Fi según los datos reales de `sysinfo`.
 fn wifi_status(
     system: &crate::sysinfo::SystemInfo,

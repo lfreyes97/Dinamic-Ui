@@ -71,7 +71,7 @@ pinned = ["firefox", "code", "kitty"]
 # [taskbar]
 # enabled = true
 # side = "bottom"
-# size = 48
+# size = 48          # grosor de la barra (40–72); los iconos se escalan con él
 # autohide = false
 
 # Topbar estilo GNOME (actividades, reloj, estado y desplegables).

@@ -356,14 +356,7 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
     x += 11.0;
     if battery.present {
         // Icono por nivel (sin el halo del glifo de la barra, que aquí pesa demasiado).
-        let glyph = match battery.percent {
-            _ if battery.charging => ic::BATTERY_CHARGING,
-            85..=100 => ic::BATTERY_FULL,
-            60..=84 => ic::BATTERY_HIGH,
-            35..=59 => ic::BATTERY_MEDIUM,
-            10..=34 => ic::BATTERY_LOW,
-            _ => ic::BATTERY_EMPTY,
-        };
+        let glyph = battery_icon(battery.percent, battery.charging);
         icon_at(ui, egui::pos2(x + 15.0, cy), glyph, ICON_SM, battery_color);
         text_at(
             ui,

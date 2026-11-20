@@ -369,3 +369,79 @@ fn sample_notifications(n: usize) -> Vec<crate::notifications::Notification> {
         )
         .collect()
 }
+
+/// Estado del taskbar: `topbar_state` pone los datos del sistema de ejemplo; aquí se
+/// desactiva el topbar y se acopla el taskbar al lado pedido.
+fn taskbar_state(side: Side, pinned: &[&str], k: f32) -> UiState {
+    let mut state = topbar_state(false, false, k);
+    state.topbar.enabled = false;
+    state.shared.snapshot.window_class = "firefox".into();
+    let mut cfg = crate::config::Config::default();
+    cfg.taskbar.enabled = true;
+    cfg.taskbar.side = side;
+    cfg.dock.pinned = pinned.iter().map(|s| s.to_string()).collect();
+    state.shared.config = Arc::new(cfg);
+    state.taskbar.enabled = true;
+    state.taskbar.progress = 1.0;
+    state.taskbar.visible = true;
+    state
+}
+
+#[test]
+#[ignore = "genera PNG en target/ui-preview (necesita GPU)"]
+fn ui_preview_taskbar() {
+    let pinned = ["firefox", "code", "kitty", "spotify"];
+    let r3 = (1366.0, 768.0);
+    let k = 1366.0 / 1280.0;
+    render_sized(
+        "taskbar-bottom",
+        r3,
+        true,
+        taskbar_state(Side::Bottom, &pinned, k),
+    );
+    render_sized(
+        "taskbar-top",
+        r3,
+        true,
+        taskbar_state(Side::Top, &pinned, k),
+    );
+    render_sized(
+        "taskbar-left",
+        r3,
+        true,
+        taskbar_state(Side::Left, &pinned, k),
+    );
+    render_sized(
+        "taskbar-right",
+        r3,
+        true,
+        taskbar_state(Side::Right, &pinned, k),
+    );
+    // Muchas apps: comprueba el recorte de iconos y el centrado de la barra.
+    let many = [
+        "firefox",
+        "code",
+        "kitty",
+        "spotify",
+        "obsidian",
+        "gimp",
+        "obs",
+        "vlc",
+        "alacritty",
+        "gnome-control-center",
+        "org.gnome.Nautilus",
+        "google-chrome",
+        "thunderbird",
+        "slack",
+        "discord",
+        "steam",
+        "blender",
+        "krita",
+    ];
+    render_sized(
+        "taskbar-bottom-many",
+        r3,
+        true,
+        taskbar_state(Side::Bottom, &many, k),
+    );
+}

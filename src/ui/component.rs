@@ -550,10 +550,9 @@ impl Component for Topbar {
             state.topbar.enabled = enabled;
             state.topbar.quick_open = false;
             state.topbar.calendar_open = false;
-            #[cfg(feature = "taskbar")]
+            // Si la taskbar no está compilada, ningún componente atiende el comando.
             if enabled {
-                state.taskbar.enabled = false;
-                state.taskbar.progress = 0.0;
+                dispatch_command("taskbar-off", state);
             }
             true
         } else {
@@ -614,16 +613,9 @@ impl Component for Taskbar {
     fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
         let cfg = state.shared.config.taskbar;
         let tb = &mut state.taskbar;
-        let near = if let Some((x, y)) = ctx.cursor {
-            match cfg.side {
-                crate::config::Side::Bottom => y >= ctx.screen_h - 24,
-                crate::config::Side::Top => y <= 24,
-                crate::config::Side::Left => x <= 24,
-                crate::config::Side::Right => x >= ctx.screen_w - 24,
-            }
-        } else {
-            false
-        };
+        let near = ctx
+            .cursor
+            .is_some_and(|c| taskbar::near_edge(&cfg, c, ctx.screen_w, ctx.screen_h));
         let visible = tb.enabled && (!cfg.autohide || near);
         let before = tb.visible;
         tb.visible = visible;
@@ -634,28 +626,32 @@ impl Component for Taskbar {
     }
 
     fn on_command(&mut self, command: &str, state: &mut UiState) -> bool {
-        if command == "taskbar" {
-            let tb = &mut state.taskbar;
-            tb.enabled = !tb.enabled;
-            tb.visible = tb.enabled;
-            tb.progress = if tb.enabled { 1.0 } else { 0.0 };
-            state.bar.expanded = false;
-            state.bar.show_panel = false;
-            #[cfg(feature = "dock")]
-            {
-                state.dock.dock_visible = false;
+        match command {
+            "taskbar" => {
+                let on = !state.taskbar.enabled;
+                taskbar::set_enabled(state, on);
+                // Cierra la barra y el panel: al volver a apagar la taskbar no reaparecen abiertos.
+                dispatch_command("collapse", state);
+                true
             }
-            true
-        } else {
-            false
+            "taskbar-off" => {
+                taskbar::set_enabled(state, false);
+                true
+            }
+            _ => false,
         }
     }
+}
 
-    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
-        if key == Keysym::Escape && state.taskbar.menu.is_some() {
-            state.taskbar.menu = None;
-            return true;
-        }
+/// `true` mientras la taskbar está desplegada. Sin la feature, nunca lo está.
+fn taskbar_on(state: &UiState) -> bool {
+    #[cfg(feature = "taskbar")]
+    {
+        super::taskbar_active(state)
+    }
+    #[cfg(not(feature = "taskbar"))]
+    {
+        let _ = state;
         false
     }
 }
@@ -682,7 +678,8 @@ impl Component for Dock {
         screen_w: i32,
         screen_h: i32,
     ) -> Vec<(i32, i32, i32, i32)> {
-        if state.dock.dock_progress <= 0.01 {
+        // Con la taskbar desplegada el dock no se dibuja ni debe reclamar entrada.
+        if state.dock.dock_progress <= 0.01 || taskbar_on(state) {
             Vec::new()
         } else {
             vec![(0, screen_h - 72, screen_w, 72)]
@@ -691,8 +688,13 @@ impl Component for Dock {
 
     fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
         let mut dirty = false;
-        // Cursor cerca del borde inferior.
-        if let Some((_, y)) = ctx.cursor {
+        if taskbar_on(state) {
+            if state.dock.dock_visible {
+                state.dock.dock_visible = false;
+                dirty = true;
+            }
+        } else if let Some((_, y)) = ctx.cursor {
+            // Cursor cerca del borde inferior (el dock no depende de la feature `taskbar`).
             let near_bottom =
                 std::env::var_os("DINAMIC_UI_DOCK").is_some() || y >= ctx.screen_h - 24;
             if near_bottom != state.dock.dock_visible {
