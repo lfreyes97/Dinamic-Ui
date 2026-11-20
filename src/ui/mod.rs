@@ -12,7 +12,7 @@ use crate::{config, theme::Palette};
 mod bar;
 mod bar_state;
 mod component;
-#[cfg(all(test, feature = "overview", feature = "activities"))]
+#[cfg(all(test, feature = "overview", feature = "activities", feature = "topbar"))]
 mod preview;
 
 pub use component::{

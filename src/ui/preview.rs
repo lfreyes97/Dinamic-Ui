@@ -292,4 +292,18 @@ fn ui_preview_overviews() {
         true,
         strip_state(StripV, Side::Top, Side::Right, k),
     );
+
+    // Topbar (la pantalla del R3: 1366×768).
+    render_sized("topbar", r3, true, topbar_state(false, false, k));
+    render_sized("topbar-quick", r3, true, topbar_state(true, false, k));
+    render_sized("topbar-calendar", r3, true, topbar_state(false, true, k));
+}
+
+fn topbar_state(quick: bool, calendar: bool, k: f32) -> UiState {
+    let mut state = sample_state(k);
+    state.topbar.enabled = true;
+    state.topbar.quick_open = quick;
+    state.topbar.calendar_open = calendar;
+    state.shared.snapshot.window_title = "Rust — Mozilla Firefox".into();
+    state
 }
