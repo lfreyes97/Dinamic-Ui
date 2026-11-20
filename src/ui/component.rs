@@ -102,9 +102,39 @@ pub fn build_components() -> Vec<Box<dyn Component>> {
     components.push(Box::new(Overview));
     #[cfg(feature = "activities")]
     components.push(Box::new(Activities));
+    #[cfg(feature = "dashboard")]
+    components.push(Box::new(dashboard::Dashboard));
+    #[cfg(feature = "config-panel")]
+    components.push(Box::new(config_panel::ConfigPanel));
     #[cfg(feature = "command-menu")]
     components.push(Box::new(CommandMenu));
     components
+}
+
+/// Cierra todos los overlays a pantalla completa. Quien abre uno lo llama antes: solo hay uno a
+/// la vez (rejilla, actividades, dashboard, panel de configuración y command menu).
+pub(super) fn close_overlays(state: &mut UiState) {
+    #[cfg(feature = "overview")]
+    {
+        state.overview.overview = false;
+    }
+    #[cfg(feature = "activities")]
+    {
+        state.activities.open = false;
+    }
+    #[cfg(feature = "command-menu")]
+    {
+        state.menu.menu_open = false;
+    }
+    #[cfg(feature = "dashboard")]
+    {
+        state.dashboard.open = false;
+    }
+    #[cfg(feature = "config-panel")]
+    {
+        state.config_panel.open = false;
+    }
+    let _ = state;
 }
 
 /// Unión de los rects de entrada de todos los componentes.
@@ -824,6 +854,14 @@ impl Component for Overview {
             {
                 state.activities.open = false;
             }
+            #[cfg(feature = "dashboard")]
+            {
+                state.dashboard.open = false;
+            }
+            #[cfg(feature = "config-panel")]
+            {
+                state.config_panel.open = false;
+            }
         }
         true
     }
@@ -895,6 +933,14 @@ impl Component for Activities {
             {
                 state.overview.overview = false;
             }
+            #[cfg(feature = "dashboard")]
+            {
+                state.dashboard.open = false;
+            }
+            #[cfg(feature = "config-panel")]
+            {
+                state.config_panel.open = false;
+            }
         }
         true
     }
@@ -939,6 +985,14 @@ impl Component for CommandMenu {
                 #[cfg(feature = "activities")]
                 {
                     state.activities.open = false;
+                }
+                #[cfg(feature = "dashboard")]
+                {
+                    state.dashboard.open = false;
+                }
+                #[cfg(feature = "config-panel")]
+                {
+                    state.config_panel.open = false;
                 }
                 state.bar.show_panel = false;
                 menu.menu_query.clear();

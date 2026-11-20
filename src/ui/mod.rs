@@ -14,6 +14,22 @@ mod bar_state;
 mod component;
 #[cfg(all(test, feature = "overview", feature = "activities", feature = "topbar"))]
 mod preview;
+#[cfg(all(
+    test,
+    feature = "overview",
+    feature = "activities",
+    feature = "topbar",
+    feature = "config-panel"
+))]
+mod preview_config;
+#[cfg(all(
+    test,
+    feature = "overview",
+    feature = "activities",
+    feature = "topbar",
+    feature = "dashboard"
+))]
+mod preview_dashboard;
 
 pub use component::{
     dispatch_command, dispatch_key, input_rects, update_components, wants_keyboard, wants_system,
@@ -27,6 +43,10 @@ use panel::*;
 mod activities;
 #[cfg(feature = "activities")]
 mod activities_model;
+#[cfg(feature = "config-panel")]
+mod config_panel;
+#[cfg(feature = "dashboard")]
+mod dashboard;
 #[cfg(feature = "dock")]
 mod dock;
 #[cfg(feature = "command-menu")]
@@ -173,6 +193,10 @@ pub struct UiState {
     pub overview: overview::OverviewState,
     #[cfg(feature = "activities")]
     pub activities: activities::ActivitiesState,
+    #[cfg(feature = "dashboard")]
+    pub dashboard: dashboard::DashboardState,
+    #[cfg(feature = "config-panel")]
+    pub config_panel: config_panel::ConfigPanelState,
     #[cfg(feature = "wallpaper")]
     pub wallpaper: wallpaper::WallpaperState,
 
@@ -199,6 +223,10 @@ impl UiState {
             overview: overview::OverviewState::default(),
             #[cfg(feature = "activities")]
             activities: activities::ActivitiesState::default(),
+            #[cfg(feature = "dashboard")]
+            dashboard: dashboard::DashboardState::default(),
+            #[cfg(feature = "config-panel")]
+            config_panel: config_panel::ConfigPanelState::default(),
             #[cfg(feature = "wallpaper")]
             wallpaper: wallpaper::WallpaperState::default(),
             shared: crate::shared::Shared::new(),

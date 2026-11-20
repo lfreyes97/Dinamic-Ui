@@ -27,7 +27,7 @@ fn client(class: &str, title: &str, address: &str, ws: i32, g: (i32, i32, i32, i
     }
 }
 
-fn apps() -> Vec<desktop::DesktopApp> {
+pub(super) fn apps() -> Vec<desktop::DesktopApp> {
     let entry = |id: &str, name: &str, comment: &str, exec: &str| {
         desktop::parse(
             id,
@@ -62,7 +62,7 @@ fn apps() -> Vec<desktop::DesktopApp> {
 }
 
 /// Estado de ejemplo para una pantalla `k` veces mayor que 1280×720.
-fn sample_state(k: f32) -> UiState {
+pub(super) fn sample_state(k: f32) -> UiState {
     let g = |x: i32, y: i32, w: i32, h: i32| {
         let s = |v: i32| (v as f32 * k).round() as i32;
         (s(x), s(y), s(w), s(h))
@@ -146,7 +146,7 @@ fn render(name: &str, windows_behind: bool, state: UiState) {
     render_sized(name, (W, H), windows_behind, state);
 }
 
-fn render_sized(name: &str, size: (f32, f32), windows_behind: bool, mut state: UiState) {
+pub(super) fn render_sized(name: &str, size: (f32, f32), windows_behind: bool, mut state: UiState) {
     let mut fonts_ready = false;
     let mut harness = Harness::builder()
         .with_size(egui::vec2(size.0, size.1))
@@ -168,6 +168,14 @@ fn render_sized(name: &str, size: (f32, f32), windows_behind: bool, mut state: U
             {
                 state.overview.progress = if state.overview.overview { 1.0 } else { 0.0 };
                 state.activities.progress = if state.activities.open { 1.0 } else { 0.0 };
+                #[cfg(feature = "dashboard")]
+                {
+                    state.dashboard.progress = if state.dashboard.open { 1.0 } else { 0.0 };
+                }
+                #[cfg(feature = "config-panel")]
+                {
+                    state.config_panel.progress = if state.config_panel.open { 1.0 } else { 0.0 };
+                }
                 state
             },
         );

@@ -21,6 +21,8 @@ pub enum Command {
     Notch,
     Overview,
     Activities,
+    Dashboard,
+    ConfigPanel,
     OverviewStripH,
     OverviewStripV,
     Taskbar,
@@ -41,6 +43,8 @@ impl Command {
             Self::Notch => "notch",
             Self::Overview => "overview",
             Self::Activities => "activities",
+            Self::Dashboard => "dashboard",
+            Self::ConfigPanel => "config-panel",
             Self::OverviewStripH => "overview-strip-h",
             Self::OverviewStripV => "overview-strip-v",
             Self::Taskbar => "taskbar",
@@ -63,6 +67,8 @@ impl Command {
                 Some(("overview", cfg!(feature = "overview")))
             }
             Self::Activities => Some(("activities", cfg!(feature = "activities"))),
+            Self::Dashboard => Some(("dashboard", cfg!(feature = "dashboard"))),
+            Self::ConfigPanel => Some(("config-panel", cfg!(feature = "config-panel"))),
             Self::Taskbar => Some(("taskbar", cfg!(feature = "taskbar"))),
             Self::Topbar => Some(("topbar", cfg!(feature = "topbar"))),
             Self::Menu => Some(("command-menu", cfg!(feature = "command-menu"))),
@@ -83,6 +89,9 @@ impl Command {
             "overview" => Some(Self::Overview),
             // `overview-activities` era el nombre antiguo: se acepta para no romper atajos.
             "activities" | "overview-activities" => Some(Self::Activities),
+            "dashboard" => Some(Self::Dashboard),
+            // `config` es el nombre corto para el atajo.
+            "config-panel" | "config" => Some(Self::ConfigPanel),
             "overview-strip-h" => Some(Self::OverviewStripH),
             "overview-strip-v" => Some(Self::OverviewStripV),
             "taskbar" => Some(Self::Taskbar),
