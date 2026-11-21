@@ -3,19 +3,22 @@
 //!
 //! Se leen con comandos de Arch (`nmcli`, `bluetoothctl`, `pactl`,
 //! `brightnessctl`, `hyprctl`, `awww`) en un hilo propio, solo mientras el panel está
-//! abierto o la barra expandida, y como mucho cada `INTERVAL`. Si un comando no existe, falla o
-//! tarda más de `TIMEOUT`, el campo queda en `None` y la UI muestra "Sin datos".
+//! solo los grupos que algún componente pide (`Needs`) y como mucho cada `INTERVAL`. Si un
+//! comando no existe, falla o tarda más de `TIMEOUT`, el campo queda en `None` y la UI muestra
+//! "Sin datos".
 
 use std::{
     io::Read,
     process::{Command, Stdio},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicU8, Ordering},
         Arc, Mutex,
     },
     thread,
     time::{Duration, Instant},
 };
+
+use crate::needs::{Need, Needs};
 
 const INTERVAL: Duration = Duration::from_secs(5);
 const TIMEOUT: Duration = Duration::from_secs(2);
@@ -70,24 +73,24 @@ pub struct SystemInfo {
 /// Hilo de lectura + último resultado compartido.
 pub struct SystemMonitor {
     shared: Arc<Mutex<(SystemInfo, u64)>>,
-    active: Arc<AtomicBool>,
+    needs: Arc<AtomicU8>,
 }
 
 impl SystemMonitor {
     pub fn new() -> Self {
         let shared = Arc::new(Mutex::new((SystemInfo::default(), 0)));
-        let active = Arc::new(AtomicBool::new(false));
-        let (thread_shared, thread_active) = (Arc::clone(&shared), Arc::clone(&active));
+        let needs = Arc::new(AtomicU8::new(0));
+        let (thread_shared, thread_needs) = (Arc::clone(&shared), Arc::clone(&needs));
         thread::Builder::new()
             .name("dinamic-ui-sysinfo".into())
-            .spawn(move || worker(thread_shared, thread_active))
+            .spawn(move || worker(thread_shared, thread_needs))
             .ok();
-        Self { shared, active }
+        Self { shared, needs }
     }
 
-    /// Solo se consulta el sistema mientras el panel o la barra están visibles.
-    pub fn set_active(&self, active: bool) {
-        self.active.store(active, Ordering::Relaxed);
+    /// Solo se consultan los datos que algún componente ha pedido.
+    pub fn set_needs(&self, needs: Needs) {
+        self.needs.store(needs.bits(), Ordering::Relaxed);
     }
 
     /// Devuelve el último estado y su revisión (cambia cuando cambian los datos).
@@ -96,17 +99,18 @@ impl SystemMonitor {
     }
 }
 
-fn worker(shared: Arc<Mutex<(SystemInfo, u64)>>, active: Arc<AtomicBool>) {
+fn worker(shared: Arc<Mutex<(SystemInfo, u64)>>, needs: Arc<AtomicU8>) {
     let mut last: Option<Instant> = None;
-    let mut was_active = false;
+    let mut was = Needs::NONE;
     loop {
-        let is_active = active.load(Ordering::Relaxed);
-        // Al abrir el panel se lee en seguida; después, cada INTERVAL.
-        let due = is_active && (!was_active || last.is_none_or(|t| t.elapsed() >= INTERVAL));
-        was_active = is_active;
+        let requested = Needs::from_bits(needs.load(Ordering::Relaxed));
+        // Cuando cambia lo pedido se lee en seguida; después, cada INTERVAL.
+        let due = !requested.is_empty()
+            && (requested != was || last.is_none_or(|t| t.elapsed() >= INTERVAL));
+        was = requested;
         if due {
             last = Some(Instant::now());
-            let info = read_all();
+            let info = read(requested);
             if let Ok(mut s) = shared.lock() {
                 if s.0 != info {
                     s.0 = info;
@@ -118,21 +122,32 @@ fn worker(shared: Arc<Mutex<(SystemInfo, u64)>>, active: Arc<AtomicBool>) {
     }
 }
 
-fn read_all() -> SystemInfo {
-    let (volume, audio_output) = read_audio();
-    let (keyboard, display) = read_hypr_devices();
-    SystemInfo {
-        wifi: read_wifi(),
-        bluetooth: read_bluetooth(),
-        brightness: read_brightness(),
-        volume,
-        audio_output,
-        keyboard,
-        display,
-        layout: read_layout(),
-        #[cfg(feature = "wallpaper")]
-        wallpaper: read_wallpaper(),
+/// Lee solo los grupos de datos pedidos; los demás quedan en `None`.
+fn read(needs: Needs) -> SystemInfo {
+    let mut info = SystemInfo::default();
+    if needs.get(Need::Audio) {
+        let (volume, audio_output) = read_audio();
+        info.volume = volume;
+        info.audio_output = audio_output;
     }
+    if needs.get(Need::Network) {
+        info.wifi = read_wifi();
+        info.bluetooth = read_bluetooth();
+    }
+    if needs.get(Need::Display) {
+        let (keyboard, display) = read_hypr_devices();
+        info.keyboard = keyboard;
+        info.display = display;
+        info.brightness = read_brightness();
+        #[cfg(feature = "wallpaper")]
+        {
+            info.wallpaper = read_wallpaper();
+        }
+    }
+    if needs.get(Need::Layout) {
+        info.layout = read_layout();
+    }
+    info
 }
 
 /// Ejecuta un comando con `LC_ALL=C` y límite de tiempo. `None` si no existe,

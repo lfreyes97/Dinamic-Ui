@@ -22,6 +22,7 @@ mod gfx;
 mod ipc;
 #[cfg(feature = "command-menu")]
 mod launcher;
+mod needs;
 #[cfg(feature = "notifications")]
 mod notifications;
 mod power;
@@ -41,6 +42,7 @@ use chrono::Local;
 use control::ControlServer;
 use gfx::Gfx;
 use ipc::HyprlandIpc;
+use needs::{Need, NeedTracker};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_registry,
@@ -102,6 +104,8 @@ struct DinamicUi {
     scale: i32,
     last_frame: Instant,
     last_battery: Instant,
+    /// Histéresis de los datos pedidos por los componentes.
+    need_tracker: NeedTracker,
     /// Última consulta de la posición del cursor (la comparten bar y dock).
     last_cursor_query: Instant,
     /// Clientes de Hyprland, consultados por el núcleo (no por el dock).
@@ -176,6 +180,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         scale: 1,
         last_frame: Instant::now(),
         last_battery: Instant::now() - std::time::Duration::from_secs(5),
+        need_tracker: NeedTracker::new(std::time::Duration::from_secs(5)),
         last_cursor_query: Instant::now() - std::time::Duration::from_secs(2),
         last_clients_query: Instant::now() - std::time::Duration::from_secs(2),
         keyboard_exclusive: false,
@@ -307,7 +312,12 @@ impl DinamicUi {
 
         // Datos del sistema: el hilo solo consulta mientras algún componente los muestra
         // (barra expandida, panel abierto, topbar…; ver `Component::wants_system`).
-        self.sysinfo.set_active(ui::wants_system(&self.ui_state));
+        // Los componentes declaran solo lo que muestran; el tracker mantiene
+        // cada dato vivo unos segundos tras dejar de pedirlo.
+        let needs = self
+            .need_tracker
+            .update(Instant::now(), ui::needs(&self.ui_state));
+        self.sysinfo.set_needs(needs);
         if let Some((info, revision)) = self.sysinfo.poll() {
             if revision != self.last_sysinfo_revision {
                 self.last_sysinfo_revision = revision;
@@ -381,7 +391,9 @@ impl DinamicUi {
         }
 
         // Batería: sysfs es barato, pero tampoco hace falta leerlo cada frame.
-        if self.last_battery.elapsed() >= std::time::Duration::from_secs(2) {
+        if needs.get(Need::Battery)
+            && self.last_battery.elapsed() >= std::time::Duration::from_secs(2)
+        {
             self.last_battery = Instant::now();
             let battery = power::read();
             if battery != self.ui_state.shared.battery {

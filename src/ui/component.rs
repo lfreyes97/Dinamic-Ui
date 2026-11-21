@@ -6,7 +6,7 @@
 
 use super::*;
 #[allow(unused_imports)]
-use crate::{approach, config::BarMaxState, theme::Palette};
+use crate::{approach, config::BarMaxState, needs::Needs, theme::Palette};
 use smithay_client_toolkit::seat::keyboard::Keysym;
 
 /// Geometría animada que comparten los componentes en un frame.
@@ -76,6 +76,16 @@ pub trait Component {
     fn wants_system(&self, state: &UiState) -> bool {
         let _ = state;
         false
+    }
+
+    /// Datos concretos que necesita ahora. Por defecto se deriva del booleano
+    /// `wants_system`, pero los componentes con vistas parciales lo afinan.
+    fn needs(&self, state: &UiState) -> Needs {
+        if self.wants_system(state) {
+            Needs::SYSTEM
+        } else {
+            Needs::NONE
+        }
     }
 }
 
@@ -174,9 +184,11 @@ pub fn dispatch_key(state: &mut UiState, key: Keysym) -> bool {
     false
 }
 
-/// ¿Algún componente muestra ahora datos del sistema?
-pub fn wants_system(state: &UiState) -> bool {
-    build_components().iter().any(|c| c.wants_system(state))
+/// Unión de los datos que piden todos los componentes en este frame.
+pub fn needs(state: &UiState) -> Needs {
+    build_components()
+        .iter()
+        .fold(Needs::NONE, |acc, c| acc.union(c.needs(state)))
 }
 
 /// ¿Algún componente necesita el teclado en exclusiva?
@@ -344,6 +356,10 @@ impl Component for BarShell {
 
     fn wants_system(&self, state: &UiState) -> bool {
         state.bar.expanded || state.bar.show_panel
+    }
+
+    fn needs(&self, state: &UiState) -> Needs {
+        bar_state::bar_needs(state.bar.phase(), state.shared.config.bar.max_state)
     }
 
     fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
@@ -602,6 +618,19 @@ impl Component for Topbar {
         state.topbar.enabled
     }
 
+    fn needs(&self, state: &UiState) -> Needs {
+        if !state.topbar.enabled {
+            return Needs::NONE;
+        }
+        use crate::needs::Need;
+        Needs::NONE
+            .with(Need::Time, true)
+            .with(Need::Battery, true)
+            .with(Need::Network, true)
+            .with(Need::Audio, true)
+            .with(Need::Display, true)
+    }
+
     fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
         if key == Keysym::Escape && (state.topbar.quick_open || state.topbar.calendar_open) {
             state.topbar.quick_open = false;
@@ -622,6 +651,18 @@ impl Component for Taskbar {
 
     fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, _ctx: DrawCtx, palette: Palette) {
         taskbar::draw_taskbar(ui, state, palette);
+    }
+
+    fn needs(&self, state: &UiState) -> Needs {
+        if !taskbar_on(state) {
+            return Needs::NONE;
+        }
+        use crate::needs::Need;
+        Needs::NONE
+            .with(Need::Time, true)
+            .with(Need::Battery, true)
+            .with(Need::Network, true)
+            .with(Need::Audio, true)
     }
 
     fn input_rects(

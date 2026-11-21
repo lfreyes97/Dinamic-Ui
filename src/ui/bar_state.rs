@@ -63,3 +63,62 @@ impl BarState {
         }
     }
 }
+
+/// Datos que pide la barra en su fase actual, acotados por `bar.max_state`.
+/// El notch en reposo no pide nada; compacto pide la hora; la barra añade
+/// batería/red/audio y el panel, pantalla y layout.
+pub fn bar_needs(phase: BarPhase, max: crate::config::BarMaxState) -> crate::needs::Needs {
+    use crate::{config::BarMaxState, needs::Need};
+    let mut out = crate::needs::Needs::NONE;
+    if phase >= BarPhase::Compact && max >= BarMaxState::Compact {
+        out.set(Need::Time, true);
+    }
+    if phase >= BarPhase::Bar && max >= BarMaxState::Bar {
+        out.set(Need::Battery, true);
+        out.set(Need::Network, true);
+        out.set(Need::Audio, true);
+    }
+    if phase >= BarPhase::Panel && max >= BarMaxState::Panel {
+        out.set(Need::Display, true);
+        out.set(Need::Layout, true);
+    }
+    out
+}
+
+#[cfg(test)]
+mod needs_tests {
+    use super::*;
+    use crate::{
+        config::BarMaxState,
+        needs::{Need, Needs},
+    };
+
+    #[test]
+    fn notch_requests_nothing() {
+        assert_eq!(bar_needs(BarPhase::Notch, BarMaxState::Panel), Needs::NONE);
+    }
+
+    #[test]
+    fn compact_only_requests_time() {
+        let n = bar_needs(BarPhase::Compact, BarMaxState::Panel);
+        assert!(n.get(Need::Time));
+        assert!(!n.get(Need::Battery));
+    }
+
+    #[test]
+    fn bar_and_panel_add_their_data() {
+        let bar = bar_needs(BarPhase::Bar, BarMaxState::Panel);
+        assert!(bar.get(Need::Battery) && bar.get(Need::Network) && bar.get(Need::Audio));
+        assert!(!bar.get(Need::Layout));
+        let panel = bar_needs(BarPhase::Panel, BarMaxState::Panel);
+        assert!(panel.get(Need::Display) && panel.get(Need::Layout));
+    }
+
+    #[test]
+    fn max_state_caps_the_requests() {
+        assert_eq!(bar_needs(BarPhase::Panel, BarMaxState::Notch), Needs::NONE);
+        let compact = bar_needs(BarPhase::Panel, BarMaxState::Compact);
+        assert!(compact.get(Need::Time));
+        assert!(!compact.get(Need::Battery) && !compact.get(Need::Layout));
+    }
+}

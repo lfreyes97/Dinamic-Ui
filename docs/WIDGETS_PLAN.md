@@ -48,13 +48,15 @@ mismo cambio con tres anfitriones.
 
 ## Fases
 
-### Fase 6.0 — Datos por demanda
+### Fase 6.0 — Datos por demanda ✅
 
-- [ ] `Needs` (conjunto de banderas: `TIME`, `BATTERY`, `NETWORK`, `AUDIO`, `DISPLAY`, `LAYOUT`).
-- [ ] `Component::needs(&self, state) -> Needs` y `Shared`/`main.rs` toman la unión.
-- [ ] `sysinfo` y `power` consultan solo lo pedido, con histéresis.
-- [ ] `bar` mapea `BarPhase` → `Needs`, acotado por `bar.max_state`.
-- [ ] Tests: unión, histéresis, `max_state`.
+- [x] `Needs` (banderas `Time`, `Battery`, `Network`, `Audio`, `Display`, `Layout`) en `src/needs.rs`.
+- [x] `Component::needs(&self, state) -> Needs` y `ui::needs()` toman la unión. `wants_system`
+      queda como atajo para los componentes que no afinan (default del trait).
+- [x] `sysinfo` lee solo los grupos pedidos; `power` solo lee la batería si se pide. Un
+      `NeedTracker` mantiene cada flag vivo 5 s tras su última petición (histéresis).
+- [x] `bar` mapea `BarPhase` → `Needs` en `bar_state::bar_needs`, acotado por `bar.max_state`.
+- [x] Tests: unión, bits, histéresis, `max_state` y fases.
 
 ### Fase 6.1 — Widget y contenedor del panel
 

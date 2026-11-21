@@ -32,7 +32,7 @@ mod preview_config;
 mod preview_dashboard;
 
 pub use component::{
-    dispatch_command, dispatch_key, input_rects, update_components, wants_keyboard, wants_system,
+    dispatch_command, dispatch_key, input_rects, needs, update_components, wants_keyboard,
     UpdateCtx,
 };
 

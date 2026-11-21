@@ -1121,6 +1121,19 @@ impl Component for Dashboard {
         "dashboard"
     }
 
+    fn needs(&self, state: &UiState) -> crate::needs::Needs {
+        use crate::needs::{Need, Needs};
+        if !state.dashboard.visible() {
+            return Needs::NONE;
+        }
+        Needs::NONE
+            .with(Need::Time, true)
+            .with(Need::Battery, true)
+            .with(Need::Network, true)
+            .with(Need::Audio, true)
+            .with(Need::Display, true)
+    }
+
     fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, _ctx: DrawCtx, palette: Palette) {
         if !state.dashboard.visible() {
             return;
