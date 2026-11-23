@@ -22,6 +22,9 @@ wayland-client = { version = "0.31", features = ["system"] }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"], optional = true }
 freedesktop-icons = { version = "0.4.0", optional = true }
 png = { version = "0.18.1", optional = true }
+# Solo el previsualizador interactivo (feature `previewer`): ventana normal, sin
+# layer-shell. El shell no lo usa. Ver docs/PREVIEWER.md.
+eframe = { version = "0.37", optional = true, default-features = false, features = ["wgpu", "wayland", "x11"] }
 
 [profile.release]
 opt-level = 2
@@ -53,6 +56,15 @@ command-menu = ["icons"]
 notifications = ["dep:zbus"]
 # Pestaña Wallpaper del panel (vive en el panel, de ahí `bar`) y sus miniaturas.
 wallpaper = ["bar", "dep:image"]
+# Previsualizador interactivo (binario `previewer`, `just previewer`): ventana eframe
+# con los componentes compilados y datos de ejemplo. No afecta al build del shell.
+previewer = ["dep:eframe"]
+
+# Previsualizador: requiere la feature; con `cargo build` normal no se compila.
+[[bin]]
+name = "previewer"
+path = "src/bin/previewer.rs"
+required-features = ["previewer"]
 
 [dev-dependencies]
 # Renderiza la UI a PNG sin compositor (`cargo test ui_preview -- --ignored`).

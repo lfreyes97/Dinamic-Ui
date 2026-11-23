@@ -86,11 +86,11 @@ test:
     cargo test
 
 # Sin colores fijos fuera de `theme.rs`: todo sale de los tokens del esquema base16.
-# (`ui/preview.rs` está exento: pinta un escritorio falso solo para las vistas previas.)
+# (`ui/sample.rs` está exento: pinta un escritorio falso para las vistas previas y el previewer.)
 # (Los velos sobre imágenes usan `Palette::scrim`/`sheen`; `Color32::BLACK/WHITE/TRANSPARENT`
 # se permiten para datos del usuario, como las muestras de color.)
 lint-colors:
-    @! grep -rnE 'Color32::(from_gray|from_rgb|from_rgba|from_black_alpha|from_white_alpha)' src | grep -v -e '^src/theme.rs' -e '^src/ui/preview.rs' || { echo "colores fijos fuera de theme.rs: usa tokens (docs/DESIGN_TOKENS.md)"; exit 1; }
+    @! grep -rnE 'Color32::(from_gray|from_rgb|from_rgba|from_black_alpha|from_white_alpha)' src | grep -v -e '^src/theme.rs' -e '^src/ui/sample.rs' || { echo "colores fijos fuera de theme.rs: usa tokens (docs/DESIGN_TOKENS.md)"; exit 1; }
     @echo "colores: sin literales fuera de theme.rs"
 
 # Todo lo que debe pasar antes de un commit
@@ -105,15 +105,16 @@ matrix_env := "CARGO_TARGET_DIR=target/matrix CARGO_INCREMENTAL=0"
 # Matriz de features: sin ninguna, cada una sola, combinaciones de referencia y todas.
 check-matrix keep="yes":
     env {{matrix_env}} cargo check --no-default-features
-    for f in bar topbar dock taskbar overview activities dashboard config-panel command-menu notifications wallpaper; do echo "== $f"; env {{matrix_env}} cargo check --no-default-features --features $f; done
+    for f in bar topbar dock taskbar overview activities dashboard config-panel command-menu notifications wallpaper previewer; do echo "== $f"; env {{matrix_env}} cargo check --no-default-features --features $f; done
     env {{matrix_env}} cargo check --no-default-features --features dock,bar
     env {{matrix_env}} cargo check --no-default-features --features taskbar,overview
+    env {{matrix_env}} cargo check --no-default-features --features bar,previewer
     env {{matrix_env}} cargo check --all-features
     @just _matrix-done {{keep}}
 
 # Clippy (sin avisos) en la matriz: lo que debe pasar antes de tocar features
 lint-matrix keep="yes":
-    for f in "" bar topbar dock taskbar overview activities dashboard config-panel command-menu notifications wallpaper dock,bar taskbar,overview taskbar,topbar; do echo "== ${f:-ninguna}"; env {{matrix_env}} cargo clippy --all-targets --no-default-features ${f:+--features $f} -- -D warnings; done
+    for f in "" bar topbar dock taskbar overview activities dashboard config-panel command-menu notifications wallpaper previewer dock,bar taskbar,overview taskbar,topbar bar,previewer; do echo "== ${f:-ninguna}"; env {{matrix_env}} cargo clippy --all-targets --no-default-features ${f:+--features $f} -- -D warnings; done
     @just _matrix-done {{keep}}
 
 # Informa del tamaño de la matriz y, con `no`, la borra.
@@ -132,8 +133,14 @@ build-minimal:
 
 # Renderiza los overviews a PNG con la UI real, sin compositor (necesita GPU).
 # Salida: target/ui-preview/*.png
+# En serie: varios harness wgpu en paralelo segfaultean en la GPU híbrida del R3.
 preview:
-    cargo test ui_preview -- --ignored --nocapture
+    cargo test ui_preview -- --ignored --nocapture --test-threads=1
+
+# Previsualizador interactivo: ventana normal con los componentes compilados,
+# datos de ejemplo y registro de acciones (no necesita Hyprland). docs/PREVIEWER.md.
+previewer *args:
+    cargo {{fast}} run --bin previewer --features previewer -- {{args}}
 
 # Limpiar artefactos
 clean:

@@ -5,7 +5,8 @@
 use std::sync::Arc;
 
 use super::config_panel::{ConfigFile, FileState, Page, PAGES};
-use super::preview::{render_sized, sample_state};
+use super::preview::render_sized;
+use super::sample::sample_state;
 use super::UiState;
 use crate::config::Config;
 

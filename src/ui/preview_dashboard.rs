@@ -2,7 +2,8 @@
 //! `target/ui-preview/dashboard-*.png`. Usa los datos de ejemplo de `preview.rs` y, para el
 //! sistema, valores de muestra fijos (batería, Wi-Fi, volumen) que solo existen aquí.
 
-use super::preview::{render_sized, sample_state};
+use super::preview::render_sized;
+use super::sample::sample_state;
 use super::*;
 use crate::ipc::ClientInfo;
 use crate::power::BatteryState;
