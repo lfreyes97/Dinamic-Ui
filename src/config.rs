@@ -45,12 +45,18 @@ pub enum BarMaxState {
 #[serde(default)]
 pub struct BarConfig {
     pub max_state: BarMaxState,
+    /// Mostrar el botón `▲` dentro del notch activo (atajo mouse para seguir subiendo).
+    pub notch_control: bool,
+    /// Mostrar `▲▼` en el hueco entre el reloj y el estado de la barra expandida.
+    pub hueco_control: bool,
 }
 
 impl Default for BarConfig {
     fn default() -> Self {
         Self {
             max_state: BarMaxState::Panel,
+            notch_control: true,
+            hueco_control: true,
         }
     }
 }
@@ -99,6 +105,8 @@ impl Default for TaskbarConfig {
 pub struct TopbarConfig {
     pub enabled: bool,
     pub height: u32,
+    /// Mostrar el botón `▼` para volver al estado anterior con mouse.
+    pub mode_control: bool,
 }
 
 impl Default for TopbarConfig {
@@ -106,6 +114,7 @@ impl Default for TopbarConfig {
         Self {
             enabled: false,
             height: 34,
+            mode_control: true,
         }
     }
 }

@@ -379,6 +379,17 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
         state.topbar.calendar_open = false;
     }
 
+    // Hueco entre reloj y estado: volver al estado previo con mouse (como el atajo).
+    if config::get().topbar.mode_control {
+        let rect = egui::Rect::from_min_size(
+            egui::pos2(bar.center().x + 80.0, cy - 8.0),
+            egui::vec2(16.0, 16.0),
+        );
+        if mode_chip(ui, rect, "▼", palette, "topbar-mode-down") {
+            dispatch_command("topbar", state);
+        }
+    }
+
     if state.topbar.quick_open {
         draw_quick(ui, state, palette);
     }

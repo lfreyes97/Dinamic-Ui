@@ -233,6 +233,16 @@ pub(super) fn draw_bar_shell(
                 palette.accent.gamma_multiply(0.5 + island_t),
             );
         }
+        if config::get().bar.notch_control && island_t > 0.1 {
+            let c = pill.center();
+            let rect = egui::Rect::from_min_size(
+                egui::pos2(c.x + 34.0, c.y - 8.0),
+                egui::vec2(16.0, 16.0),
+            );
+            // El chip comparte zona con el pill: el clic lo atiende el rect grande
+            // (notch → compacto → barra). Este interact solo dibuja hover/cursor.
+            let _ = mode_chip(ui, rect, "▲", palette, "notch-mode");
+        }
         // Clic: notch/compacto -> compacto enganchado -> barra.
         let response = ui.interact(
             pill,
@@ -260,5 +270,31 @@ pub(super) fn draw_bar_shell(
         );
         child.set_opacity(bar_alpha);
         draw_bar_row(&mut child, state, palette);
+
+        // Hueco entre el reloj y el estado: atajo mouse para subir a topbar o
+        // bajar a la isla (equivalente a los comandos `topbar` / `collapse`).
+        if config::get().bar.hueco_control && t >= 0.5 {
+            let cx = header.center().x;
+            let cy = header.center().y - 8.0;
+            let size = egui::vec2(16.0, 16.0);
+            if mode_chip(
+                ui,
+                egui::Rect::from_min_size(egui::pos2(cx + 80.0, cy), size),
+                "▲",
+                palette,
+                "bar-mode-up",
+            ) {
+                dispatch_command("topbar", state);
+            }
+            if mode_chip(
+                ui,
+                egui::Rect::from_min_size(egui::pos2(cx + 98.0, cy), size),
+                "▼",
+                palette,
+                "bar-mode-down",
+            ) {
+                dispatch_command("collapse", state);
+            }
+        }
     }
 }

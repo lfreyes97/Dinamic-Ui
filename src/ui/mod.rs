@@ -369,6 +369,46 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
+/// Chip de control de modo (▲/▼). Con hover y cursor, con tokens del tema.
+/// Devuelve `true` si se hizo clic; el llamador decide qué comando despachar.
+pub(super) fn mode_chip(
+    ui: &egui::Ui,
+    rect: egui::Rect,
+    label: &str,
+    palette: Palette,
+    id: &'static str,
+) -> bool {
+    let response = ui.interact(
+        rect,
+        ui.scope_id().with(egui::IdSalt::new(id)),
+        egui::Sense::click(),
+    );
+    let fill = if response.hovered() {
+        palette.hover
+    } else {
+        palette.badge
+    };
+    ui.painter().rect(
+        rect,
+        egui::CornerRadius::same(6),
+        fill,
+        egui::Stroke::new(1.0, palette.border),
+        egui::StrokeKind::Middle,
+    );
+    text_at(
+        ui,
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        label,
+        TEXT_CAPTION,
+        palette.text,
+    );
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    response.clicked()
+}
+
 fn island_slot(
     ui: &mut egui::Ui,
     id: &'static str,
