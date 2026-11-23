@@ -76,6 +76,12 @@ pub struct SystemMonitor {
     needs: Arc<AtomicU8>,
 }
 
+impl Default for SystemMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemMonitor {
     pub fn new() -> Self {
         let shared = Arc::new(Mutex::new((SystemInfo::default(), 0)));

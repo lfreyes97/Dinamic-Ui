@@ -1,40 +1,7 @@
-// El kit de UI compartido (`ui/mod.rs`) tiene piezas que solo usa cada componente: en
-// un build parcial es normal que haya código sin usar. Con todo compilado sigue avisando.
-#![cfg_attr(
-    not(all(
-        feature = "bar",
-        feature = "dock",
-        feature = "overview",
-        feature = "command-menu",
-        feature = "notifications",
-        feature = "wallpaper"
-    )),
-    allow(dead_code)
-)]
+// El bucle de eventos Wayland del shell. La lógica vive en la lib (`src/lib.rs`);
+// el previewer interactivo (feature `previewer`) la reutiliza sin compositor.
 
-#[cfg(feature = "icons")]
-mod appicons;
-mod config;
-mod control;
-#[cfg(feature = "icons")]
-mod desktop;
-mod gfx;
-mod ipc;
-#[cfg(feature = "command-menu")]
-mod launcher;
-mod needs;
-#[cfg(feature = "notifications")]
-mod notifications;
-mod power;
-// Criterio de búsqueda compartido por el command menu y Actividades.
-#[cfg(any(feature = "command-menu", feature = "activities"))]
-mod search;
-mod shared;
-mod sysinfo;
-mod theme;
-#[cfg(feature = "wallpaper")]
-mod thumbs;
-mod ui;
+use dinamic_ui::{config, control, gfx, ipc, needs, power, sysinfo, theme, ui};
 
 use std::time::{Duration, Instant};
 
@@ -366,11 +333,7 @@ impl DinamicUi {
             self.exit = true;
         }
 
-        let t = smootherstep(self.ui_state.bar.expansion);
-        let panel_t = smootherstep(self.ui_state.bar.panel_progress);
-        let m = metrics();
-        // La notificación tiene tarjeta propia: la isla no cambia de ancho.
-        let pill_w = lerp(m.island_w as f32, m.bar_w as f32, t);
+        let (t, panel_t, pill_w) = ui::draw_params(&self.ui_state);
         // El input region lo declaran los componentes activos. El surface no
         // se redimensiona: solo cambia la zona que acepta eventos.
         let rects = ui::input_rects(&self.ui_state, self.width as i32, self.height as i32);
@@ -448,26 +411,6 @@ impl DinamicUi {
             }
         }
         self.layer.commit();
-    }
-}
-
-pub(crate) fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
-}
-
-/// Curva con velocidad cero en ambos extremos: el morph arranca y termina suave.
-pub(crate) fn smootherstep(t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
-}
-
-pub(crate) fn approach(current: f32, target: f32, step: f32) -> f32 {
-    if (current - target).abs() <= step {
-        target
-    } else if current < target {
-        current + step
-    } else {
-        current - step
     }
 }
 

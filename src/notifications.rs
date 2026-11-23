@@ -107,22 +107,43 @@ impl Server {
     }
 }
 
+impl Default for Notifications {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Notifications {
     pub fn new() -> Self {
-        let mut state = Shared::default();
-        if std::env::var_os("DINAMIC_UI_DND").is_some() {
-            state.dnd = true;
-        }
-        let shared = Arc::new(Mutex::new(state));
-        let listener = Arc::clone(&shared);
+        let s = Self::new_offline();
         // Los tests (y las vistas previas) no deben reclamar el nombre D-Bus del sistema.
         if !cfg!(test) {
+            let listener = Arc::clone(&s.shared);
             thread::Builder::new()
                 .name("dinamic-ui-notifications".into())
                 .spawn(move || serve(listener))
                 .ok();
         }
-        Self { shared }
+        s
+    }
+
+    /// Sin hilo servidor: para el previewer, que no reclama el nombre D-Bus.
+    pub fn new_offline() -> Self {
+        let mut state = Shared::default();
+        if std::env::var_os("DINAMIC_UI_DND").is_some() {
+            state.dnd = true;
+        }
+        Self {
+            shared: Arc::new(Mutex::new(state)),
+        }
+    }
+
+    /// Notificación de ejemplo para el previewer (sin pasar por D-Bus).
+    pub fn push_preview(&self, n: Notification) {
+        if let Ok(mut state) = self.shared.lock() {
+            state.queue.push_back(n);
+            state.revision += 1;
+        }
     }
 
     /// Devuelve (activa, número en cola, revisión). Descarta las caducadas.

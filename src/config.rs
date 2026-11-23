@@ -353,6 +353,11 @@ pub fn get() -> Arc<Config> {
         .unwrap_or_default()
 }
 
+/// Fija la configuración en memoria sin tocar el archivo (previewer: sliders en vivo).
+pub fn set(config: Config) {
+    *CONFIG.write().expect("config lock envenenado") = Some(Arc::new(config));
+}
+
 /// Recarga el archivo. Si falla, mantiene la configuración anterior.
 pub fn reload() -> Result<(), String> {
     let path = path().ok_or_else(|| "XDG_CONFIG_HOME no definido".to_string())?;

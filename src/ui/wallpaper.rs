@@ -4,6 +4,7 @@ use super::*;
 use crate::sysinfo::Wallpaper;
 
 /// Estado de la pestaña Wallpaper (galería, miniaturas y selección).
+#[derive(Default)]
 pub struct WallpaperState {
     pub wallpaper_color: Option<String>,
     pub wallpaper_selected: Option<usize>,
@@ -17,25 +18,6 @@ pub struct WallpaperState {
     pub last_thumb_revision: u64,
     pub last_system_revision: u64,
     pub thumb_textures: std::collections::HashMap<std::path::PathBuf, egui::TextureHandle>,
-}
-
-impl Default for WallpaperState {
-    fn default() -> Self {
-        Self {
-            wallpaper_color: None,
-            wallpaper_selected: None,
-            wallpaper_image: None,
-            wallpaper_hover: None,
-            wallpaper_image_request: None,
-            wallpaper_grid: false,
-            wallpaper_files: Vec::new(),
-            wallpaper_scan: None,
-            thumbs: crate::thumbs::Thumbnails::new(),
-            last_thumb_revision: 0,
-            last_system_revision: 0,
-            thumb_textures: std::collections::HashMap::new(),
-        }
-    }
 }
 
 /// Carpeta de imágenes del usuario (`XDG_PICTURES_DIR` o `~/Pictures`).

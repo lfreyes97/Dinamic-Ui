@@ -20,8 +20,17 @@ pub struct NotificationState {
 
 impl NotificationState {
     pub fn new() -> Self {
+        Self::with_service(crate::notifications::Notifications::new())
+    }
+
+    /// Sin servidor D-Bus (previewer): la cola se alimenta con `push_preview`.
+    pub fn new_offline() -> Self {
+        Self::with_service(crate::notifications::Notifications::new_offline())
+    }
+
+    fn with_service(service: crate::notifications::Notifications) -> Self {
         Self {
-            service: crate::notifications::Notifications::new(),
+            service,
             last_revision: 0,
             notification: None,
             notification_count: 0,

@@ -31,7 +31,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub(crate) fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             Self::Toggle => "toggle",
             Self::Expand => "expand",

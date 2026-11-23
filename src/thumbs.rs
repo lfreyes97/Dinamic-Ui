@@ -36,6 +36,12 @@ pub struct Thumbnails {
     requested: HashSet<PathBuf>,
 }
 
+impl Default for Thumbnails {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Thumbnails {
     pub fn new() -> Self {
         Self {

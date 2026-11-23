@@ -14,6 +14,7 @@ mod bar_state;
 mod component;
 #[cfg(all(test, feature = "overview", feature = "activities", feature = "topbar"))]
 mod preview;
+// Datos de ejemplo: los comparten las vistas previas PNG y el previewer interactivo.
 #[cfg(all(
     test,
     feature = "overview",
@@ -30,6 +31,8 @@ mod preview_config;
     feature = "dashboard"
 ))]
 mod preview_dashboard;
+#[cfg(any(test, feature = "previewer"))]
+pub mod sample;
 
 pub use component::{
     dispatch_command, dispatch_key, input_rects, needs, update_components, wants_keyboard,
@@ -205,8 +208,24 @@ pub struct UiState {
     pub should_exit: bool,
 }
 
+impl Default for UiState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UiState {
     pub fn new() -> Self {
+        Self::with_notifications(true)
+    }
+
+    /// Como `new`, pero sin el servidor D-Bus: el previewer no debe reclamar el
+    /// nombre `org.freedesktop.Notifications` de la sesión.
+    pub fn new_preview() -> Self {
+        Self::with_notifications(false)
+    }
+
+    fn with_notifications(#[allow(unused_variables)] online: bool) -> Self {
         Self {
             bar: bar_state::BarState::new(),
             #[cfg(feature = "dock")]
@@ -218,7 +237,11 @@ impl UiState {
             #[cfg(feature = "command-menu")]
             menu: menu::MenuState::default(),
             #[cfg(feature = "notifications")]
-            notifications: notifications::NotificationState::new(),
+            notifications: if online {
+                notifications::NotificationState::new()
+            } else {
+                notifications::NotificationState::new_offline()
+            },
             #[cfg(feature = "overview")]
             overview: overview::OverviewState::default(),
             #[cfg(feature = "activities")]
@@ -285,6 +308,17 @@ fn icon_font(size: f32) -> egui::FontId {
 /// Paleta del frame en curso, para los helpers de dibujo.
 fn pal() -> Palette {
     crate::theme::current()
+}
+
+/// Parámetros de dibujo del frame: expansión de la barra, progreso del panel y
+/// ancho de la píldora. Los comparten el shell y el previewer (una sola fuente).
+pub fn draw_params(state: &UiState) -> (f32, f32, f32) {
+    let t = crate::smootherstep(state.bar.expansion);
+    let panel_t = crate::smootherstep(state.bar.panel_progress);
+    let m = metrics();
+    // La notificación tiene tarjeta propia: la isla no cambia de ancho.
+    let pill_w = crate::lerp(m.island_w as f32, m.bar_w as f32, t);
+    (t, panel_t, pill_w)
 }
 
 pub fn draw(

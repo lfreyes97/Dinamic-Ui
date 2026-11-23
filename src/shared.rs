@@ -77,6 +77,12 @@ impl IconCache {
     }
 }
 
+impl Default for Shared {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Shared {
     /// Textura del icono de una clase/nombre de app. La primera llamada lo pide al
     /// hilo de carga; mientras no esté listo (o si solo existe en SVG) devuelve

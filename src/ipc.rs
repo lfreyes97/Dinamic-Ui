@@ -71,6 +71,12 @@ pub struct HyprlandIpc {
     snapshot: HyprlandSnapshot,
 }
 
+impl Default for HyprlandIpc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HyprlandIpc {
     pub fn new() -> Self {
         let socket = socket_path();
