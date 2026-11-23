@@ -27,6 +27,27 @@ pub struct UpdateCtx {
     pub cursor: Option<(i32, i32)>,
 }
 
+/// Zona que reclama entrada mientras el dock está visible (misma que `input_rects`).
+#[cfg(feature = "dock")]
+const DOCK_HIT_H: i32 = 72;
+/// Franja inferior que DESPLEGA el dock cuando está oculto.
+#[cfg(feature = "dock")]
+const DOCK_ACTIVATE_H: i32 = 24;
+
+/// Histéresis del autohide: entrar cuesta menos que salir. Once visible, el cursor
+/// puede estar sobre cualquier parte del dock (72 px), no solo en la franja de 24.
+#[cfg(feature = "dock")]
+fn dock_should_show(visible: bool, forced: bool, y: i32, screen_h: i32) -> bool {
+    if forced {
+        return true;
+    }
+    if visible {
+        y >= screen_h - DOCK_HIT_H
+    } else {
+        y >= screen_h - DOCK_ACTIVATE_H
+    }
+}
+
 /// Un componente del shell: dibujo, entrada, comandos y su propia lógica de host.
 pub trait Component {
     #[allow(dead_code)]
@@ -767,7 +788,7 @@ impl Component for Dock {
         if state.dock.dock_progress <= 0.01 || taskbar_on(state) {
             Vec::new()
         } else {
-            vec![(0, screen_h - 72, screen_w, 72)]
+            vec![(0, screen_h - DOCK_HIT_H, screen_w, DOCK_HIT_H)]
         }
     }
 
@@ -779,11 +800,13 @@ impl Component for Dock {
                 dirty = true;
             }
         } else if let Some((_, y)) = ctx.cursor {
-            // Cursor cerca del borde inferior (el dock no depende de la feature `taskbar`).
-            let near_bottom =
-                std::env::var_os("DINAMIC_UI_DOCK").is_some() || y >= ctx.screen_h - 24;
-            if near_bottom != state.dock.dock_visible {
-                state.dock.dock_visible = near_bottom;
+            // El dock no depende de la feature `taskbar`. Con histéresis: aparece al
+            // llegar a 24 px del borde, pero no se oculta hasta salir de los 72 px
+            // que reclama (así el cursor puede estar sobre el dock sin que se vaya).
+            let forced = std::env::var_os("DINAMIC_UI_DOCK").is_some();
+            let visible = dock_should_show(state.dock.dock_visible, forced, y, ctx.screen_h);
+            if visible != state.dock.dock_visible {
+                state.dock.dock_visible = visible;
                 dirty = true;
             }
         }
@@ -1101,5 +1124,33 @@ impl Component for CommandMenu {
 
     fn wants_keyboard(&self, state: &UiState) -> bool {
         state.menu.menu_open
+    }
+}
+
+#[cfg(all(test, feature = "dock"))]
+mod dock_tests {
+    use super::*;
+
+    const H: i32 = 768;
+
+    #[test]
+    fn oculto_aparece_solo_en_la_franja_de_24px() {
+        assert!(dock_should_show(false, false, H - 23, H));
+        assert!(dock_should_show(false, false, H - 24, H));
+        assert!(!dock_should_show(false, false, H - 25, H));
+    }
+
+    #[test]
+    fn visible_se_mantiene_sobre_todo_el_dock_de_72px() {
+        // El cursor puede estar en la parte alta del dock (por encima de la franja).
+        assert!(dock_should_show(true, false, H - 70, H));
+        assert!(dock_should_show(true, false, H - 24, H));
+        assert!(!dock_should_show(true, false, H - 73, H));
+    }
+
+    #[test]
+    fn env_var_fuerza_visible() {
+        assert!(dock_should_show(false, true, 0, H));
+        assert!(dock_should_show(true, true, 0, H));
     }
 }
