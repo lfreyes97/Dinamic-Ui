@@ -4,8 +4,14 @@
 
 - El layer surface cubre toda la pantalla; el dock se dibuja abajo centrado.
 - Aparece (`slide in` desde abajo, ~0,2 s) cuando el cursor llega a los **24 px
-  inferiores**; se oculta al alejarse. La posición se consulta por IPC
-  (`cursorpos`) cada 120 ms.
+  inferiores** y se oculta al salir de los **72 px** que reclama el dock (histéresis):
+  así el cursor puede estar sobre la parte alta del dock sin que se esconda. La
+  posición se consulta por IPC (`cursorpos`) cada 120 ms.
+- **Zona reservada (diseño pendiente)**: la reserva real (`exclusive_zone`) debe ir
+  ligada a `autohide`. Con autohide activo **no** se reserva (el hueco aparece y
+  desaparece con el dock); con `autohide = false` se reservan los 72 px de forma
+  permanente, como una barra fija. El parche temporal `hyprland/patch.lua` cubre
+  **solo el topbar** con gaps globales de Hyprland y no toca el dock.
 - Elementos: apps fijadas (`[dock] pinned`) + ventanas mapeadas (`j/clients`),
   sin duplicar por `class`.
 - **Moverse entre ventanas**: una sola ventana → enfocar por dirección; varias →

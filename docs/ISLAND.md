@@ -15,6 +15,8 @@
 - El modo compacto muestra **icono de reloj + hora** (15 px semibold) en acento/texto.
 - **Interacción**: clic en el notch/compacto lo engancha en modo compacto; un
   segundo clic expande a la barra completa. El hover solo lo despliega temporalmente.
+- Con `[bar] notch_control = true` (default), el notch activo muestra un `▲` a la
+  derecha de la hora: es la pista visual del clic que continúa el ascenso.
 - `DINAMIC_UI_ISLAND=1` fuerza el estado desplegado (pruebas).
 - Comandos de control: `dinamic-ui --compact` fija el compacto y `--notch` vuelve
   al notch (también `just compact` / `just notch`).

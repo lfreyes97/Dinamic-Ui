@@ -3,6 +3,18 @@
 # Techo de expansión de la barra: notch | compact | bar | panel (default: panel).
 # [bar]
 # max_state = "panel"
+# Controles de modo con mouse (default: true): ▲ en el notch activo y ▲▼ en el
+# hueco entre reloj y estado de la barra expandida.
+# notch_control = true
+# hueco_control = true
+
+# Topbar estilo GNOME (default: desactivada). `mode_control` muestra el ▼ para
+# volver al estado anterior con mouse.
+# [topbar]
+# enabled = false
+# height = 34
+# mode_control = true
+
 # Recargar en caliente: dinamic-ui --reload
 
 [theme]

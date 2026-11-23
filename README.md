@@ -151,6 +151,9 @@ docs/DOCK.md            # dock inferior con autohide
 docs/ISLAND.md          # isla tipo notch y batería
 docs/OVERVIEW.md        # overview de workspaces
 docs/COMMAND_MENU.md    # command menu (maqueta + implementación)
+docs/PREVIEWER.md       # previsualizador interactivo (widget factory)
+docs/SUPPORT_OTHER_WCS.md # fakers de otros WCs (idea opcional, no roadmap)
+docs/POST_QUICKSHELL.md # cutover y backlog tras archivar quickshell
 plan-mode-panel.md      # plan de modos y panel
 config.example.toml     # ejemplo de configuración
 ```
@@ -174,6 +177,13 @@ Pendiente:
 - [ ] Múltiples monitores (ahora se ancla al monitor por defecto).
 - [ ] Entrada de texto por teclado en egui (Escape y los keybinds cubren el control básico).
 - [x] Configurable vía archivo (colores, tamaños, workspaces) con recarga en caliente.
+- [ ] Cubrir el backlog de quickshell archivado (OSD, capturas, Alt+Tab, quick settings…): [`docs/POST_QUICKSHELL.md`](docs/POST_QUICKSHELL.md).
+
+> **Idea opcional de exploración (no es roadmap ni está priorizada)**: simular en el
+> previewer el comportamiento de otros WCs mediante *fakers*. El proyecto se usa con
+> Hyprland y no hay necesidad actual de otros compositores; el soporte real exigiría
+> diseñar IPCs propios. La idea, por si algún día interesa, está en
+> [`docs/SUPPORT_OTHER_WCS.md`](docs/SUPPORT_OTHER_WCS.md).
 
 Ver [`plan-mode-panel.md`](plan-mode-panel.md) para el plan completo de modos y la siguiente fase (notificaciones DBus).
 

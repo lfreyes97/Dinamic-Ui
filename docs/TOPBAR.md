@@ -28,6 +28,10 @@ sistema y fusión con `bar`) está en «Fuera de alcance» y depende de pruebas 
   interruptor «No molestar», las tres más recientes con su botón de cerrar y, si hay más, «+N más»
   con «Borrar todo». Sin notificaciones muestra «Sin notificaciones». Si la feature no está
   compilada, el calendario es solo calendario.
+- **Controles de modo**: con `[bar] hueco_control = true` (default), la barra
+  expandida muestra `▲▼` en el hueco entre el reloj y el estado: `▲` entra al
+  topbar y `▼` vuelve a la isla (equivalente a `collapse`). El topbar muestra un
+  `▼` equivalente si `[topbar] mode_control = true`.
 - **La barra cede el borde superior:** mientras el topbar está activo, la barra (notch/isla) no se
   dibuja ni reclama entrada (`BarState::suppressed`); el panel sigue disponible. Antes seguían
   dibujándose y animándose por debajo las dos a la vez.
