@@ -139,6 +139,8 @@ pub fn build_components() -> Vec<Box<dyn Component>> {
     components.push(Box::new(config_panel::ConfigPanel));
     #[cfg(feature = "command-menu")]
     components.push(Box::new(CommandMenu));
+    #[cfg(feature = "screenshots")]
+    components.push(Box::new(Screenshots));
     // El OSD va encima de todo: el aviso de volumen/brillo también se ve con un
     // overview o el menú abiertos, y no reclama entrada.
     #[cfg(feature = "osd")]
@@ -168,6 +170,10 @@ pub(super) fn close_overlays(state: &mut UiState) {
     #[cfg(feature = "config-panel")]
     {
         state.config_panel.open = false;
+    }
+    #[cfg(feature = "screenshots")]
+    {
+        state.screenshots.open = false;
     }
     let _ = state;
 }
@@ -932,6 +938,10 @@ impl Component for Overview {
         } else {
             overview::open(state, kind);
             // Solo un overlay a pantalla completa a la vez.
+            #[cfg(feature = "screenshots")]
+            {
+                state.screenshots.open = false;
+            }
             #[cfg(feature = "activities")]
             {
                 state.activities.open = false;
@@ -1011,6 +1021,10 @@ impl Component for Activities {
             state.activities.open = false;
         } else {
             activities::open(state);
+            #[cfg(feature = "screenshots")]
+            {
+                state.screenshots.open = false;
+            }
             #[cfg(feature = "overview")]
             {
                 state.overview.overview = false;
@@ -1060,6 +1074,10 @@ impl Component for CommandMenu {
             let menu = &mut state.menu;
             menu.menu_open = !menu.menu_open;
             if menu.menu_open {
+                #[cfg(feature = "screenshots")]
+                {
+                    state.screenshots.open = false;
+                }
                 #[cfg(feature = "overview")]
                 {
                     state.overview.overview = false;
@@ -1128,6 +1146,56 @@ impl Component for CommandMenu {
 
     fn wants_keyboard(&self, state: &UiState) -> bool {
         state.menu.menu_open
+    }
+}
+
+#[cfg(feature = "screenshots")]
+struct Screenshots;
+#[cfg(feature = "screenshots")]
+impl Component for Screenshots {
+    fn name(&self) -> &'static str {
+        "screenshots"
+    }
+
+    fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, _ctx: DrawCtx, palette: Palette) {
+        super::screenshots::draw(ui, state, palette);
+    }
+
+    fn input_rects(
+        &self,
+        state: &UiState,
+        screen_w: i32,
+        screen_h: i32,
+    ) -> Vec<(i32, i32, i32, i32)> {
+        if state.screenshots.open {
+            vec![(0, 0, screen_w, screen_h)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        super::screenshots::update(state, ctx.dt)
+    }
+
+    fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
+        super::screenshots::handle_key(state, key)
+    }
+
+    fn wants_keyboard(&self, state: &UiState) -> bool {
+        state.screenshots.open
+    }
+
+    fn on_command(&mut self, command: &str, state: &mut UiState) -> bool {
+        if command != "screenshots" {
+            return false;
+        }
+        if state.screenshots.open {
+            state.screenshots.open = false;
+        } else {
+            super::screenshots::open(state);
+        }
+        true
     }
 }
 

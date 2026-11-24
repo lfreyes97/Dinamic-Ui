@@ -73,6 +73,8 @@ mod overview_strips;
 pub mod panel;
 #[cfg(any(feature = "bar", feature = "topbar", feature = "config-panel"))]
 mod quick_settings;
+#[cfg(feature = "screenshots")]
+pub mod screenshots;
 #[cfg(feature = "taskbar")]
 mod taskbar;
 #[cfg(feature = "topbar")]
@@ -200,6 +202,8 @@ pub struct UiState {
     pub overview: overview::OverviewState,
     #[cfg(feature = "osd")]
     pub osd: osd::OsdState,
+    #[cfg(feature = "screenshots")]
+    pub screenshots: screenshots::ScreenshotState,
     #[cfg(feature = "activities")]
     pub activities: activities::ActivitiesState,
     #[cfg(feature = "dashboard")]
@@ -252,6 +256,8 @@ impl UiState {
             overview: overview::OverviewState::default(),
             #[cfg(feature = "osd")]
             osd: osd::OsdState::default(),
+            #[cfg(feature = "screenshots")]
+            screenshots: screenshots::ScreenshotState::default(),
             #[cfg(feature = "activities")]
             activities: activities::ActivitiesState::default(),
             #[cfg(feature = "dashboard")]

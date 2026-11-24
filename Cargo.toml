@@ -32,7 +32,7 @@ lto = "thin"
 
 # Componentes compilables por separado. Ver docs/MODULARIZATION_PLAN.md.
 [features]
-default = ["bar", "dock", "taskbar", "topbar", "overview", "osd", "activities", "dashboard", "config-panel", "command-menu", "notifications", "wallpaper"]
+default = ["bar", "dock", "taskbar", "topbar", "overview", "osd", "screenshots", "activities", "dashboard", "config-panel", "command-menu", "notifications", "wallpaper"]
 # Isla / píldora / barra / panel (un solo componente con estados de expansión).
 bar = []
 # Topbar GNOME-like: reloj, estado y desplegables.
@@ -46,6 +46,8 @@ taskbar = ["dock"]
 overview = ["icons"]
 # OSD de volumen y brillo: barra efímera sobre el shell (ver docs/OSD.md).
 osd = []
+# Panel de capturas (región/pantalla/ventana/retardo) sobre grim+slurp+wl-copy.
+screenshots = []
 # Dashboard: rejilla bento de widgets a pantalla completa (ver docs/WIDGETS_PLAN.md).
 dashboard = []
 # Panel de configuración: páginas de ajustes con navegación lateral (maqueta de solo lectura).

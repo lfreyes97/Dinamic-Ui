@@ -30,6 +30,7 @@ pub enum Command {
     Menu,
     OsdVolume,
     OsdBrightness,
+    Screenshots,
 }
 
 impl Command {
@@ -54,6 +55,7 @@ impl Command {
             Self::Menu => "menu",
             Self::OsdVolume => "osd-volume",
             Self::OsdBrightness => "osd-brightness",
+            Self::Screenshots => "screenshots",
         }
     }
 
@@ -77,6 +79,7 @@ impl Command {
             Self::Topbar => Some(("topbar", cfg!(feature = "topbar"))),
             Self::Menu => Some(("command-menu", cfg!(feature = "command-menu"))),
             Self::OsdVolume | Self::OsdBrightness => Some(("osd", cfg!(feature = "osd"))),
+            Self::Screenshots => Some(("screenshots", cfg!(feature = "screenshots"))),
             Self::Quit | Self::Reload => None,
         }
     }
@@ -104,6 +107,7 @@ impl Command {
             "menu" => Some(Self::Menu),
             "osd-volume" => Some(Self::OsdVolume),
             "osd-brightness" => Some(Self::OsdBrightness),
+            "screenshots" => Some(Self::Screenshots),
             _ => None,
         }
     }
