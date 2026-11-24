@@ -697,6 +697,20 @@ pub(super) fn eu_summer_time(utc: chrono::DateTime<chrono::Utc>) -> bool {
 
 // ── System ──────────────────────────────────────────────────────────────
 
+fn format_minutes(minutes: u32) -> String {
+    if minutes >= 60 {
+        let h = minutes / 60;
+        let m = minutes % 60;
+        if m == 0 {
+            format!("{h} h")
+        } else {
+            format!("{h} h {m} min")
+        }
+    } else {
+        format!("{minutes} min")
+    }
+}
+
 pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
     let width = ui.available_width();
     let battery = &state.shared.battery;
@@ -763,172 +777,10 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
     bar_at(ui, bar, battery.percent as f32 / 100.0, pal().track, tone);
     ui.add_space(15.0);
 
-    // Wi-Fi (nmcli) y Bluetooth (bluetoothctl), leídos por `sysinfo.rs`.
-    let system = &state.shared.system;
-    section_heading(ui, "CONNECTIVITY", "Network status");
-    let wifi = match &system.wifi {
-        None => (None, "Sin datos".to_string()),
-        Some(w) if !w.enabled => (Some(false), "Desactivado".to_string()),
-        Some(w) => match &w.ssid {
-            Some(ssid) => (Some(true), truncate(ssid, 20)),
-            None => (Some(false), "Sin conexión".to_string()),
-        },
-    };
-    let bluetooth = match &system.bluetooth {
-        None => (None, "Sin datos".to_string()),
-        Some(b) if !b.powered => (Some(false), "Apagado".to_string()),
-        Some(b) => (
-            Some(true),
-            match b.connected {
-                0 => "Encendido · sin dispositivos".to_string(),
-                1 => "1 dispositivo".to_string(),
-                n => format!("{n} dispositivos"),
-            },
-        ),
-    };
-    let gap = 8.0;
-    let (row, _) = ui.allocate_exact_size(egui::Vec2::new(width, 72.0), egui::Sense::hover());
-    for (rect, (icon, name, (on, detail))) in split(row, &[1.0, 1.0], gap, true).into_iter().zip([
-        (ic::WIFI_HIGH, "Wi-Fi", wifi),
-        (ic::BLUETOOTH, "Bluetooth", bluetooth),
-    ]) {
-        card_at(ui, rect, 11);
-        let inner = rect.shrink(11.0);
-        icon_at(
-            ui,
-            inner.min + egui::Vec2::new(8.0, 8.0),
-            icon,
-            ICON_LG,
-            pal().text_hi,
-        );
-        // Punto: verde activo, gris oscuro apagado, gris medio desconocido.
-        let dot = match on {
-            Some(true) => pal().ok,
-            Some(false) => pal().faint,
-            None => pal().faint,
-        };
-        ui.painter().circle_filled(
-            egui::Pos2::new(inner.max.x - 3.0, inner.min.y + 8.0),
-            3.0,
-            dot,
-        );
-        text_at(
-            ui,
-            egui::Pos2::new(inner.min.x, inner.max.y - 14.0),
-            egui::Align2::LEFT_CENTER,
-            name,
-            TEXT_TITLE,
-            pal().text_hi,
-        );
-        text_at(
-            ui,
-            egui::Pos2::new(inner.min.x, inner.max.y - 2.0),
-            egui::Align2::LEFT_CENTER,
-            detail,
-            TEXT_CAPTION,
-            pal().muted,
-        );
-    }
-    ui.add_space(15.0);
-
-    // Brillo (brightnessctl) y volumen (pactl): solo lectura.
-    section_heading(ui, "LEVELS", "Output controls");
-    let (card, _) = ui.allocate_exact_size(egui::Vec2::new(width, 66.0), egui::Sense::hover());
-    card_at(ui, card, 12);
-    let inner = card.shrink2(egui::Vec2::new(13.0, 12.0));
-    let volume_icon = match &system.volume {
-        Some(v) if v.muted => ic::SPEAKER_SLASH,
-        _ => ic::SPEAKER_HIGH,
-    };
-    let levels = [
-        (ic::SUN, system.brightness.map(|b| (b, false))),
-        (
-            volume_icon,
-            system.volume.as_ref().map(|v| (v.percent, v.muted)),
-        ),
-    ];
-    for (rect, (icon, level)) in split(inner, &[1.0, 1.0], 12.0, false)
-        .into_iter()
-        .zip(levels)
-    {
-        let y = rect.center().y;
-        icon_at(
-            ui,
-            egui::Pos2::new(rect.min.x + 8.0, y),
-            icon,
-            ICON_MD,
-            pal().muted,
-        );
-        let track = egui::Rect::from_min_max(
-            egui::Pos2::new(rect.min.x + 27.0, y - 2.5),
-            egui::Pos2::new(rect.max.x - 38.0, y + 2.5),
-        );
-        let (fraction, label) = match level {
-            Some((_, true)) => (0.0, "Mute".to_string()),
-            Some((percent, false)) => (percent as f32 / 100.0, format!("{percent}%")),
-            None => (0.0, "--".to_string()),
-        };
-        bar_at(ui, track, fraction, pal().faint, pal().text_hi);
-        text_at(
-            ui,
-            egui::Pos2::new(rect.max.x, y),
-            egui::Align2::RIGHT_CENTER,
-            label,
-            TEXT_CAPTION,
-            pal().muted,
-        );
-    }
-    ui.add_space(15.0);
-
-    // Dispositivos: salida de audio (pactl), teclado y pantalla (hyprctl).
-    section_heading(ui, "DEVICES", "Hardware");
-    let or_none = |v: &Option<String>| truncate(v.as_deref().unwrap_or("Sin datos"), 44);
-    let devices = [
-        (
-            ic::SPEAKER_HIGH,
-            "Audio output",
-            or_none(&system.audio_output),
-        ),
-        (ic::KEYBOARD, "Keyboard", or_none(&system.keyboard)),
-        (ic::MONITOR, "Display", or_none(&system.display)),
-    ];
-    let row_h = 44.0;
-    let (card, _) = ui.allocate_exact_size(
-        egui::Vec2::new(width, row_h * devices.len() as f32 + 12.0),
-        egui::Sense::hover(),
-    );
-    card_at(ui, card, 12);
-    let inner = card.shrink2(egui::Vec2::new(13.0, 6.0));
-    for (i, (icon, name, detail)) in devices.into_iter().enumerate() {
-        let rect = egui::Rect::from_min_size(
-            inner.min + egui::Vec2::new(0.0, i as f32 * row_h),
-            egui::Vec2::new(inner.width(), row_h),
-        );
-        if i > 0 {
-            ui.painter()
-                .hline(rect.x_range(), rect.min.y, Stroke::new(1.0, pal().border));
-        }
-        list_row_at(ui, rect, icon, name, &detail);
-        icon_at(
-            ui,
-            egui::Pos2::new(rect.max.x - 6.0, rect.center().y),
-            ic::CARET_RIGHT,
-            ICON_SM,
-            pal().dim,
-        );
-    }
-
-    // Placeholder: Hyprland no tiene una aplicación de ajustes estándar.
-    let _ = panel_footer(ui, "System overview", "System settings ↗", false, false);
-}
-
-/// "2 h 05 min" / "40 min".
-pub(super) fn format_minutes(minutes: u32) -> String {
-    if minutes >= 60 {
-        format!("{} h {:02} min", minutes / 60, minutes % 60)
-    } else {
-        format!("{minutes} min")
-    }
+    // Los mismos controles que el overlay del topbar, en el ancho del panel.
+    section_heading(ui, "QUICK SETTINGS", "Sistema");
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(width, 210.0), egui::Sense::hover());
+    super::quick_settings::draw(ui, rect, state, pal());
 }
 
 // ── Alertas (centro de notificaciones, cola de la Fase B) ───────────────

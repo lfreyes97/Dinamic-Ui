@@ -69,6 +69,8 @@ mod overview_model;
 mod overview_strips;
 #[cfg(feature = "bar")]
 pub mod panel;
+#[cfg(any(feature = "bar", feature = "topbar", feature = "config-panel"))]
+mod quick_settings;
 #[cfg(feature = "taskbar")]
 mod taskbar;
 #[cfg(feature = "topbar")]

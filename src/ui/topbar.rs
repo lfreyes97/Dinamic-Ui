@@ -8,7 +8,7 @@
 
 use chrono::{Datelike, Local, NaiveDate};
 
-use super::panel::{days_in_month, format_minutes, MONTHS_LONG};
+use super::panel::{days_in_month, MONTHS_LONG};
 use super::*;
 
 /// Estado de la topbar y sus desplegables.
@@ -70,7 +70,7 @@ fn quick_card(state: &UiState, screen_w: f32) -> egui::Rect {
     };
     egui::Rect::from_min_size(
         egui::pos2(screen_w - POPOVER_W - EDGE, bar_height(state) + POPOVER_GAP),
-        egui::vec2(POPOVER_W, 168.0 + footer),
+        egui::vec2(POPOVER_W, 252.0 + footer),
     )
 }
 
@@ -413,49 +413,8 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
     }
 }
 
-/// Casilla de estado (icono, título y subtítulo) del resumen del sistema.
-fn status_tile(
-    ui: &egui::Ui,
-    rect: egui::Rect,
-    glyph: &str,
-    glyph_color: Color32,
-    title: &str,
-    subtitle: String,
-    on: bool,
-) {
-    let p = pal();
-    ui.painter().rect_filled(
-        rect,
-        CornerRadius::same(10),
-        if on { p.accent_soft } else { p.badge },
-    );
-    icon_at(
-        ui,
-        egui::pos2(rect.min.x + 20.0, rect.center().y),
-        glyph,
-        ICON_MD,
-        glyph_color,
-    );
-    text_at(
-        ui,
-        egui::pos2(rect.min.x + 38.0, rect.center().y - 7.0),
-        egui::Align2::LEFT_CENTER,
-        title,
-        TEXT_BODY,
-        if on { p.text } else { p.muted },
-    );
-    text_at(
-        ui,
-        egui::pos2(rect.min.x + 38.0, rect.center().y + 8.0),
-        egui::Align2::LEFT_CENTER,
-        subtitle,
-        TEXT_CAPTION,
-        p.muted,
-    );
-}
-
-/// Resumen del sistema (solo lectura) con los datos reales.
-fn draw_quick(ui: &mut egui::Ui, state: &UiState, palette: Palette) {
+/// Resumen del sistema con controles de QuickSettings compartidos con el panel.
+fn draw_quick(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let card = quick_card(state, ui.max_rect().width());
     dropdown_card(ui, card);
     // Absorbe el clic en las zonas sin widget: no cuenta como «clic fuera».
@@ -473,143 +432,31 @@ fn draw_quick(ui: &mut egui::Ui, state: &UiState, palette: Palette) {
         palette.dim,
     );
 
-    let system = &state.shared.system;
-    let tile_w = (card.width() - 32.0 - 8.0) / 2.0;
-    let tile = |col: f32| {
-        egui::Rect::from_min_size(
-            egui::pos2(card.min.x + 16.0 + col * (tile_w + 8.0), card.min.y + 30.0),
-            egui::vec2(tile_w, 44.0),
-        )
-    };
-    let (wifi_icon, wifi_color, _) = wifi_status(system, palette);
-    let (wifi_sub, wifi_on) = match &system.wifi {
-        None => ("Sin datos".to_string(), false),
-        Some(w) if !w.enabled => ("Desactivado".to_string(), false),
-        Some(w) => match &w.ssid {
-            Some(ssid) => (truncate(ssid, 14), true),
-            None => ("Sin conexión".to_string(), false),
-        },
-    };
-    status_tile(
-        ui,
-        tile(0.0),
-        wifi_icon,
-        wifi_color,
-        "Wi-Fi",
-        wifi_sub,
-        wifi_on,
+    let body = egui::Rect::from_min_size(
+        egui::pos2(card.min.x + 16.0, card.min.y + 30.0),
+        egui::vec2(card.width() - 32.0, card.height() - 64.0),
     );
+    quick_settings::draw(ui, body, state, palette);
 
-    let (bt_icon, bt_sub, bt_on) = match &system.bluetooth {
-        None => (ic::BLUETOOTH, "Sin datos".to_string(), false),
-        Some(b) if !b.powered => (ic::BLUETOOTH_SLASH, "Apagado".to_string(), false),
-        Some(b) if b.connected == 0 => (ic::BLUETOOTH, "Activado".to_string(), true),
-        Some(b) => (
-            ic::BLUETOOTH_CONNECTED,
-            format!(
-                "{} conectado{}",
-                b.connected,
-                if b.connected == 1 { "" } else { "s" }
-            ),
-            true,
-        ),
-    };
-    status_tile(
-        ui,
-        tile(1.0),
-        bt_icon,
-        if bt_on { palette.accent } else { palette.muted },
-        "Bluetooth",
-        bt_sub,
-        bt_on,
-    );
-
-    // Volumen y brillo: barras con el valor real (o «—» si no hay dato).
-    let volume = system.volume.as_ref();
-    let rows = [
-        (
-            "Volumen",
-            match volume {
-                Some(v) if v.muted => "Silenciado".to_string(),
-                Some(v) => format!("{}%", v.percent),
-                None => "—".to_string(),
-            },
-            volume.map_or(0.0, |v| {
-                if v.muted {
-                    0.0
-                } else {
-                    v.percent as f32 / 100.0
-                }
-            }),
-            palette.accent,
-        ),
-        (
-            "Brillo",
-            system
-                .brightness
-                .map_or("—".to_string(), |b| format!("{b}%")),
-            system.brightness.map_or(0.0, |b| b as f32 / 100.0),
-            palette.text,
-        ),
-    ];
-    let mut y = card.min.y + 88.0;
-    for (label, value, fraction, fill) in rows {
-        text_at(
-            ui,
-            egui::pos2(card.min.x + 16.0, y + 5.0),
-            egui::Align2::LEFT_CENTER,
-            label,
-            TEXT_CAPTION,
-            palette.muted,
-        );
-        text_at(
-            ui,
-            egui::pos2(card.max.x - 16.0, y + 5.0),
-            egui::Align2::RIGHT_CENTER,
-            value,
-            TEXT_CAPTION,
-            palette.text,
-        );
-        bar_at(
-            ui,
-            egui::Rect::from_min_size(
-                egui::pos2(card.min.x + 16.0, y + 14.0),
-                egui::vec2(card.width() - 32.0, 5.0),
-            ),
-            fraction,
-            palette.track,
-            fill,
-        );
-        y += 34.0;
-    }
-
-    // Pie: salida de audio y batería.
-    y += 4.0;
-    if let Some(output) = &system.audio_output {
-        text_at(
-            ui,
-            egui::pos2(card.min.x + 16.0, y + 7.0),
-            egui::Align2::LEFT_CENTER,
-            format!("Salida: {}", truncate(output, 34)),
-            TEXT_CAPTION,
-            palette.muted,
-        );
-        y += 18.0;
+    // Pie: salida de audio y batería, en una sola línea compacta.
+    let y = card.max.y - 22.0;
+    let mut footer = String::new();
+    if let Some(output) = &state.shared.system.audio_output {
+        footer.push_str(&format!("Salida: {} · ", truncate(output, 20)));
     }
     let battery = &state.shared.battery;
     if battery.present {
-        let mut text = format!("Batería: {}%", battery.percent);
+        footer.push_str(&format!("Batería: {}%", battery.percent));
         if battery.charging {
-            text.push_str(" · cargando");
+            footer.push_str(" · cargando");
         }
-        if let Some(minutes) = battery.minutes_left {
-            text.push_str(&format!(" · {}", format_minutes(minutes)));
-        }
+    }
+    if !footer.is_empty() {
         text_at(
             ui,
-            egui::pos2(card.min.x + 16.0, y + 7.0),
+            egui::pos2(card.min.x + 16.0, y),
             egui::Align2::LEFT_CENTER,
-            text,
+            footer,
             TEXT_CAPTION,
             palette.muted,
         );
