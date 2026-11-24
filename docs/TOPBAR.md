@@ -46,12 +46,12 @@ sistema y fusión con `bar`) está en «Fuera de alcance» y depende de pruebas 
 - **Datos bajo demanda:** el hilo de `sysinfo` solo consulta si algún componente lo pide
   (`Component::wants_system`): la barra expandida, el panel abierto o el topbar visible.
 
-## Fuera de alcance (depende de probar en el R7)
+- **QuickSettings**: el resumen del sistema es interactivo y comparte renderer con la
+  pestaña System del panel. Wi-Fi, Bluetooth, DND, volumen y brillo encolan acciones
+  tipadas con semáforo ámbar; `lock` pide confirmación. Controles elegibles en
+  `[quick_settings] items`.
 
-- [ ] **Acciones del resumen del sistema** (activar/desactivar wifi y bluetooth, subir volumen y
-      brillo): hay que lanzar comandos del sistema (`nmcli`, `bluetoothctl`, `wpctl`,
-      `brightnessctl`…). Se dejó en solo lectura hasta comprobar qué herramientas hay y cómo
-      responden; ejecutarlas desde aquí cambiaría el wifi o el volumen de la máquina real.
+## Fuera de alcance (depende de probar en el R7)
 - [ ] **Topbar como estado de `bar`** (versión completa de lo acordado en
       `docs/WIDGETS_PLAN.md`): hoy es un componente aparte que suprime a la barra. Falta que sea un
       estado más de la misma máquina (con `bar.max_state`) y que el calendario y las notificaciones

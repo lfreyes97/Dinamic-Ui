@@ -29,7 +29,7 @@ Quickshell cubría estas cosas que dinamic-ui aún no tiene. Orden sugerido de p
 | 1 | OSD de volumen / brillo | Componente del shell sobre `wpctl` + `brightnessctl` (o script con `notify-send`); los datos ya están en `sysinfo` | Alta |
 | 2 | Panel de capturas (región/pantalla/ventana, retardo) | `grim` + `slurp` + `wl-copy` enlazados a `SUPER SHIFT S`, con notificación de confirmación | Alta |
 | 3 | Alt+Tab (MRU) y `SUPER+Tab` (workspaces) | Componente usando el modelo de clientes que ya tiene `ipc::clients()`; no requiere nuevo IPC | Alta |
-| 4 | Quick settings con toggles (wifi, bluetooth, DND, volumen, brillo, power mode, night light) | Pasar la pestaña System de solo lectura a acciones (`nmcli`, `wpctl`, `brightnessctl`, `gdbus`…). Cambia el estado real: decidir confirmaciones | Media |
+| 4 | ~~Quick settings con toggles~~ → implementado parcialmente: wifi, bluetooth, DND, volumen, brillo y lock con confirmación; faltan power mode y night light | `src/actions.rs` + renderer compartido en `ui/quick_settings.rs`, hosts en topbar y panel System | ✅/Media |
 | 5 | Tema que sigue `org.gnome.desktop.interface` (`color-scheme`, `accent-color`) | Watch de gsettings → `config::set` + `Palette::load()`; se apoya directamente en la Fase 2 del previewer | Media |
 | 6 | Hot corners (superior-izquierdo overview, inferior-izquierdo apps) | El cursor ya llega en `UpdateCtx`; añadir componente con umbral de permanencia (~180 ms) | Baja |
 | 7 | System tray | Requiere `com.system76.CosmicStatusNotifierWatcher` (está activable en D-Bus) | Baja |
