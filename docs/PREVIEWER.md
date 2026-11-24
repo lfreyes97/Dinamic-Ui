@@ -54,7 +54,11 @@ Ventana con dos zonas:
 
 | Zona | Contenido |
 |---|---|
-| Sidebar izquierda | Comandos de los componentes compilados, tema/tamaños en vivo, datos falsos y registro de acciones |
+| Sidebar izquierda | Comandos de los componentes compilados, tema/tamaños y fuente en vivo, datos falsos y registro de acciones |
+
+Los campos `Regular` y `Semibold` de "Fuente (en vivo)" escriben `font.regular` y
+`font.semibold` en la config en memoria y reaplican `gfx::install_fonts` al instante;
+vacíos vuelven a la autodetección de Inter. El shell hace lo mismo en `--reload`.
 | Centro | Escritorio falso (`fake_desktop`) + `ui::draw` real, al tamaño de pantalla simulado |
 
 - **Mismo camino que el CLI**: los botones llaman `dispatch_command("expand" | "panel" |

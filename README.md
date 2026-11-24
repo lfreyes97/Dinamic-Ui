@@ -201,7 +201,7 @@ La pestaña Alerts usa la misma cola DBus que la isla: no hay dos suscripciones.
 
 ### Tipografía
 
-Se usa **Inter** (Regular) como fuente principal y **Inter SemiBold** para los textos destacados, cargadas desde `~/.local/share/fonts/Instatypst/Inter/static`. Egui 0.37 no tiene peso en `FontId` (`.strong()` solo cambia el color), así que la negrita se selecciona por familia. El surface usa un formato **no sRGB** (`Bgra8Unorm`/`Rgba8Unorm`) porque egui entrega colores en espacio gamma: con sRGB el texto salía apagado.
+Se usa **Inter** (Regular) como fuente principal y **Inter SemiBold** para los textos destacados. Por defecto se autodetectan en `$XDG_DATA_HOME/fonts/{instatypst,Instatypst}/Inter/static` (ambas capitalizaciones, porque Google Fonts instala la carpeta en minúsculas); con `[font] regular/semibold` en `config.toml` se elige cualquier par de TTF. La fuente se aplica en vivo desde el previewer y con `dinamic-ui --reload`. Egui 0.37 no tiene peso en `FontId` (`.strong()` solo cambia el color), así que la negrita se selecciona por familia. El surface usa un formato **no sRGB** (`Bgra8Unorm`/`Rgba8Unorm`) porque egui entrega colores en espacio gamma: con sRGB el texto salía apagado.
 
 ### Dock
 
