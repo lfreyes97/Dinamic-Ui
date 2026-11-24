@@ -19,6 +19,14 @@
 # [quick_settings]
 # items = ["wifi", "bluetooth", "dnd", "volume", "brightness", "lock"]
 
+# Tipografía: con las rutas vacías se autodetecta Inter en
+# $XDG_DATA_HOME/fonts/{instatypst,Instatypst}/Inter/static. Para elegir otra
+# fuente, rutas a los TTF regular y semibold (se admite `~/…`). Se aplica en
+# vivo desde el previewer y con `dinamic-ui --reload`.
+# [font]
+# regular = "~/.local/share/fonts/instatypst/Inter/static/Inter_18pt-Regular.ttf"
+# semibold = "~/.local/share/fonts/instatypst/Inter/static/Inter_18pt-SemiBold.ttf"
+
 # Recargar en caliente: dinamic-ui --reload
 
 [theme]

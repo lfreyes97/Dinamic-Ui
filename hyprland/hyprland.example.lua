@@ -288,6 +288,8 @@ hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd(dinamicUi .. " --menu"))
 -- Barras y overviews (Dinamic UI)
 hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(dinamicUi .. " --taskbar"))
 hl.bind(mainMod .. " + B", hl.dsp.exec_cmd(dinamicUi .. " --topbar"))
+-- Panel de capturas (región / pantalla / ventana / retardo).
+hl.bind("PRINT", hl.dsp.exec_cmd(dinamicUi .. " --screenshots"))
 hl.bind(mainMod .. " + SHIFT + O", hl.dsp.exec_cmd(dinamicUi .. " --overview-activities"))
 hl.bind(mainMod .. " + ALT + O", hl.dsp.exec_cmd(dinamicUi .. " --overview-strip-h"))
 hl.bind(mainMod .. " + CTRL + O", hl.dsp.exec_cmd(dinamicUi .. " --overview-strip-v"))
