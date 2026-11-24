@@ -167,14 +167,29 @@ fn dropdown_card(ui: &egui::Ui, rect: egui::Rect) {
 }
 
 /// Fondo de un botón de la barra: resalta al pasar el cursor o mientras su desplegable está abierto.
+/// Chip de herramienta siempre dibujado: fondo sheen(10), borde y esquinas.
+/// El hover solo lo intensifica; así todos los clicables de la topbar comparten
+/// el mismo estado visible (como los botones de mes del calendario).
+fn tool_chip(ui: &egui::Ui, rect: egui::Rect, hovered: bool, open: bool) {
+    let p = pal();
+    let fill = if open {
+        p.pressed
+    } else if hovered {
+        Palette::sheen(22)
+    } else {
+        Palette::sheen(10)
+    };
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(7),
+        fill,
+        Stroke::new(1.0, p.border),
+        StrokeKind::Middle,
+    );
+}
+
 fn hover_pill(ui: &egui::Ui, rect: egui::Rect, hovered: bool, open: bool) {
-    if hovered || open {
-        ui.painter().rect_filled(
-            rect,
-            CornerRadius::same(7),
-            if open { pal().pressed } else { pal().hover },
-        );
-    }
+    tool_chip(ui, rect, hovered, open);
     if hovered {
         ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
     }
@@ -605,17 +620,7 @@ fn draw_quick(ui: &mut egui::Ui, state: &UiState, palette: Palette) {
 fn month_button(ui: &mut egui::Ui, rect: egui::Rect, glyph: &str, id: &'static str) -> bool {
     let p = pal();
     let resp = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
-    ui.painter().rect(
-        rect,
-        CornerRadius::same(6),
-        if resp.hovered() {
-            Palette::sheen(22)
-        } else {
-            Palette::sheen(10)
-        },
-        Stroke::new(1.0, p.border),
-        StrokeKind::Middle,
-    );
+    tool_chip(ui, rect, resp.hovered(), false);
     icon_at(
         ui,
         rect.center(),

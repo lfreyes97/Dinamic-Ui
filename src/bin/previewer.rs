@@ -593,8 +593,8 @@ impl Previewer {
 fn draw_chip(ui: &egui::Ui, rect: egui::Rect, icon: &str, p: Palette) {
     ui.painter().rect(
         rect,
-        egui::CornerRadius::same(6),
-        p.surface,
+        egui::CornerRadius::same(7),
+        Palette::sheen(10),
         egui::Stroke::new(1.0, p.border),
         egui::StrokeKind::Middle,
     );

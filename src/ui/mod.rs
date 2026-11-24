@@ -384,13 +384,13 @@ pub(super) fn mode_chip(
         egui::Sense::click(),
     );
     let fill = if response.hovered() {
-        palette.hover
+        Palette::sheen(22)
     } else {
-        palette.badge
+        Palette::sheen(10)
     };
     ui.painter().rect(
         rect,
-        egui::CornerRadius::same(6),
+        egui::CornerRadius::same(7),
         fill,
         egui::Stroke::new(1.0, palette.border),
         egui::StrokeKind::Middle,
