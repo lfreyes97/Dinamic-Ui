@@ -113,15 +113,23 @@ impl Reservations {
         }
         self.zones = zones;
         for (i, (surface, zone)) in self.edges.iter().zip(zones).enumerate() {
-            if zone > 0 {
-                // Un borde y los dos perpendiculares: el caso en el que el
-                // protocolo considera significativo un zone positivo.
-                if i == 1 || i == 3 {
-                    surface.set_size(zone as u32, 0);
+            // Un borde y los dos perpendiculares: el caso en el que el protocolo
+            // considera significativo un zone positivo. Al soltar la zona se
+            // restaura el tamaño de arranque: si no, el auxiliar conserva una
+            // geometría "fantasma" aunque ya no reserve nada.
+            let vertical = i == 1 || i == 3;
+            let size = if zone > 0 {
+                if vertical {
+                    (zone as u32, 0)
                 } else {
-                    surface.set_size(0, zone as u32);
+                    (0, zone as u32)
                 }
-            }
+            } else if vertical {
+                (1, 0)
+            } else {
+                (0, 1)
+            };
+            surface.set_size(size.0, size.1);
             surface.set_exclusive_zone(zone);
             surface.commit();
         }
@@ -874,3 +882,72 @@ impl smithay_client_toolkit::dispatch2::Dispatch2<wl_region::WlRegion, DinamicUi
 }
 
 smithay_client_toolkit::delegate_dispatch2!(DinamicUi);
+
+#[cfg(test)]
+mod tests {
+    #[cfg(all(feature = "topbar", feature = "taskbar"))]
+    #[test]
+    fn reserve_zones_topbar_y_taskbar_por_borde() {
+        use super::*;
+        use dinamic_ui::config::{Config, Side, TaskbarConfig, TopbarConfig};
+
+        let cfg = Config {
+            topbar: TopbarConfig {
+                enabled: true,
+                height: 34,
+                mode_control: true,
+            },
+            taskbar: TaskbarConfig {
+                enabled: true,
+                side: Side::Bottom,
+                size: 48,
+                autohide: false,
+            },
+            ..Default::default()
+        };
+        config::set(cfg);
+
+        let mut state = UiState::new_preview();
+        state.shared.config = config::get();
+        state.topbar.enabled = true;
+        state.taskbar.enabled = true;
+        state.taskbar.progress = 1.0;
+        assert_eq!(
+            reserve_zones(&state),
+            [34, 0, 48, 0],
+            "topbar arriba + taskbar abajo"
+        );
+
+        // La misma taskbar, ahora en el borde derecho.
+        let mut cfg = config::get().as_ref().clone();
+        cfg.taskbar.side = Side::Right;
+        config::set(cfg);
+        state.shared.config = config::get();
+        assert_eq!(
+            reserve_zones(&state),
+            [34, 48, 0, 0],
+            "taskbar a la derecha"
+        );
+
+        // Autohide nunca reserva, aunque esté desplegada.
+        let mut cfg = config::get().as_ref().clone();
+        cfg.taskbar.autohide = true;
+        config::set(cfg);
+        state.shared.config = config::get();
+        assert_eq!(reserve_zones(&state), [34, 0, 0, 0], "taskbar en autohide");
+
+        // La animación de entrada solo reserva pasada la mitad.
+        let mut cfg = config::get().as_ref().clone();
+        cfg.taskbar.autohide = false;
+        config::set(cfg);
+        state.shared.config = config::get();
+        state.taskbar.progress = 0.4;
+        assert_eq!(reserve_zones(&state), [34, 0, 0, 0], "progress 0.4");
+        state.taskbar.progress = 0.6;
+        assert_eq!(reserve_zones(&state), [34, 48, 0, 0], "progress 0.6");
+
+        state.topbar.enabled = false;
+        state.taskbar.enabled = false;
+        assert_eq!(reserve_zones(&state), [0, 0, 0, 0], "todo apagado");
+    }
+}
