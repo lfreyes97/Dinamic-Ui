@@ -325,6 +325,33 @@ impl DinamicUi {
         for argv in self.ui_state.shared.pending_spawns.drain(..) {
             sysinfo::spawn_detached(argv);
         }
+        // QuickSettings: ejecuta las acciones tipadas y hace avanzar el semáforo.
+        let setting_actions = std::mem::take(&mut self.ui_state.shared.settings.queue);
+        for action in setting_actions {
+            if let Some(argv) = action.command() {
+                sysinfo::spawn_detached(argv);
+            }
+        }
+        for p in self.ui_state.shared.settings.pending.values_mut() {
+            if p.since_revision == 0 {
+                p.since_revision = self.last_sysinfo_revision;
+            }
+        }
+        let now = Instant::now();
+        #[cfg(feature = "notifications")]
+        let (dnd_revision, dnd) = (
+            self.ui_state.notifications.last_revision,
+            self.ui_state.notifications.dnd,
+        );
+        #[cfg(not(feature = "notifications"))]
+        let (dnd_revision, dnd) = (0u64, false);
+        self.ui_state.shared.settings.reconcile(
+            now,
+            self.last_sysinfo_revision,
+            dnd_revision,
+            &self.ui_state.shared.system,
+            dnd,
+        );
         if std::mem::take(&mut self.ui_state.shared.reload_requested) {
             self.reload_config();
             dirty = true;

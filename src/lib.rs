@@ -18,6 +18,7 @@
     allow(dead_code)
 )]
 
+pub mod actions;
 #[cfg(feature = "icons")]
 pub mod appicons;
 pub mod config;

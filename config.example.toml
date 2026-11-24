@@ -15,6 +15,10 @@
 # height = 34
 # mode_control = true
 
+# QuickSettings: controles visibles en el topbar y en el panel System.
+# [quick_settings]
+# items = ["wifi", "bluetooth", "dnd", "volume", "brightness", "lock"]
+
 # Recargar en caliente: dinamic-ui --reload
 
 [theme]

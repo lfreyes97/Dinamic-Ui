@@ -549,6 +549,11 @@ impl Previewer {
         for argv in std::mem::take(&mut self.state.shared.pending_spawns) {
             self.log.push(format!("spawn: {}", argv.join(" ")));
         }
+        for action in std::mem::take(&mut self.state.shared.settings.queue) {
+            self.log.push(format!("setting: {action:?}"));
+        }
+        // Sin sistema real que confirme, el previewer cierra el semáforo al instante.
+        self.state.shared.settings.clear_pending();
         let reload = std::mem::take(&mut self.state.shared.reload_requested);
         if self.state.should_exit {
             self.state.should_exit = false;

@@ -28,6 +28,7 @@ pub struct Config {
     pub topbar: TopbarConfig,
     pub overview: OverviewConfig,
     pub activities: ActivitiesConfig,
+    pub quick_settings: QuickSettingsConfig,
 }
 
 /// Techo de expansión de la barra: notch → compacto → barra → panel.
@@ -115,6 +116,29 @@ impl Default for TopbarConfig {
             enabled: false,
             height: 34,
             mode_control: true,
+        }
+    }
+}
+
+/// Controles visibles en QuickSettings (topbar y panel System).
+/// Nombres: `wifi`, `bluetooth`, `dnd`, `volume`, `brightness`, `lock`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct QuickSettingsConfig {
+    pub items: Vec<String>,
+}
+
+impl Default for QuickSettingsConfig {
+    fn default() -> Self {
+        Self {
+            items: vec![
+                "wifi".into(),
+                "bluetooth".into(),
+                "dnd".into(),
+                "volume".into(),
+                "brightness".into(),
+                "lock".into(),
+            ],
         }
     }
 }

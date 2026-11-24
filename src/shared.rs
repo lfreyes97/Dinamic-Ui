@@ -43,6 +43,8 @@ pub struct Shared {
     pub system_revision: u64,
     /// Un componente pidió recargar config y paleta (lo ejecuta el núcleo).
     pub reload_requested: bool,
+    /// Acciones de QuickSettings con su semáforo (ámbar) y log de ciclo de vida.
+    pub settings: crate::actions::SettingsState,
     #[cfg(feature = "icons")]
     icons: IconCache,
     /// Destello breve cuando cambia el workspace/ventana.
@@ -114,6 +116,7 @@ impl Shared {
             system: SystemInfo::default(),
             system_revision: 0,
             reload_requested: false,
+            settings: crate::actions::SettingsState::default(),
             #[cfg(feature = "icons")]
             icons: IconCache::new(),
             pulse: 0.0,
