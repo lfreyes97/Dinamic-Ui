@@ -691,10 +691,10 @@ impl LayerShellHandler for DinamicUi {
         _serial: u32,
     ) {
         if self.reservations.is_edge(layer) {
-            // Commit sin buffer para mapar el auxiliar: el zone es doble-buffer
-            // y solo se aplica después de este commit. Su configure nunca debe
-            // alterar la geometría del surface que dibuja.
-            layer.commit();
+            // El estado del auxiliar ya se aplicó en el commit de creación y se
+            // reenvía desde `sync()` cuando cambia la zona. Commitear aquí
+            // provoca un bucle configure↔commit con el compositor: cada commit
+            // sin buffer dispara otro configure (~4.400/s medidos).
             return;
         }
         self.width = configure.new_size.0.max(1);
