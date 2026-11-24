@@ -11,9 +11,19 @@ use std::{
 
 use serde::Deserialize;
 
+/// Tipografía. Con las rutas vacías se autodetecta Inter en XDG_DATA_HOME;
+/// con rutas se elige cualquier par de TTF (se admiten `~/…`).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct FontConfig {
+    pub regular: Option<String>,
+    pub semibold: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    pub font: FontConfig,
     pub bar: BarConfig,
     pub theme: ThemeConfig,
     pub sizes: Sizes,

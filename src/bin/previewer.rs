@@ -41,13 +41,16 @@ fn main() -> Result<(), eframe::Error> {
         "dinamic-ui-previewer",
         options,
         Box::new(|cc| {
-            gfx::install_fonts(&cc.egui_ctx);
-            Ok(Box::new(Previewer::new()))
+            let ctx = cc.egui_ctx.clone();
+            gfx::install_fonts(&ctx);
+            Ok(Box::new(Previewer::new(ctx)))
         }),
     )
 }
 
 struct Previewer {
+    /// Contexto de egui: reaplica las fuentes cuando cambia la config en vivo.
+    ctx: egui::Context,
     state: ui::UiState,
     /// Acciones que la instancia real ejecutaría (dispatches, spawns, reload, quit).
     log: Vec<String>,
@@ -61,10 +64,11 @@ struct Previewer {
 }
 
 impl Previewer {
-    fn new() -> Self {
+    fn new(ctx: egui::Context) -> Self {
         // La config real se lee (solo lectura): temas y tamaños son los del usuario.
         config::init();
         let mut p = Self {
+            ctx,
             state: sample_state(1.0),
             log: Vec::new(),
             config_mtime: Self::config_mtime(),
@@ -114,6 +118,7 @@ impl Previewer {
         match config::reload() {
             Ok(()) => {
                 self.sync_config();
+                gfx::install_fonts(&self.ctx);
                 self.log.push("config.toml recargado del disco".into());
             }
             Err(e) => self.log.push(format!("config: {e}")),
@@ -125,6 +130,7 @@ impl Previewer {
     fn apply_config(&mut self, cfg: Config) {
         config::set(cfg);
         self.sync_config();
+        gfx::install_fonts(&self.ctx);
     }
 
     /// Llamado cada frame: si el archivo cambió, recarga. Poll de mtime, sin deps nuevas.
@@ -193,6 +199,34 @@ impl Previewer {
         } else {
             Some(accent.trim().to_string())
         };
+
+        ui.separator();
+        ui.strong("Fuente (en vivo)");
+        let mut regular = cfg.font.regular.clone().unwrap_or_default();
+        ui.horizontal(|ui| {
+            ui.label("Regular");
+            if ui.text_edit_singleline(&mut regular).changed() {
+                changed = true;
+            }
+        });
+        cfg.font.regular = if regular.trim().is_empty() {
+            None
+        } else {
+            Some(regular.trim().to_string())
+        };
+        let mut semibold = cfg.font.semibold.clone().unwrap_or_default();
+        ui.horizontal(|ui| {
+            ui.label("Semibold");
+            if ui.text_edit_singleline(&mut semibold).changed() {
+                changed = true;
+            }
+        });
+        cfg.font.semibold = if semibold.trim().is_empty() {
+            None
+        } else {
+            Some(semibold.trim().to_string())
+        };
+        ui.label("Vacío = autodetectar Inter en XDG_DATA_HOME");
 
         if ui
             .add(egui::Slider::new(&mut cfg.sizes.bar_h, 24..=48).text("bar_h"))

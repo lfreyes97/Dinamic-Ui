@@ -355,6 +355,8 @@ impl DinamicUi {
         // Los componentes leen la config desde `Shared`: hay que refrescarla.
         self.ui_state.shared.config = config::get();
         self.ui_state.shared.palette = self.palette;
+        // La fuente también es configuración en vivo: reaplicar al recargar.
+        gfx::install_fonts(&self.gfx.ctx);
         #[cfg(feature = "taskbar")]
         {
             let enabled = self.ui_state.shared.config.taskbar.enabled;

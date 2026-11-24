@@ -308,6 +308,44 @@ impl From<RequestDeviceError> for GfxError {
 /// Inter como fuente principal (Regular) y semibold como familia aparte.
 /// egui 0.37 no tiene peso en `FontId`: `.strong()` solo cambia el color, así
 /// que los textos destacados usan explícitamente `inter-semibold`.
+/// Expande `~/` en las rutas de configuración.
+fn expand_home(path: &str) -> std::path::PathBuf {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = std::env::var_os("HOME") {
+            return std::path::PathBuf::from(home).join(rest);
+        }
+    }
+    std::path::PathBuf::from(path)
+}
+
+/// TTF (regular, semibold) según la config. Sin rutas configuradas, autodetecta
+/// Inter en el directorio de datos; se prueban ambas capitalizaciones porque
+/// Google Fonts instala `instatypst` y la documentación histórica decía `Instatypst`.
+/// La existencia de los archivos la comprueba `install_fonts`.
+fn resolve_font_files(
+    font: &crate::config::FontConfig,
+    data_home: &std::path::Path,
+) -> (Option<std::path::PathBuf>, Option<std::path::PathBuf>) {
+    if font.regular.is_some() || font.semibold.is_some() {
+        return (
+            font.regular.as_deref().map(expand_home),
+            font.semibold.as_deref().map(expand_home),
+        );
+    }
+    let fonts = data_home.join("fonts");
+    let dir = ["instatypst", "Instatypst"]
+        .iter()
+        .map(|name| fonts.join(name).join("Inter").join("static"))
+        .find(|dir| dir.join("Inter_18pt-Regular.ttf").is_file());
+    match dir {
+        Some(dir) => (
+            Some(dir.join("Inter_18pt-Regular.ttf")),
+            Some(dir.join("Inter_18pt-SemiBold.ttf")),
+        ),
+        None => (None, None),
+    }
+}
+
 pub fn install_fonts(ctx: &Context) {
     use egui::{text::FontData, FontDefinitions, FontFamily};
 
@@ -319,36 +357,83 @@ pub fn install_fonts(ctx: &Context) {
         egui_phosphor::Variant::Bold.font_bytes(),
     );
 
-    let base = std::env::var_os("XDG_DATA_HOME")
+    let cfg = crate::config::get();
+    let data_home = std::env::var_os("XDG_DATA_HOME")
         .map(std::path::PathBuf::from)
         .or_else(|| {
             std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share"))
         })
-        .unwrap_or_default()
-        .join("fonts")
-        .join("Instatypst")
-        .join("Inter")
-        .join("static");
+        .unwrap_or_default();
+    let (regular, semibold) = resolve_font_files(&cfg.font, &data_home);
 
-    let regular = base.join("Inter_18pt-Regular.ttf");
-    if let Ok(bytes) = std::fs::read(&regular) {
-        fonts
-            .font_data
-            .insert("inter".into(), FontData::from_owned(bytes).into());
-        if let Some(keys) = fonts.families.get_mut(&FontFamily::Proportional) {
-            keys.insert(0, "inter".into());
+    if let Some(path) = regular {
+        if let Ok(bytes) = std::fs::read(path) {
+            fonts
+                .font_data
+                .insert("inter".into(), FontData::from_owned(bytes).into());
+            if let Some(keys) = fonts.families.get_mut(&FontFamily::Proportional) {
+                keys.insert(0, "inter".into());
+            }
         }
     }
-    let semibold = base.join("Inter_18pt-SemiBold.ttf");
-    if let Ok(bytes) = std::fs::read(&semibold) {
-        fonts
-            .font_data
-            .insert("inter-semibold".into(), FontData::from_owned(bytes).into());
-        fonts.families.insert(
-            FontFamily::Name("inter-semibold".into()),
-            vec!["inter-semibold".into(), "inter".into()],
-        );
+    if let Some(path) = semibold {
+        if let Ok(bytes) = std::fs::read(path) {
+            fonts
+                .font_data
+                .insert("inter-semibold".into(), FontData::from_owned(bytes).into());
+            fonts.families.insert(
+                FontFamily::Name("inter-semibold".into()),
+                vec!["inter-semibold".into(), "inter".into()],
+            );
+        }
     }
 
     ctx.set_fonts(fonts);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::FontConfig;
+    use std::path::PathBuf;
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("dinamic-ui-font-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        path
+    }
+
+    #[test]
+    fn autodetect_acepta_minusculas_y_mayusculas() {
+        for name in ["instatypst", "Instatypst"] {
+            let root = temp_dir(name);
+            let dir = root.join("fonts").join(name).join("Inter").join("static");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("Inter_18pt-Regular.ttf"), b"").unwrap();
+            let (regular, semibold) = resolve_font_files(&FontConfig::default(), &root);
+            assert_eq!(regular, Some(dir.join("Inter_18pt-Regular.ttf")));
+            assert_eq!(semibold, Some(dir.join("Inter_18pt-SemiBold.ttf")));
+            std::fs::remove_dir_all(&root).unwrap();
+        }
+    }
+
+    #[test]
+    fn sin_archivos_no_hay_fuentes() {
+        let root = temp_dir("missing");
+        let (regular, semibold) = resolve_font_files(&FontConfig::default(), &root);
+        assert_eq!((regular, semibold), (None, None));
+    }
+
+    #[test]
+    fn config_explicita_tiene_prioridad() {
+        let root = temp_dir("explicit");
+        let font = FontConfig {
+            regular: Some("/tmp/regular.ttf".into()),
+            semibold: Some("/tmp/semibold.ttf".into()),
+        };
+        let (regular, semibold) = resolve_font_files(&font, &root);
+        assert_eq!(regular, Some(PathBuf::from("/tmp/regular.ttf")));
+        assert_eq!(semibold, Some(PathBuf::from("/tmp/semibold.ttf")));
+    }
 }
