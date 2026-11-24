@@ -70,7 +70,7 @@ fn quick_card(state: &UiState, screen_w: f32) -> egui::Rect {
     };
     egui::Rect::from_min_size(
         egui::pos2(screen_w - POPOVER_W - EDGE, bar_height(state) + POPOVER_GAP),
-        egui::vec2(POPOVER_W, 252.0 + footer),
+        egui::vec2(POPOVER_W, 292.0 + footer),
     )
 }
 
