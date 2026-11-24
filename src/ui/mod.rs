@@ -374,7 +374,7 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
 pub(super) fn mode_chip(
     ui: &egui::Ui,
     rect: egui::Rect,
-    label: &str,
+    icon: &str,
     palette: Palette,
     id: &'static str,
 ) -> bool {
@@ -395,12 +395,11 @@ pub(super) fn mode_chip(
         egui::Stroke::new(1.0, palette.border),
         egui::StrokeKind::Middle,
     );
-    text_at(
-        ui,
+    ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
-        label,
-        TEXT_CAPTION,
+        icon,
+        icon_font(ICON_XS),
         palette.text,
     );
     if response.hovered() {

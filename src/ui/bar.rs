@@ -241,7 +241,7 @@ pub(super) fn draw_bar_shell(
             );
             // El chip comparte zona con el pill: el clic lo atiende el rect grande
             // (notch → compacto → barra). Este interact solo dibuja hover/cursor.
-            let _ = mode_chip(ui, rect, "▲", palette, "notch-mode");
+            let _ = mode_chip(ui, rect, ic::CARET_UP, palette, "notch-mode");
         }
         // Clic: notch/compacto -> compacto enganchado -> barra.
         let response = ui.interact(
@@ -280,7 +280,7 @@ pub(super) fn draw_bar_shell(
             if mode_chip(
                 ui,
                 egui::Rect::from_min_size(egui::pos2(cx + 80.0, cy), size),
-                "▲",
+                ic::CARET_UP,
                 palette,
                 "bar-mode-up",
             ) {
@@ -289,7 +289,7 @@ pub(super) fn draw_bar_shell(
             if mode_chip(
                 ui,
                 egui::Rect::from_min_size(egui::pos2(cx + 98.0, cy), size),
-                "▼",
+                ic::CARET_DOWN,
                 palette,
                 "bar-mode-down",
             ) {

@@ -16,6 +16,7 @@ use dinamic_ui::config::{Config, Side};
 use dinamic_ui::ui::sample::sample_notifications;
 use dinamic_ui::ui::sample::{fake_desktop, sample_state, sample_system};
 use dinamic_ui::{config, gfx, theme::Palette, ui};
+use egui_phosphor::regular as ic;
 use smithay_client_toolkit::seat::keyboard::Keysym;
 
 /// Posiciones candidatas para los controles de modo (sandbox de diseño).
@@ -474,39 +475,39 @@ impl Previewer {
                 let x = surface.max.x - 4.0 - SIZE * 2.0 - 2.0;
                 chip(
                     egui::Rect::from_min_size(egui::pos2(x, cy), egui::vec2(SIZE, SIZE)),
-                    "▲",
+                    ic::CARET_UP,
                 );
                 chip(
                     egui::Rect::from_min_size(
                         egui::pos2(x + SIZE + 2.0, cy),
                         egui::vec2(SIZE, SIZE),
                     ),
-                    "▼",
+                    ic::CARET_DOWN,
                 );
             }
             ControlPlacement::Izquierda => {
                 let x = surface.min.x + 4.0;
                 chip(
                     egui::Rect::from_min_size(egui::pos2(x, cy), egui::vec2(SIZE, SIZE)),
-                    "▲",
+                    ic::CARET_UP,
                 );
                 chip(
                     egui::Rect::from_min_size(
                         egui::pos2(x + SIZE + 2.0, cy),
                         egui::vec2(SIZE, SIZE),
                     ),
-                    "▼",
+                    ic::CARET_DOWN,
                 );
             }
             ControlPlacement::Reloj => {
                 let cx = screen.width() / 2.0;
                 chip(
                     egui::Rect::from_min_size(egui::pos2(cx - 52.0, cy), egui::vec2(SIZE, SIZE)),
-                    "▲",
+                    ic::CARET_UP,
                 );
                 chip(
                     egui::Rect::from_min_size(egui::pos2(cx + 36.0, cy), egui::vec2(SIZE, SIZE)),
-                    "▼",
+                    ic::CARET_DOWN,
                 );
             }
             ControlPlacement::Notch => {
@@ -517,7 +518,7 @@ impl Previewer {
                             egui::pos2(c.x + 34.0, c.y - SIZE / 2.0),
                             egui::vec2(SIZE, SIZE),
                         ),
-                        "▲",
+                        ic::CARET_UP,
                     );
                 }
             }
@@ -526,14 +527,14 @@ impl Previewer {
                 let x = cx + 80.0;
                 chip(
                     egui::Rect::from_min_size(egui::pos2(x, cy), egui::vec2(SIZE, SIZE)),
-                    "▲",
+                    ic::CARET_UP,
                 );
                 chip(
                     egui::Rect::from_min_size(
                         egui::pos2(x + SIZE + 2.0, cy),
                         egui::vec2(SIZE, SIZE),
                     ),
-                    "▼",
+                    ic::CARET_DOWN,
                 );
             }
         }
@@ -589,7 +590,7 @@ impl Previewer {
     }
 }
 
-fn draw_chip(ui: &egui::Ui, rect: egui::Rect, label: &str, p: Palette) {
+fn draw_chip(ui: &egui::Ui, rect: egui::Rect, icon: &str, p: Palette) {
     ui.painter().rect(
         rect,
         egui::CornerRadius::same(6),
@@ -600,8 +601,8 @@ fn draw_chip(ui: &egui::Ui, rect: egui::Rect, label: &str, p: Palette) {
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
-        label,
-        egui::FontId::proportional(10.0),
+        icon,
+        egui::FontId::new(12.0, egui::FontFamily::Name("phosphor-bold".into())),
         p.text,
     );
 }
