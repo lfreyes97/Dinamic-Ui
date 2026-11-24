@@ -367,6 +367,17 @@ impl DinamicUi {
         }
     }
 
+    /// Muestra el OSD y fuerza una lectura inmediata del dato que va a pintar.
+    #[cfg(feature = "osd")]
+    fn show_osd(&mut self, kind: ui::osd::OsdKind) {
+        self.ui_state.osd.show(kind);
+        let data = match kind {
+            ui::osd::OsdKind::Volume => needs::Needs::NONE.with(Need::Audio, true),
+            ui::osd::OsdKind::Brightness => needs::Needs::NONE.with(Need::Display, true),
+        };
+        self.sysinfo.force_refresh(data);
+    }
+
     fn draw(&mut self, qh: &QueueHandle<Self>) {
         let mut dirty = false;
 
@@ -380,6 +391,10 @@ impl DinamicUi {
             match command {
                 control::Command::Quit => self.exit = true,
                 control::Command::Reload => self.reload_config(),
+                #[cfg(feature = "osd")]
+                control::Command::OsdVolume => self.show_osd(ui::osd::OsdKind::Volume),
+                #[cfg(feature = "osd")]
+                control::Command::OsdBrightness => self.show_osd(ui::osd::OsdKind::Brightness),
                 other => eprintln!(
                     "[dinamic-ui] comando `{}` no disponible: componente no compilado",
                     other.name()
@@ -465,6 +480,16 @@ impl DinamicUi {
         for action in setting_actions {
             if let Some(argv) = action.command() {
                 sysinfo::spawn_detached(argv);
+            }
+            #[cfg(feature = "osd")]
+            match action {
+                dinamic_ui::actions::SettingAction::Volume(_) => {
+                    self.show_osd(ui::osd::OsdKind::Volume)
+                }
+                dinamic_ui::actions::SettingAction::Brightness(_) => {
+                    self.show_osd(ui::osd::OsdKind::Brightness)
+                }
+                _ => {}
             }
         }
         for p in self.ui_state.shared.settings.pending.values_mut() {

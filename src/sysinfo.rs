@@ -11,7 +11,7 @@ use std::{
     io::Read,
     process::{Command, Stdio},
     sync::{
-        atomic::{AtomicU8, Ordering},
+        atomic::{AtomicBool, AtomicU8, Ordering},
         Arc, Mutex,
     },
     thread,
@@ -74,6 +74,7 @@ pub struct SystemInfo {
 pub struct SystemMonitor {
     shared: Arc<Mutex<(SystemInfo, u64)>>,
     needs: Arc<AtomicU8>,
+    force: Arc<AtomicBool>,
 }
 
 impl Default for SystemMonitor {
@@ -86,17 +87,32 @@ impl SystemMonitor {
     pub fn new() -> Self {
         let shared = Arc::new(Mutex::new((SystemInfo::default(), 0)));
         let needs = Arc::new(AtomicU8::new(0));
-        let (thread_shared, thread_needs) = (Arc::clone(&shared), Arc::clone(&needs));
+        let force = Arc::new(AtomicBool::new(false));
+        let (thread_shared, thread_needs, thread_force) =
+            (Arc::clone(&shared), Arc::clone(&needs), Arc::clone(&force));
         thread::Builder::new()
             .name("dinamic-ui-sysinfo".into())
-            .spawn(move || worker(thread_shared, thread_needs))
+            .spawn(move || worker(thread_shared, thread_needs, thread_force))
             .ok();
-        Self { shared, needs }
+        Self {
+            shared,
+            needs,
+            force,
+        }
     }
 
     /// Solo se consultan los datos que algún componente ha pedido.
     pub fn set_needs(&self, needs: Needs) {
         self.needs.store(needs.bits(), Ordering::Relaxed);
+    }
+
+    /// Fuerza una lectura inmediata de los grupos pedidos, sin esperar `INTERVAL`.
+    /// Se usa al abrir el OSD: el valor tiene que estar fresco en el siguiente frame.
+    pub fn force_refresh(&self, needs: Needs) {
+        let current = Needs::from_bits(self.needs.load(Ordering::Relaxed));
+        let merged = current.union(needs);
+        self.needs.store(merged.bits(), Ordering::Relaxed);
+        self.force.store(true, Ordering::Relaxed);
     }
 
     /// Devuelve el último estado y su revisión (cambia cuando cambian los datos).
@@ -105,14 +121,15 @@ impl SystemMonitor {
     }
 }
 
-fn worker(shared: Arc<Mutex<(SystemInfo, u64)>>, needs: Arc<AtomicU8>) {
+fn worker(shared: Arc<Mutex<(SystemInfo, u64)>>, needs: Arc<AtomicU8>, force: Arc<AtomicBool>) {
     let mut last: Option<Instant> = None;
     let mut was = Needs::NONE;
     loop {
         let requested = Needs::from_bits(needs.load(Ordering::Relaxed));
-        // Cuando cambia lo pedido se lee en seguida; después, cada INTERVAL.
+        let forced = force.swap(false, Ordering::Relaxed);
+        // Cuando cambia lo pedido o se fuerza (OSD) se lee en seguida; después, cada INTERVAL.
         let due = !requested.is_empty()
-            && (requested != was || last.is_none_or(|t| t.elapsed() >= INTERVAL));
+            && (forced || requested != was || last.is_none_or(|t| t.elapsed() >= INTERVAL));
         was = requested;
         if due {
             last = Some(Instant::now());

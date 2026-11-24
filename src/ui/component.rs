@@ -139,6 +139,10 @@ pub fn build_components() -> Vec<Box<dyn Component>> {
     components.push(Box::new(config_panel::ConfigPanel));
     #[cfg(feature = "command-menu")]
     components.push(Box::new(CommandMenu));
+    // El OSD va encima de todo: el aviso de volumen/brillo también se ve con un
+    // overview o el menú abiertos, y no reclama entrada.
+    #[cfg(feature = "osd")]
+    components.push(Box::new(Osd));
     components
 }
 
@@ -1124,6 +1128,27 @@ impl Component for CommandMenu {
 
     fn wants_keyboard(&self, state: &UiState) -> bool {
         state.menu.menu_open
+    }
+}
+
+#[cfg(feature = "osd")]
+struct Osd;
+#[cfg(feature = "osd")]
+impl Component for Osd {
+    fn name(&self) -> &'static str {
+        "osd"
+    }
+
+    fn draw(&mut self, ui: &mut egui::Ui, state: &mut UiState, _ctx: DrawCtx, palette: Palette) {
+        super::osd::draw(ui, state, palette);
+    }
+
+    fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        super::osd::update(&mut state.osd, ctx.dt)
+    }
+
+    fn needs(&self, state: &UiState) -> Needs {
+        super::osd::needs(&state.osd)
     }
 }
 

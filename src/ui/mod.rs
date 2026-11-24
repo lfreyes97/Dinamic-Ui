@@ -59,6 +59,8 @@ mod notifications;
 // Piezas comunes de los overlays a pantalla completa.
 #[cfg(any(feature = "overview", feature = "activities"))]
 mod nav;
+#[cfg(feature = "osd")]
+pub mod osd;
 #[cfg(any(feature = "overview", feature = "activities"))]
 mod overlay;
 #[cfg(feature = "overview")]
@@ -196,6 +198,8 @@ pub struct UiState {
     pub notifications: notifications::NotificationState,
     #[cfg(feature = "overview")]
     pub overview: overview::OverviewState,
+    #[cfg(feature = "osd")]
+    pub osd: osd::OsdState,
     #[cfg(feature = "activities")]
     pub activities: activities::ActivitiesState,
     #[cfg(feature = "dashboard")]
@@ -246,6 +250,8 @@ impl UiState {
             },
             #[cfg(feature = "overview")]
             overview: overview::OverviewState::default(),
+            #[cfg(feature = "osd")]
+            osd: osd::OsdState::default(),
             #[cfg(feature = "activities")]
             activities: activities::ActivitiesState::default(),
             #[cfg(feature = "dashboard")]

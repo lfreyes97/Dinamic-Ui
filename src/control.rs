@@ -28,6 +28,8 @@ pub enum Command {
     Taskbar,
     Topbar,
     Menu,
+    OsdVolume,
+    OsdBrightness,
 }
 
 impl Command {
@@ -50,6 +52,8 @@ impl Command {
             Self::Taskbar => "taskbar",
             Self::Topbar => "topbar",
             Self::Menu => "menu",
+            Self::OsdVolume => "osd-volume",
+            Self::OsdBrightness => "osd-brightness",
         }
     }
 
@@ -72,6 +76,7 @@ impl Command {
             Self::Taskbar => Some(("taskbar", cfg!(feature = "taskbar"))),
             Self::Topbar => Some(("topbar", cfg!(feature = "topbar"))),
             Self::Menu => Some(("command-menu", cfg!(feature = "command-menu"))),
+            Self::OsdVolume | Self::OsdBrightness => Some(("osd", cfg!(feature = "osd"))),
             Self::Quit | Self::Reload => None,
         }
     }
@@ -97,6 +102,8 @@ impl Command {
             "taskbar" => Some(Self::Taskbar),
             "topbar" => Some(Self::Topbar),
             "menu" => Some(Self::Menu),
+            "osd-volume" => Some(Self::OsdVolume),
+            "osd-brightness" => Some(Self::OsdBrightness),
             _ => None,
         }
     }
