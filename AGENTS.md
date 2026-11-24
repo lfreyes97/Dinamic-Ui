@@ -8,6 +8,10 @@ Instrucciones para agentes que trabajen en este repositorio.
 - Mensajes de commit: **inglés**, estilo convencional (`feat:`, `fix:`, `docs:`,
   `chore:`, `style:`). Separar código, ejemplos y documentación en commits
   distintos cuando sea razonable.
+- **Todo commit es una propuesta** hasta que el usuario lo confirme: no
+  commitear sin confirmación explícita. Presentar antes una tabla con un renglón
+  por archivo (`ruta`, `+`, `−`, `neto`) y una fila final de resumen con el total
+  de líneas modificadas y el neto.
 - **No hacer push** salvo petición explícita.
 - Este repo **no es un dotfiles**. `hyprland/hyprland.example.lua` es un ejemplo;
   sus rutas son relativas vía `DINAMIC_UI_REPO` con fallback a `$HOME`.
@@ -72,8 +76,8 @@ Instrucciones para agentes que trabajen en este repositorio.
 - Otros WCs (`Sugar_*`, `fake_hypr`, `fake_river`, `fake_weston`) son una
   **idea de exploración**, no roadmap. Soportarlos de verdad exige diseñar IPCs
   propios. Ver `docs/SUPPORT_OTHER_WCS.md`.
-- La reserva real de zonas requiere surfaces auxiliares. `hyprland/patch.lua` es
-  un parche temporal de gaps de Hyprland, no una solución de protocolo.
+- La reserva real de zonas se hace con surfaces auxiliares (`Reservations` en
+  `src/main.rs`); ya no hay parche de gaps en la config de Hyprland.
 - Los sliders de config nunca escriben `config.toml` del usuario.
 
 ## Relación con el usuario

@@ -1,6 +1,8 @@
 // El bucle de eventos Wayland del shell. La lógica vive en la lib (`src/lib.rs`);
 // el previewer interactivo (feature `previewer`) la reutiliza sin compositor.
 
+#[cfg(feature = "taskbar")]
+use dinamic_ui::config::Side;
 use dinamic_ui::{config, control, gfx, ipc, needs, power, sysinfo, theme, ui};
 
 use std::time::{Duration, Instant};
@@ -43,6 +45,122 @@ use wayland_client::{
 
 type InputRects = Vec<(i32, i32, i32, i32)>;
 
+/// Zonas reservadas por borde: arriba, derecha, abajo, izquierda.
+type Zones = [i32; 4];
+
+/// Cuatro layer surfaces auxiliares que solo exponen `exclusive_zone`: no llevan
+/// buffer, no dibujan y su `input_region` está vacía. El surface principal sigue
+/// siendo el único que renderiza; las reservas viven aparte para no violar la
+/// regla del protocolo que anula el zone en superficies ancladas a los 4 bordes.
+struct Reservations {
+    edges: [LayerSurface; 4],
+    zones: Zones,
+}
+
+impl Reservations {
+    fn new(
+        layer_shell: &LayerShell,
+        compositor: &CompositorState,
+        qh: &QueueHandle<DinamicUi>,
+    ) -> Self {
+        // Región vacía: `set_input_region(None)` significaría "toda la superficie"
+        // y un auxiliar invisible se comería los clics del borde.
+        let empty = compositor.wl_compositor().create_region(qh, ());
+        let make = |namespace: &str, anchor: Anchor, size: (u32, u32)| {
+            let surface = compositor.create_surface(qh);
+            let reserved =
+                layer_shell.create_layer_surface(qh, surface, Layer::Top, Some(namespace), None);
+            reserved.set_anchor(anchor);
+            reserved.set_keyboard_interactivity(KeyboardInteractivity::None);
+            reserved.set_size(size.0, size.1);
+            reserved.set_input_region(Some(&empty));
+            reserved.set_exclusive_zone(0);
+            reserved.commit();
+            reserved
+        };
+        let edges = [
+            make(
+                "dinamic-ui-reserve-top",
+                Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+                (0, 1),
+            ),
+            make(
+                "dinamic-ui-reserve-right",
+                Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM,
+                (1, 0),
+            ),
+            make(
+                "dinamic-ui-reserve-bottom",
+                Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+                (0, 1),
+            ),
+            make(
+                "dinamic-ui-reserve-left",
+                Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM,
+                (1, 0),
+            ),
+        ];
+        empty.destroy();
+        Self {
+            edges,
+            zones: [0; 4],
+        }
+    }
+
+    fn sync(&mut self, zones: Zones) {
+        if self.zones == zones {
+            return;
+        }
+        self.zones = zones;
+        for (i, (surface, zone)) in self.edges.iter().zip(zones).enumerate() {
+            if zone > 0 {
+                // Un borde y los dos perpendiculares: el caso en el que el
+                // protocolo considera significativo un zone positivo.
+                if i == 1 || i == 3 {
+                    surface.set_size(zone as u32, 0);
+                } else {
+                    surface.set_size(0, zone as u32);
+                }
+            }
+            surface.set_exclusive_zone(zone);
+            surface.commit();
+        }
+    }
+
+    fn is_edge(&self, layer: &LayerSurface) -> bool {
+        self.edges.iter().any(|edge| edge == layer)
+    }
+}
+
+/// Contribución de cada componente a la reserva por borde. El dock no aporta:
+/// es autohide por diseño (`docs/DOCK.md`), así que no reserva hueco permanente.
+#[cfg_attr(
+    not(any(feature = "topbar", feature = "taskbar")),
+    allow(unused_variables, unused_mut)
+)]
+fn reserve_zones(state: &UiState) -> Zones {
+    let mut zones = [0i32; 4];
+    #[cfg(feature = "topbar")]
+    if state.topbar.enabled {
+        zones[0] = state.shared.config.topbar.height as i32;
+    }
+    #[cfg(feature = "taskbar")]
+    if state.taskbar.enabled
+        && !state.shared.config.taskbar.autohide
+        && state.taskbar.progress > 0.5
+    {
+        let size = state.shared.config.taskbar.size as i32;
+        let edge = match state.shared.config.taskbar.side {
+            Side::Top => 0,
+            Side::Right => 1,
+            Side::Bottom => 2,
+            Side::Left => 3,
+        };
+        zones[edge] = zones[edge].max(size);
+    }
+    zones
+}
+
 struct DinamicUi {
     registry_state: RegistryState,
     seat_state: SeatState,
@@ -50,6 +168,8 @@ struct DinamicUi {
     compositor_state: CompositorState,
 
     layer: LayerSurface,
+    /// Reservas de layout por borde (topbar y taskbar).
+    reservations: Reservations,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     pointer: Option<wl_pointer::WlPointer>,
 
@@ -118,7 +238,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
     layer.set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
     layer.set_size(0, 0);
+    // -1 = extensión total: el compositor no debe mover este surface para
+    // acomodar las reservas de los auxiliares. Así overview y menú siguen
+    // cubriendo la pantalla y la geometría de la animación no cambia.
+    layer.set_exclusive_zone(-1);
     layer.commit(); // configure inicial
+
+    let reservations = Reservations::new(&layer_shell, &compositor_state, &qh);
 
     let backend = conn.backend();
     let gfx = Gfx::new(&backend, layer.wl_surface(), 1.0)?;
@@ -129,6 +255,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         output_state: OutputState::new(&globals, &qh),
         compositor_state,
         layer,
+        reservations,
         keyboard: None,
         pointer: None,
         gfx,
@@ -360,6 +487,11 @@ impl DinamicUi {
             self.exit = true;
         }
 
+        // Reservas: cambian con topbar, taskbar (lado y autohide) y reload.
+        // El surface principal no se redimensiona, así que la animación sigue
+        // siendo nuestra y el input region solo filtra clics.
+        self.reservations.sync(reserve_zones(&self.ui_state));
+
         let (t, panel_t, pill_w) = ui::draw_params(&self.ui_state);
         // El input region lo declaran los componentes activos. El surface no
         // se redimensiona: solo cambia la zona que acepta eventos.
@@ -446,9 +578,12 @@ impl CompositorHandler for DinamicUi {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         new_factor: i32,
     ) {
+        if surface != self.layer.wl_surface() {
+            return;
+        }
         self.scale = new_factor.max(1);
         self.layer.wl_surface().set_buffer_scale(self.scale);
     }
@@ -466,9 +601,12 @@ impl CompositorHandler for DinamicUi {
         &mut self,
         _conn: &Connection,
         qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
+        if surface != self.layer.wl_surface() {
+            return;
+        }
         self.draw(qh);
     }
 
@@ -501,18 +639,29 @@ impl OutputHandler for DinamicUi {
 }
 
 impl LayerShellHandler for DinamicUi {
-    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
-        self.exit = true;
+    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, layer: &LayerSurface) {
+        // Solo el surface principal sostiene el proceso; cerrar un auxiliar no
+        // tiene que apagar el shell.
+        if layer == &self.layer {
+            self.exit = true;
+        }
     }
 
     fn configure(
         &mut self,
         _conn: &Connection,
         qh: &QueueHandle<Self>,
-        _layer: &LayerSurface,
+        layer: &LayerSurface,
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
+        if self.reservations.is_edge(layer) {
+            // Commit sin buffer para mapar el auxiliar: el zone es doble-buffer
+            // y solo se aplica después de este commit. Su configure nunca debe
+            // alterar la geometría del surface que dibuja.
+            layer.commit();
+            return;
+        }
         self.width = configure.new_size.0.max(1);
         self.height = configure.new_size.1.max(1);
         self.draw(qh);

@@ -43,13 +43,6 @@ local HOME = os.getenv("HOME") or ""
 local REPO = os.getenv("DINAMIC_UI_REPO") or (HOME .. "/Projects/Dinamic-Ui")
 local dinamicUi = REPO .. "/target/release/dinamic-ui"
 
--- PARCHE TEMPORAL: reservas vía gaps_out mientras no haya exclusive_zone real.
--- Quitar estas dos líneas (y reiniciar Hyprland) para deshacerlo.
-if not patch_topbar then
-  dofile(REPO .. "/hyprland/patch.lua")
-end
-
-
 -------------------
 ---- AUTOSTART ----
 -------------------

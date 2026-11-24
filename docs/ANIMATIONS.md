@@ -81,11 +81,18 @@ solo `top`, al crecer recentra pero al encoger deja fijo el borde izquierdo. Y a
 se compensara con márgen, llamar a `set_size`/`set_margin` cada frame genera un
 `configure` por cambio y se producía un desfase de un frame entre tamaño y posición.
 
-Solución definitiva: **el layer surface nunca cambia de geometría**. Se ancla
-`TOP | LEFT | RIGHT` con `set_size(0, surface_h)` (de la config) y ocupa todo el ancho siempre.
-La píldora se dibuja centrada dentro con egui y el `input_region` se actualiza para
-que solo el área visible reciba clics (`wl_compositor.create_region` + `set_input_region`).
+Solución definitiva: **el layer surface nunca cambia de geometría**. Se ancla a
+los cuatro bordes con `set_size(0, 0)`, ocupa toda la pantalla y lleva
+`set_exclusive_zone(-1)` para que el compositor no lo mueva al añadir reservas
+(el caso del wallpaper: extenderse hasta los bordes). La píldora se dibuja
+centrada dentro con egui y el `input_region` se actualiza para que solo el área
+visible reciba clics (`wl_compositor.create_region` + `set_input_region`).
 Cero `set_size` durante la animación, cero `configure`, cero jitter.
+
+El hueco de topbar/taskbar no lo reserva este surface: el protocolo trata un
+zone positivo como cero cuando el surface está anclado a los cuatro bordes. Lo
+reservan cuatro surfaces auxiliares sin buffer (`Reservations` en `src/main.rs`),
+uno por borde, con `input_region` vacío y la zone calculada desde la config.
 
 Además, en la config de Hyprland se añadió `no_anim` para el namespace `dinamic-ui`,
 para que el compositor no interpole encima de nuestros propios valores.

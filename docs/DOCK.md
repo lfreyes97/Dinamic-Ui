@@ -7,11 +7,11 @@
   inferiores** y se oculta al salir de los **72 px** que reclama el dock (histéresis):
   así el cursor puede estar sobre la parte alta del dock sin que se esconda. La
   posición se consulta por IPC (`cursorpos`) cada 120 ms.
-- **Zona reservada (diseño pendiente)**: la reserva real (`exclusive_zone`) debe ir
-  ligada a `autohide`. Con autohide activo **no** se reserva (el hueco aparece y
-  desaparece con el dock); con `autohide = false` se reservan los 72 px de forma
-  permanente, como una barra fija. El parche temporal `hyprland/patch.lua` cubre
-  **solo el topbar** con gaps globales de Hyprland y no toca el dock.
+- **Zona reservada**: el dock es siempre autohide (`DockConfig` no tiene aún
+  `autohide`), así que **no reserva** hueco: la franja aparece y desaparece con
+  el dock. Las reservas reales (`exclusive_zone`) viven en surfaces auxiliares
+  y hoy solo las usan topbar y taskbar. Si se añade `dock.autohide`, con
+  `false` se reservarían los 72 px de forma permanente, como una barra fija.
 - Elementos: apps fijadas (`[dock] pinned`) + ventanas mapeadas (`j/clients`),
   sin duplicar por `class`.
 - **Moverse entre ventanas**: una sola ventana → enfocar por dirección; varias →
