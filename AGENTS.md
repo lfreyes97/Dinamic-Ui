@@ -38,7 +38,8 @@ Instrucciones para agentes que trabajen en este repositorio.
   que abre el caret del estado y la pestaña System del panel (para usuarios sin
   topbar completo). No dibujar dos veces la misma lógica.
 - Opciones elegibles en `[quick_settings] items`.
-- Acciones pendientes: power mode, night light y capturas.
+- Power mode implementado (`powerprofilesctl`, item `power-mode`); capturas en
+  `screenshots.rs`. Pendiente: night light (no hay esquema/servicio en esta máquina).
 
 ## Previewer
 
