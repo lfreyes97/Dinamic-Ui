@@ -779,7 +779,8 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
 
     // Los mismos controles que el overlay del topbar, en el ancho del panel.
     section_heading(ui, "QUICK SETTINGS", "Sistema");
-    let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(width, 210.0), egui::Sense::hover());
+    let height = super::quick_settings::required_height(state);
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(width, height), egui::Sense::hover());
     super::quick_settings::draw(ui, rect, state, pal());
 }
 

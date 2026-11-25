@@ -81,6 +81,7 @@ pub fn bar_needs(phase: BarPhase, max: crate::config::BarMaxState) -> crate::nee
     if phase >= BarPhase::Panel && max >= BarMaxState::Panel {
         out.set(Need::Display, true);
         out.set(Need::Layout, true);
+        out.set(Need::Power, true);
     }
     out
 }

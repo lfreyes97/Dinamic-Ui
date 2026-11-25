@@ -58,8 +58,11 @@ fn as_ints(r: egui::Rect) -> (i32, i32, i32, i32) {
 /// Líneas de pie del resumen del sistema (salida de audio y batería).
 fn quick_footer_lines(state: &UiState) -> usize {
     usize::from(state.shared.system.audio_output.is_some())
-        + usize::from(state.shared.battery.present)
 }
+
+/// Espacio del encabezado y del pie del popover. El cuerpo lo decide el grid.
+const QUICK_HEADER: f32 = 30.0;
+const QUICK_BOTTOM: f32 = 8.0;
 
 fn quick_card(state: &UiState, screen_w: f32) -> egui::Rect {
     let lines = quick_footer_lines(state);
@@ -68,9 +71,10 @@ fn quick_card(state: &UiState, screen_w: f32) -> egui::Rect {
     } else {
         0.0
     };
+    let body = super::quick_settings::required_height(state);
     egui::Rect::from_min_size(
         egui::pos2(screen_w - POPOVER_W - EDGE, bar_height(state) + POPOVER_GAP),
-        egui::vec2(POPOVER_W, 292.0 + footer),
+        egui::vec2(POPOVER_W, QUICK_HEADER + body + footer + QUICK_BOTTOM),
     )
 }
 
@@ -423,33 +427,32 @@ fn draw_quick(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         ui.scope_id().with("tb-quick-card"),
         egui::Sense::click(),
     );
-    text_at(
-        ui,
-        egui::pos2(card.min.x + 16.0, card.min.y + 17.0),
-        egui::Align2::LEFT_CENTER,
-        "Sistema",
-        TEXT_CAPTION,
-        palette.dim,
+    let header = egui::Rect::from_min_size(
+        egui::pos2(card.min.x + 16.0, card.min.y + 6.0),
+        egui::vec2(card.width() - 32.0, 20.0),
     );
+    quick_settings::draw_header(ui, header, state, palette);
 
+    let lines = quick_footer_lines(state);
+    let footer = if lines > 0 {
+        4.0 + 18.0 * lines as f32
+    } else {
+        0.0
+    };
     let body = egui::Rect::from_min_size(
-        egui::pos2(card.min.x + 16.0, card.min.y + 30.0),
-        egui::vec2(card.width() - 32.0, card.height() - 64.0),
+        egui::pos2(card.min.x + 16.0, card.min.y + QUICK_HEADER),
+        egui::vec2(
+            card.width() - 32.0,
+            card.height() - QUICK_HEADER - footer - QUICK_BOTTOM,
+        ),
     );
     quick_settings::draw(ui, body, state, palette);
 
     // Pie: salida de audio y batería, en una sola línea compacta.
-    let y = card.max.y - 22.0;
+    let y = card.max.y - QUICK_BOTTOM - footer + 12.0;
     let mut footer = String::new();
     if let Some(output) = &state.shared.system.audio_output {
-        footer.push_str(&format!("Salida: {} · ", truncate(output, 20)));
-    }
-    let battery = &state.shared.battery;
-    if battery.present {
-        footer.push_str(&format!("Batería: {}%", battery.percent));
-        if battery.charging {
-            footer.push_str(" · cargando");
-        }
+        footer.push_str(&format!("Salida: {}", truncate(output, 26)));
     }
     if !footer.is_empty() {
         text_at(

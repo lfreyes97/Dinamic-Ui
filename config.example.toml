@@ -17,7 +17,7 @@
 
 # QuickSettings: controles visibles en el topbar y en el panel System.
 # [quick_settings]
-# items = ["wifi", "bluetooth", "dnd", "volume", "brightness", "lock"]
+# items = ["wifi", "bluetooth", "dnd", "power-mode", "volume", "brightness", "lock"]
 
 # Tipografía: con las rutas vacías se autodetecta Inter en
 # $XDG_DATA_HOME/fonts/{instatypst,Instatypst}/Inter/static. Para elegir otra

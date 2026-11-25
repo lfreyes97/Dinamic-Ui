@@ -17,15 +17,18 @@ pub enum Need {
     Audio,
     Display,
     Layout,
+    /// Perfil de energía (`powerprofilesctl`), para QuickSettings.
+    Power,
 }
 
-pub const ALL_NEEDS: [Need; 6] = [
+pub const ALL_NEEDS: [Need; 7] = [
     Need::Time,
     Need::Battery,
     Need::Network,
     Need::Audio,
     Need::Display,
     Need::Layout,
+    Need::Power,
 ];
 
 /// Conjunto de datos solicitados. Se propaga por valor; `Copy` es deliberado.
@@ -35,8 +38,8 @@ pub struct Needs(u8);
 impl Needs {
     pub const NONE: Self = Self(0);
     /// Todo lo que antes se leía en bloque (sin la hora, que no consulta el hilo).
-    pub const SYSTEM: Self = Self(0b0111_1110);
-    pub const ALL: Self = Self(0b0111_1111);
+    pub const SYSTEM: Self = Self(0b1111_1110);
+    pub const ALL: Self = Self(0b1111_1111);
 
     pub fn from_bits(bits: u8) -> Self {
         Self(bits & Self::ALL.0)
@@ -80,6 +83,7 @@ impl Needs {
             Need::Audio => 1 << 3,
             Need::Display => 1 << 4,
             Need::Layout => 1 << 5,
+            Need::Power => 1 << 6,
         }
     }
 }
@@ -87,14 +91,14 @@ impl Needs {
 /// Mantiene cada flag vivo durante `hold` tras su última petición.
 #[derive(Debug)]
 pub struct NeedTracker {
-    last: [Option<Instant>; 6],
+    last: [Option<Instant>; 7],
     hold: Duration,
 }
 
 impl NeedTracker {
     pub fn new(hold: Duration) -> Self {
         Self {
-            last: [None; 6],
+            last: [None; 7],
             hold,
         }
     }

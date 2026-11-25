@@ -654,12 +654,23 @@ impl Component for Topbar {
             return Needs::NONE;
         }
         use crate::needs::Need;
-        Needs::NONE
+        let mut out = Needs::NONE
             .with(Need::Time, true)
             .with(Need::Battery, true)
             .with(Need::Network, true)
             .with(Need::Audio, true)
-            .with(Need::Display, true)
+            .with(Need::Display, true);
+        if state
+            .shared
+            .config
+            .quick_settings
+            .items
+            .iter()
+            .any(|item| item == "power-mode")
+        {
+            out.set(Need::Power, true);
+        }
+        out
     }
 
     fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {

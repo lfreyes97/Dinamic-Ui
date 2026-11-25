@@ -21,12 +21,14 @@ pub enum SettingId {
     Volume,
     Brightness,
     Lock,
+    PowerMode,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SettingValue {
     Bool(bool),
     Percent(u8),
+    Profile(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +39,7 @@ pub enum SettingAction {
     Volume(u8),
     Brightness(u8),
     Lock,
+    PowerMode(&'static str),
 }
 
 impl SettingAction {
@@ -48,6 +51,7 @@ impl SettingAction {
             Self::Volume(_) => SettingId::Volume,
             Self::Brightness(_) => SettingId::Brightness,
             Self::Lock => SettingId::Lock,
+            Self::PowerMode(_) => SettingId::PowerMode,
         }
     }
 
@@ -56,6 +60,7 @@ impl SettingAction {
             Self::Wifi(on) | Self::Bluetooth(on) | Self::Dnd(on) => SettingValue::Bool(on),
             Self::Volume(pct) | Self::Brightness(pct) => SettingValue::Percent(pct),
             Self::Lock => SettingValue::Bool(true),
+            Self::PowerMode(profile) => SettingValue::Profile(profile.to_string()),
         }
     }
 
@@ -86,6 +91,7 @@ impl SettingAction {
             ],
             Self::Brightness(pct) => vec![s("brightnessctl"), s("set"), s(&format!("{pct}%"))],
             Self::Lock => vec![s("hyprlock")],
+            Self::PowerMode(profile) => vec![s("powerprofilesctl"), s("set"), s(profile)],
             Self::Dnd(_) => return None,
         })
     }
@@ -222,6 +228,7 @@ fn actual_value(id: SettingId, system: &SystemInfo, dnd: bool) -> Option<Setting
         SettingId::Volume => SettingValue::Percent(system.volume.as_ref()?.percent),
         SettingId::Brightness => SettingValue::Percent(system.brightness?),
         SettingId::Lock => return None,
+        SettingId::PowerMode => SettingValue::Profile(system.power_profile.as_deref()?.to_string()),
     })
 }
 

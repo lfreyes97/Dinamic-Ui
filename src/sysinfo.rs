@@ -65,6 +65,8 @@ pub struct SystemInfo {
     pub display: Option<String>,
     /// Valor actual de `general:layout` en Hyprland.
     pub layout: Option<String>,
+    /// Perfil de energía activo (`powerprofilesctl get`), p. ej. `balanced`.
+    pub power_profile: Option<String>,
     /// Fondo actual del primer monitor (`awww query`).
     #[cfg(feature = "wallpaper")]
     pub wallpaper: Option<Wallpaper>,
@@ -170,7 +172,19 @@ fn read(needs: Needs) -> SystemInfo {
     if needs.get(Need::Layout) {
         info.layout = read_layout();
     }
+    if needs.get(Need::Power) {
+        info.power_profile = read_power_profile();
+    }
     info
+}
+
+fn read_power_profile() -> Option<String> {
+    let out = run("powerprofilesctl", &["get"])?;
+    out.lines()
+        .next()
+        .map(str::trim)
+        .filter(|profile| !profile.is_empty())
+        .map(str::to_string)
 }
 
 /// Ejecuta un comando con `LC_ALL=C` y límite de tiempo. `None` si no existe,

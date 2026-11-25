@@ -131,7 +131,7 @@ impl Default for TopbarConfig {
 }
 
 /// Controles visibles en QuickSettings (topbar y panel System).
-/// Nombres: `wifi`, `bluetooth`, `dnd`, `volume`, `brightness`, `lock`.
+/// Nombres: `wifi`, `bluetooth`, `dnd`, `power-mode`, `volume`, `brightness`, `lock`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct QuickSettingsConfig {
@@ -145,6 +145,7 @@ impl Default for QuickSettingsConfig {
                 "wifi".into(),
                 "bluetooth".into(),
                 "dnd".into(),
+                "power-mode".into(),
                 "volume".into(),
                 "brightness".into(),
                 "lock".into(),
