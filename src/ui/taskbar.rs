@@ -202,7 +202,7 @@ fn tool_slot(
     let response = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     ui.painter().rect_filled(
         rect,
-        CornerRadius::same(9),
+        CornerRadius::same(Radius::of(Radius::MD)),
         hover_fill(&response, palette, false),
     );
     ui.painter().text(
@@ -295,7 +295,7 @@ fn tray_button(
     let response = ui.interact(rect, ui.scope_id().with(id), egui::Sense::hover());
     ui.painter().rect_filled(
         rect,
-        CornerRadius::same(6),
+        CornerRadius::same(Radius::of(Radius::SM)),
         hover_fill(&response, palette, false),
     );
     ui.painter().text(
@@ -488,7 +488,7 @@ pub(super) fn draw_taskbar(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
 
     ui.painter().rect(
         bar,
-        CornerRadius::same(0),
+        CornerRadius::same(Radius::of(Radius::NONE)),
         palette.surface,
         Stroke::new(1.0, palette.border),
         StrokeKind::Middle,
@@ -561,7 +561,7 @@ pub(super) fn draw_taskbar(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         );
         ui.painter().rect_filled(
             rect,
-            CornerRadius::same(9),
+            CornerRadius::same(Radius::of(Radius::MD)),
             hover_fill(&response, palette, active),
         );
         let icon_px = item * 0.55;
@@ -586,7 +586,7 @@ pub(super) fn draw_taskbar(ui: &mut egui::Ui, state: &mut UiState, palette: Pale
         if active {
             ui.painter().rect_filled(
                 active_mark(rect, cfg.side),
-                CornerRadius::same(1),
+                CornerRadius::same(Radius::of(Radius::NONE)),
                 palette.accent,
             );
         } else if running {
@@ -700,7 +700,7 @@ fn draw_overflow(
     drop_shadow(ui, card, 12, 8, 24, 90);
     ui.painter().rect(
         card,
-        CornerRadius::same(12),
+        CornerRadius::same(Radius::of(Radius::CARD)),
         Palette::with_alpha(palette.raised, 250),
         Stroke::new(1.0, palette.border),
         StrokeKind::Middle,
@@ -729,7 +729,7 @@ fn draw_overflow(
         );
         ui.painter().rect_filled(
             row,
-            CornerRadius::same(8),
+            CornerRadius::same(Radius::of(Radius::MD)),
             hover_fill(&resp, palette, active),
         );
         let icon_px = row_h * 0.5;

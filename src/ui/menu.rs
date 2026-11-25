@@ -83,15 +83,18 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
     use crate::launcher::{filter, MenuMode};
 
     let screen = ui.max_rect();
-    ui.painter()
-        .rect_filled(screen, CornerRadius::same(0), Palette::scrim(205));
+    ui.painter().rect_filled(
+        screen,
+        CornerRadius::same(Radius::of(Radius::NONE)),
+        Palette::scrim(205),
+    );
 
     let w = 560.0f32.min(screen.width() - 60.0);
     let h = 520.0f32.min(screen.height() - 60.0);
     let card = egui::Rect::from_center_size(screen.center(), egui::vec2(w, h));
     ui.painter().rect(
         card,
-        CornerRadius::same(18),
+        CornerRadius::same(Radius::of(Radius::XL)),
         pal().card_fill,
         Stroke::new(1.0, pal().border),
         StrokeKind::Middle,
@@ -132,7 +135,7 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
                 egui::pos2(x + 30.0 + state.menu.menu_query.len() as f32 * 7.6, y + 2.0),
                 egui::vec2(1.5, 14.0),
             ),
-            CornerRadius::same(0),
+            CornerRadius::same(Radius::of(Radius::NONE)),
             palette.accent,
         );
     }
@@ -162,8 +165,11 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
         );
         let active = *mode == state.menu.menu_mode;
         if active {
-            ui.painter()
-                .rect_filled(rect, CornerRadius::same(8), pal().hover);
+            ui.painter().rect_filled(
+                rect,
+                CornerRadius::same(Radius::of(Radius::MD)),
+                pal().hover,
+            );
         }
         let label = format!("{}  {}", mode.label(), mode.shortcut());
         ui.painter().text(
@@ -216,8 +222,11 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
         );
         let selected = i == state.menu.menu_selected;
         if selected {
-            ui.painter()
-                .rect_filled(rect, CornerRadius::same(10), palette.accent_soft);
+            ui.painter().rect_filled(
+                rect,
+                CornerRadius::same(Radius::of(Radius::MD)),
+                palette.accent_soft,
+            );
         }
         let icon_rect = egui::Rect::from_center_size(
             rect.min + egui::vec2(26.0, rect.height() / 2.0),
@@ -231,8 +240,11 @@ pub(super) fn draw_command_menu(ui: &mut egui::Ui, state: &mut UiState, palette:
             .corner_radius(8.0)
             .paint_at(ui, icon_rect);
         } else {
-            ui.painter()
-                .rect_filled(icon_rect, CornerRadius::same(8), palette.badge);
+            ui.painter().rect_filled(
+                icon_rect,
+                CornerRadius::same(Radius::of(Radius::MD)),
+                palette.badge,
+            );
             let glyph = match entry.icon_key.as_str() {
                 "folder" => ic::FOLDER,
                 "file" => ic::FILE,

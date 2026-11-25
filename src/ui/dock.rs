@@ -90,7 +90,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
 
     ui.painter().rect(
         dock,
-        CornerRadius::same(16),
+        CornerRadius::same(Radius::of(Radius::XL)),
         pal().card_fill,
         Stroke::new(1.0, pal().border),
         StrokeKind::Middle,
@@ -128,7 +128,8 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
         } else {
             pal().hover
         };
-        ui.painter().rect_filled(rect, CornerRadius::same(12), fill);
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(Radius::of(Radius::CARD)), fill);
 
         let icon_size = if pressed { 22.0 } else { 26.0 };
         let icon_rect =
@@ -217,7 +218,7 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             );
             ui.painter().rect(
                 menu,
-                CornerRadius::same(12),
+                CornerRadius::same(Radius::of(Radius::CARD)),
                 pal().card_fill,
                 Stroke::new(1.0, pal().border),
                 StrokeKind::Middle,
@@ -241,8 +242,11 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                     egui::Sense::click(),
                 );
                 if r.hovered() {
-                    ui.painter()
-                        .rect_filled(row, CornerRadius::same(6), palette.badge);
+                    ui.painter().rect_filled(
+                        row,
+                        CornerRadius::same(Radius::of(Radius::SM)),
+                        palette.badge,
+                    );
                     ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
                 }
                 text_at(
@@ -268,8 +272,11 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                 egui::Sense::click(),
             );
             if r.hovered() {
-                ui.painter()
-                    .rect_filled(new_row, CornerRadius::same(6), palette.badge);
+                ui.painter().rect_filled(
+                    new_row,
+                    CornerRadius::same(Radius::of(Radius::SM)),
+                    palette.badge,
+                );
             }
             text_at(
                 ui,

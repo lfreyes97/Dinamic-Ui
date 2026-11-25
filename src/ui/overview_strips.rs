@@ -45,7 +45,7 @@ fn nav_button(
     let resp = ui.interact(rect, ui.scope_id().with(id), egui::Sense::click());
     ui.painter().rect(
         rect,
-        CornerRadius::same(6),
+        CornerRadius::same(Radius::of(Radius::SM)),
         if resp.hovered() {
             Palette::sheen(22)
         } else {
@@ -98,7 +98,7 @@ fn thumb(
     };
     ui.painter().rect(
         rect,
-        CornerRadius::same(6),
+        CornerRadius::same(Radius::of(Radius::SM)),
         if active_ws {
             Palette::with_alpha(crate::theme::mix(palette.raised, palette.accent, 0.12), 240)
         } else if selected || resp.hovered() {
@@ -112,7 +112,7 @@ fn thumb(
     if active_ws {
         ui.painter().rect_stroke(
             rect.expand(1.5),
-            CornerRadius::same(7),
+            CornerRadius::same(Radius::of(Radius::SM)),
             Stroke::new(1.0, Palette::with_alpha(palette.accent, 50)),
             StrokeKind::Middle,
         );
@@ -173,7 +173,7 @@ fn thumb(
 fn strip_background(ui: &egui::Ui, strip: egui::Rect, edge: (egui::Pos2, egui::Pos2)) {
     ui.painter().rect_filled(
         strip,
-        CornerRadius::same(0),
+        CornerRadius::same(Radius::of(Radius::NONE)),
         Palette::with_alpha(pal().solid(), 236),
     );
     ui.painter()

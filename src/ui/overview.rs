@@ -253,8 +253,11 @@ pub(super) fn handle_key(state: &mut UiState, key: Keysym) -> bool {
 /// Overview: rejilla de workspaces con las ventanas en su posición relativa.
 fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
-    ui.painter()
-        .rect_filled(screen, CornerRadius::same(0), Palette::scrim(168));
+    ui.painter().rect_filled(
+        screen,
+        CornerRadius::same(Radius::of(Radius::NONE)),
+        Palette::scrim(168),
+    );
     // Registrado antes que las tarjetas: un clic en ventana gana sobre el fondo.
     let backdrop = ui.interact(
         screen,
@@ -342,7 +345,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         };
         ui.painter().rect(
             card,
-            CornerRadius::same(9),
+            CornerRadius::same(Radius::of(Radius::MD)),
             Palette::with_alpha(fill, 224),
             Stroke::new(width, color),
             StrokeKind::Middle,
@@ -351,7 +354,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
             // Halo de 1 px alrededor de la tarjeta del workspace actual.
             ui.painter().rect_stroke(
                 card.expand(1.5),
-                CornerRadius::same(10),
+                CornerRadius::same(Radius::of(Radius::MD)),
                 Stroke::new(1.0, Palette::with_alpha(palette.accent, 50)),
                 StrokeKind::Middle,
             );
@@ -409,8 +412,11 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
             (inner.width(), inner.width() / aspect)
         };
         let mon = egui::Rect::from_center_size(inner.center(), egui::vec2(mw, mh));
-        ui.painter()
-            .rect_filled(mon, CornerRadius::same(4), Palette::sheen(6));
+        ui.painter().rect_filled(
+            mon,
+            CornerRadius::same(Radius::of(Radius::XS)),
+            Palette::sheen(6),
+        );
 
         // La ventana activa se pinta al final: queda encima si se solapan.
         for j in model::paint_order(&windows, &active_address) {

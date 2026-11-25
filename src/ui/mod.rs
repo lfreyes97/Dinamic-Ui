@@ -346,6 +346,7 @@ pub fn draw(
     pill_w: f32,
 ) {
     crate::theme::set_current(palette);
+    tokens::set_scale(ui.ctx().content_rect().height());
     let mut visuals = egui::Visuals::dark();
     visuals.panel_fill = Color32::TRANSPARENT;
     visuals.window_fill = Color32::TRANSPARENT;
@@ -406,7 +407,7 @@ pub(super) fn mode_chip(
     };
     ui.painter().rect(
         rect,
-        egui::CornerRadius::same(7),
+        egui::CornerRadius::same(Radius::of(Radius::SM)),
         fill,
         egui::Stroke::new(1.0, palette.border),
         egui::StrokeKind::Middle,
@@ -523,7 +524,7 @@ fn battery_glyph_at(painter: &egui::Painter, center: egui::Pos2, percent: u8, co
     );
     painter.rect_stroke(
         body,
-        CornerRadius::same(2),
+        CornerRadius::same(Radius::of(Radius::NONE)),
         Stroke::new(1.5, color),
         StrokeKind::Middle,
     );
@@ -532,14 +533,18 @@ fn battery_glyph_at(painter: &egui::Painter, center: egui::Pos2, percent: u8, co
         egui::Pos2::new(body.max.x, body.center().y - 2.0),
         egui::Vec2::new(2.0, 4.0),
     );
-    painter.rect_filled(terminal, CornerRadius::same(1), color);
+    painter.rect_filled(
+        terminal,
+        CornerRadius::same(Radius::of(Radius::NONE)),
+        color,
+    );
 
     let fill_w = (11.0 * (percent.clamp(0, 100) as f32 / 100.0)).max(1.0);
     let fill = egui::Rect::from_min_size(
         body.min + egui::Vec2::new(2.0, 2.0),
         egui::Vec2::new(fill_w, 6.0),
     );
-    painter.rect_filled(fill, CornerRadius::same(1), color);
+    painter.rect_filled(fill, CornerRadius::same(Radius::of(Radius::NONE)), color);
 }
 
 /// Sombra suave bajo una tarjeta flotante.
@@ -680,7 +685,8 @@ fn round_icon_button_at(
 
 /// Caja redondeada con un icono (`.item-icon`, `.device-icon`, `.app-icon`…).
 fn icon_box_at(ui: &egui::Ui, rect: egui::Rect, icon: &str, fill: Color32) {
-    ui.painter().rect_filled(rect, CornerRadius::same(8), fill);
+    ui.painter()
+        .rect_filled(rect, CornerRadius::same(Radius::of(Radius::MD)), fill);
     icon_at(ui, rect.center(), icon, ICON_MD, pal().text_hi);
 }
 

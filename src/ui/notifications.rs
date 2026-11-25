@@ -54,7 +54,7 @@ pub(super) fn draw_notification_card(
 ) {
     ui.painter().rect(
         rect,
-        CornerRadius::same(14),
+        CornerRadius::same(Radius::of(Radius::LG)),
         pal().card_fill,
         Stroke::new(1.0, pal().border),
         StrokeKind::Middle,

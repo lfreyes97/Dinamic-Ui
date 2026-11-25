@@ -165,7 +165,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
     };
     ui.painter().rect(
         preview,
-        CornerRadius::same(12),
+        CornerRadius::same(Radius::of(Radius::CARD)),
         base,
         Stroke::new(1.0, pal().faint),
         StrokeKind::Inside,
@@ -196,8 +196,11 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                 .uv(uv)
                 .corner_radius(12)
                 .paint_at(ui, preview);
-            ui.painter()
-                .rect_filled(preview, CornerRadius::same(12), Palette::scrim(110));
+            ui.painter().rect_filled(
+                preview,
+                CornerRadius::same(Radius::of(Radius::CARD)),
+                Palette::scrim(110),
+            );
             true
         }
         _ => false,
@@ -275,7 +278,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
     );
     ui.painter().rect(
         menu,
-        CornerRadius::same(6),
+        CornerRadius::same(Radius::of(Radius::SM)),
         Palette::scrim(80),
         Stroke::new(1.0, Palette::sheen(48)),
         StrokeKind::Inside,
@@ -361,14 +364,14 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
             if current {
                 ui.painter().rect_stroke(
                     rect,
-                    CornerRadius::same(10),
+                    CornerRadius::same(Radius::of(Radius::MD)),
                     Stroke::new(1.5, pal().text_hi),
                     StrokeKind::Inside,
                 );
             } else if response.hovered() {
                 ui.painter().rect_stroke(
                     rect,
-                    CornerRadius::same(10),
+                    CornerRadius::same(Radius::of(Radius::MD)),
                     Stroke::new(1.0, pal().faint),
                     StrokeKind::Inside,
                 );
@@ -386,8 +389,11 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                         .paint_at(ui, thumb);
                 }
                 None => {
-                    ui.painter()
-                        .rect_filled(thumb, CornerRadius::same(6), pal().badge);
+                    ui.painter().rect_filled(
+                        thumb,
+                        CornerRadius::same(Radius::of(Radius::SM)),
+                        pal().badge,
+                    );
                     icon_at(ui, thumb.center(), ic::IMAGE, ICON_MD, pal().muted);
                 }
             }
@@ -458,15 +464,18 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
                     .paint_at(ui, image_rect);
                 }
                 None => {
-                    ui.painter()
-                        .rect_filled(image_rect, CornerRadius::same(8), pal().badge);
+                    ui.painter().rect_filled(
+                        image_rect,
+                        CornerRadius::same(Radius::of(Radius::MD)),
+                        pal().badge,
+                    );
                     icon_at(ui, image_rect.center(), ic::IMAGE, ICON_MD, pal().muted);
                 }
             }
             if current {
                 ui.painter().rect_stroke(
                     image_rect,
-                    CornerRadius::same(8),
+                    CornerRadius::same(Radius::of(Radius::MD)),
                     Stroke::new(2.0, pal().text_hi),
                     StrokeKind::Inside,
                 );
@@ -476,7 +485,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
             } else if response.hovered() {
                 ui.painter().rect_stroke(
                     image_rect,
-                    CornerRadius::same(8),
+                    CornerRadius::same(Radius::of(Radius::MD)),
                     Stroke::new(1.0, pal().dim),
                     StrokeKind::Inside,
                 );
@@ -535,7 +544,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
         let color = color_of(hex);
         ui.painter().rect(
             rect,
-            CornerRadius::same(9),
+            CornerRadius::same(Radius::of(Radius::MD)),
             color,
             Stroke::new(1.0, pal().faint),
             StrokeKind::Inside,
@@ -548,7 +557,7 @@ pub(super) fn panel_wallpaper(ui: &mut egui::Ui, state: &mut UiState) {
         if state.wallpaper.wallpaper_selected == Some(i) {
             ui.painter().rect_stroke(
                 rect.expand(3.0),
-                CornerRadius::same(11),
+                CornerRadius::same(Radius::of(Radius::CARD)),
                 Stroke::new(2.0, pal().text_hi),
                 StrokeKind::Middle,
             );

@@ -33,7 +33,7 @@ pub(super) fn search_pill(ui: &egui::Ui, screen: egui::Rect, query: &str, placeh
     drop_shadow(ui, r, 17, 10, 30, 100);
     ui.painter().rect(
         r,
-        CornerRadius::same(17),
+        CornerRadius::same(Radius::of(Radius::XL)),
         Palette::with_alpha(p.solid(), 232),
         Stroke::new(1.0, if query.is_empty() { p.border } else { p.accent }),
         StrokeKind::Middle,
@@ -65,7 +65,7 @@ pub(super) fn search_pill(ui: &egui::Ui, screen: egui::Rect, query: &str, placeh
     );
     ui.painter().rect(
         chip,
-        CornerRadius::same(5),
+        CornerRadius::same(Radius::of(Radius::SM)),
         Palette::sheen(8),
         Stroke::new(1.0, p.border),
         StrokeKind::Middle,
@@ -101,7 +101,7 @@ pub(super) fn hint_bar(ui: &egui::Ui, screen: egui::Rect, items: &[(&str, &str)]
         let chip = egui::Rect::from_min_size(egui::pos2(x, y - 8.0), egui::vec2(kw, 16.0));
         ui.painter().rect(
             chip,
-            CornerRadius::same(4),
+            CornerRadius::same(Radius::of(Radius::XS)),
             Palette::sheen(8),
             Stroke::new(1.0, p.border),
             StrokeKind::Middle,

@@ -9,7 +9,7 @@ Implementación en `src/theme.rs`.
 |---|---|---|
 | 1. Esquema | Los 16 slots `base00`–`base0F` | `theme.rs` (`Base16`) |
 | 2. Tokens semánticos | `Palette`, derivada del esquema con la guía de estilo de base16 | `theme.rs` (`derive`) |
-| 3. Tokens de componente | Radios, espaciados, tipografía, elevación, movimiento | `ui/mod.rs` *(pendiente de centralizar)* |
+| 3. Tokens de componente | Radios, espaciados, tipografía, elevación, movimiento | Radios y espaciados en `ui/tokens.rs`; tipografía/iconos en `ui/mod.rs` |
 
 ## Capa 1 — Esquemas
 
@@ -83,7 +83,10 @@ Compatibilidad: `name = "bathory"` sigue funcionando (alias de `scheme`), igual 
 - [x] `just lint-colors` (parte de `just ci`) falla si reaparece un literal fuera de `theme.rs`.
       `Color32::BLACK/WHITE/TRANSPARENT` se permiten (datos del usuario, como las muestras
       de color del wallpaper).
-- [ ] Capa 3: radios, espaciados, tipografía y movimiento centralizados.
+- [x] Capa 3: radios y espaciados centralizados en `ui/tokens.rs` (`Radius`, `Space`,
+      `scale`), con la escala del frame fijada en `ui::draw`. Tipografía e iconos ya
+      estaban en `ui/mod.rs`. Quedan por migrar las expresiones de radio que llevan
+      su propia escala local (`config_panel.rs`, `dashboard.rs`).
 
 ### Cómo se usan los tokens
 

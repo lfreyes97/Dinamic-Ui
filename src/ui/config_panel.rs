@@ -581,8 +581,11 @@ enum Control {
 /// Dibuja el panel de configuración a pantalla completa.
 pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
-    ui.painter()
-        .rect_filled(screen, CornerRadius::same(0), Palette::scrim(200));
+    ui.painter().rect_filled(
+        screen,
+        CornerRadius::same(Radius::of(Radius::NONE)),
+        Palette::scrim(200),
+    );
     // Registrado antes que el contenido: un clic en un widget gana sobre el fondo.
     let backdrop = ui.interact(
         screen,

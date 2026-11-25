@@ -3,9 +3,27 @@
 //! Las capas 1 y 2 (esquema base16 y `Palette`) viven en `theme.rs`. Aquí solo
 //! están las medidas que antes se escribían a mano en cada componente.
 
+use std::cell::Cell;
+
+thread_local! {
+    /// Escala del frame, fijada por `ui::draw`. Así los helpers puros también
+    /// pueden pedir tokens sin recibir el `Ui`.
+    static CURRENT_SCALE: Cell<f32> = const { Cell::new(1.0) };
+}
+
 /// Escala de la UI según la altura de la pantalla. A 720 px es 1, hasta 1,6.
 pub fn scale(screen_h: f32) -> f32 {
     (screen_h / 720.0).clamp(1.0, 1.6)
+}
+
+/// Fija la escala del frame actual.
+pub fn set_scale(screen_h: f32) {
+    CURRENT_SCALE.set(scale(screen_h));
+}
+
+/// Escala vigente en este frame.
+pub fn current_scale() -> f32 {
+    CURRENT_SCALE.get()
 }
 
 /// Radios canónicos en px a 720p. Sustituyen los `CornerRadius::same(4/7/10/14/18)`
@@ -13,14 +31,22 @@ pub fn scale(screen_h: f32) -> f32 {
 pub struct Radius;
 
 impl Radius {
+    pub const NONE: u8 = 0;
     pub const XS: u8 = 4;
     pub const SM: u8 = 7;
     pub const MD: u8 = 10;
+    pub const CARD: u8 = 12;
     pub const LG: u8 = 14;
+    pub const XL: u8 = 18;
 
     /// Radio escalado y acotado a `u8`, que es lo que espera egui.
     pub fn scaled(base: u8, scale: f32) -> u8 {
         ((base as f32 * scale).round() as i32).clamp(0, u8::MAX as i32) as u8
+    }
+
+    /// Radio con la escala del frame actual.
+    pub fn of(base: u8) -> u8 {
+        Self::scaled(base, current_scale())
     }
 }
 

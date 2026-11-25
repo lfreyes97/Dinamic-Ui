@@ -139,8 +139,11 @@ pub(super) fn handle_key(state: &mut UiState, key: Keysym) -> bool {
 /// Overview de actividades: buscador, apps instaladas y tira de ventanas abiertas.
 pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
-    ui.painter()
-        .rect_filled(screen, CornerRadius::same(0), Palette::scrim(176));
+    ui.painter().rect_filled(
+        screen,
+        CornerRadius::same(Radius::of(Radius::NONE)),
+        Palette::scrim(176),
+    );
     let backdrop = ui.interact(
         screen,
         ui.scope_id().with("ov-act-backdrop"),
@@ -223,7 +226,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         let box_rect = box_rect.translate(egui::vec2(0.0, -2.0 * lift));
         ui.painter().rect(
             box_rect,
-            CornerRadius::same(14),
+            CornerRadius::same(Radius::of(Radius::LG)),
             if selected {
                 palette.accent_soft
             } else {
@@ -315,7 +318,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         drop_shadow(ui, r, 8, 6, 16, 80);
         ui.painter().rect(
             r,
-            CornerRadius::same(8),
+            CornerRadius::same(Radius::of(Radius::MD)),
             Palette::with_alpha(palette.raised, 240),
             Stroke::new(
                 if is_active { 1.5 } else { 1.0 },
@@ -335,8 +338,11 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
             egui::vec2(film.pic.0, film.pic.1),
         );
         let mon = monitor_rect(pic, aspect);
-        ui.painter()
-            .rect_filled(mon, CornerRadius::same(3), Palette::sheen(8));
+        ui.painter().rect_filled(
+            mon,
+            CornerRadius::same(Radius::of(Radius::XS)),
+            Palette::sheen(8),
+        );
         let wr = window_rect(win, monitor, mon, 6.0);
         if wr.width() > 0.0 && wr.height() > 0.0 {
             mini_window(ui, wr, is_active, resp.hovered(), 2);

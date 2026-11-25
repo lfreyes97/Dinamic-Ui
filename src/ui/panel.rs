@@ -122,7 +122,7 @@ pub(super) fn draw_panel(ui: &mut egui::Ui, state: &mut UiState, palette: Palett
     let (bar, _) = ui.allocate_exact_size(egui::Vec2::new(width, 26.0), egui::Sense::hover());
     ui.painter().rect(
         bar,
-        CornerRadius::same(10),
+        CornerRadius::same(Radius::of(Radius::MD)),
         pal().inset,
         Stroke::new(1.0, pal().border),
         StrokeKind::Inside,
@@ -144,8 +144,11 @@ pub(super) fn draw_panel(ui: &mut egui::Ui, state: &mut UiState, palette: Palett
             .on_hover_cursor(CursorIcon::PointingHand);
         let active = i == state.bar.panel_tab;
         if active {
-            ui.painter()
-                .rect_filled(rect, CornerRadius::same(7), pal().border);
+            ui.painter().rect_filled(
+                rect,
+                CornerRadius::same(Radius::of(Radius::SM)),
+                pal().border,
+            );
         }
         let color = if active || response.hovered() {
             pal().text_hi
@@ -258,7 +261,7 @@ pub(super) fn panel_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: 
         };
         ui.painter().rect(
             rect,
-            CornerRadius::same(10),
+            CornerRadius::same(Radius::of(Radius::MD)),
             fill,
             Stroke::new(1.0, stroke),
             StrokeKind::Inside,
@@ -343,7 +346,7 @@ pub(super) fn panel_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: 
         };
         ui.painter().rect(
             rect,
-            CornerRadius::same(10),
+            CornerRadius::same(Radius::of(Radius::MD)),
             fill,
             Stroke::new(1.0, stroke),
             StrokeKind::Inside,
@@ -422,7 +425,7 @@ pub(super) fn paint_layout_preview(ui: &egui::Ui, rect: egui::Rect, preset: usiz
     }
     for (block, color) in blocks {
         ui.painter()
-            .rect_filled(block, CornerRadius::same(3), color);
+            .rect_filled(block, CornerRadius::same(Radius::of(Radius::XS)), color);
     }
 }
 
@@ -547,8 +550,11 @@ pub(super) fn panel_clock(ui: &mut egui::Ui, state: &mut UiState) {
         let rect = cell(7 + lead + day as usize - 1);
         let is_today = today == Some(day);
         if is_today {
-            ui.painter()
-                .rect_filled(rect, CornerRadius::same(6), pal().text_hi);
+            ui.painter().rect_filled(
+                rect,
+                CornerRadius::same(Radius::of(Radius::SM)),
+                pal().text_hi,
+            );
         }
         let color = if is_today { pal().solid() } else { pal().text };
         text_at(
@@ -725,8 +731,11 @@ pub(super) fn panel_system(ui: &mut egui::Ui, state: &mut UiState) {
     } else {
         ic::BATTERY_HIGH
     };
-    ui.painter()
-        .rect_filled(icon_rect, CornerRadius::same(10), pal().badge);
+    ui.painter().rect_filled(
+        icon_rect,
+        CornerRadius::same(Radius::of(Radius::MD)),
+        pal().badge,
+    );
     icon_at(ui, icon_rect.center(), icon, ICON_LG, pal().text_hi);
     let status = match (battery.present, battery.charging) {
         (false, _) => "Sin batería detectada".to_string(),
@@ -832,7 +841,7 @@ pub(super) fn panel_notifications(ui: &mut egui::Ui, state: &mut UiState) {
         (pal().faint, pal().text_hi, toggle.min.x + 9.5)
     };
     ui.painter()
-        .rect_filled(toggle, CornerRadius::same(10), track);
+        .rect_filled(toggle, CornerRadius::same(Radius::of(Radius::MD)), track);
     ui.painter()
         .circle_filled(egui::Pos2::new(knob_x, toggle.center().y), 7.5, knob);
     if response.clicked() {
@@ -993,7 +1002,7 @@ pub(super) fn draw_panel_card(
         let card_border = pal().border;
         ui.painter().rect(
             card,
-            CornerRadius::same(18),
+            CornerRadius::same(Radius::of(Radius::XL)),
             card_fill,
             Stroke::new(1.0, card_border),
             StrokeKind::Middle,

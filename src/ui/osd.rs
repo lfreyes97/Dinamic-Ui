@@ -121,7 +121,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &UiState, palette: Palette) {
     drop_shadow(ui, r, 12, 6, 20, 90);
     ui.painter().rect(
         r,
-        CornerRadius::same(10),
+        CornerRadius::same(Radius::of(Radius::MD)),
         Palette::with_alpha(palette.solid(), 232),
         Stroke::new(1.0, palette.border),
         StrokeKind::Middle,

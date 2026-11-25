@@ -133,15 +133,18 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
     let previous = ui.opacity();
     ui.set_opacity(previous * crate::smootherstep(progress));
-    ui.painter()
-        .rect_filled(screen, CornerRadius::same(0), Palette::scrim(205));
+    ui.painter().rect_filled(
+        screen,
+        CornerRadius::same(Radius::of(Radius::NONE)),
+        Palette::scrim(205),
+    );
 
     let w = 520.0f32.min(screen.width() - 60.0);
     let h = 330.0f32.min(screen.height() - 60.0);
     let card = egui::Rect::from_center_size(screen.center(), egui::vec2(w, h));
     ui.painter().rect(
         card,
-        CornerRadius::same(16),
+        CornerRadius::same(Radius::of(Radius::XL)),
         pal().card_fill,
         Stroke::new(1.0, palette.border),
         StrokeKind::Middle,
@@ -174,7 +177,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         let active = i == selected || response.hovered();
         ui.painter().rect(
             row,
-            CornerRadius::same(9),
+            CornerRadius::same(Radius::of(Radius::MD)),
             if i == selected {
                 Palette::with_alpha(palette.accent_soft, 70)
             } else {
