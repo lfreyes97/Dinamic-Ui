@@ -11,7 +11,7 @@ use crate::actions::{ActionPhase, SettingAction, SettingId};
 
 /// Columnas del grid, como `N_QUICK_SETTINGS_COLUMNS` en gnome-shell 50.
 const COLUMNS: usize = 2;
-const GAP: f32 = 8.0;
+const GAP: f32 = Space::MD;
 const TOGGLE_H: f32 = 56.0;
 const SLIDER_H: f32 = 34.0;
 
@@ -38,6 +38,7 @@ fn surface(
     hovered: bool,
     active: bool,
     pending: bool,
+    round: u8,
     palette: Palette,
 ) {
     let fill = if pending {
@@ -51,7 +52,7 @@ fn surface(
     };
     ui.painter().rect(
         rect,
-        egui::CornerRadius::same(10),
+        egui::CornerRadius::same(round),
         fill,
         egui::Stroke::new(1.0, palette.border),
         egui::StrokeKind::Middle,
@@ -251,7 +252,8 @@ fn draw_toggle(
             .with(egui::IdSalt::new(("qs-toggle", id as u8))),
         egui::Sense::click(),
     );
-    surface(ui, rect, resp.hovered(), on, pending, palette);
+    let round = Radius::scaled(Radius::MD, scale(ui.ctx().content_rect().height()));
+    surface(ui, rect, resp.hovered(), on, pending, round, palette);
 
     let icon_rect = egui::Rect::from_min_size(
         rect.min + egui::vec2(10.0, (rect.height() - 24.0) / 2.0),
@@ -389,9 +391,10 @@ pub(super) fn draw_header(
     state: &mut UiState,
     palette: Palette,
 ) {
+    let round = Radius::scaled(Radius::SM, scale(ui.ctx().content_rect().height()));
     if state.shared.battery.present {
         let pill = egui::Rect::from_min_size(rect.min, egui::vec2(76.0, rect.height()));
-        surface(ui, pill, false, false, false, palette);
+        surface(ui, pill, false, false, false, round, palette);
         icon_at(
             ui,
             egui::pos2(pill.min.x + 13.0, pill.center().y),
@@ -422,7 +425,7 @@ pub(super) fn draw_header(
         ui.scope_id().with(egui::IdSalt::new("qs-lock-header")),
         egui::Sense::click(),
     );
-    surface(ui, button, resp.hovered(), false, pending, palette);
+    surface(ui, button, resp.hovered(), false, pending, round, palette);
     icon_at(
         ui,
         button.center(),

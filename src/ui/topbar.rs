@@ -161,9 +161,10 @@ pub fn calendar_rect(state: &UiState, screen_w: i32) -> (i32, i32, i32, i32) {
 
 fn dropdown_card(ui: &egui::Ui, rect: egui::Rect) {
     drop_shadow(ui, rect, 14, 10, 28, 90);
+    let round = Radius::scaled(Radius::LG, scale(ui.ctx().content_rect().height()));
     ui.painter().rect(
         rect,
-        CornerRadius::same(14),
+        CornerRadius::same(round),
         Palette::with_alpha(pal().raised, 252),
         Stroke::new(1.0, pal().border),
         StrokeKind::Middle,
@@ -183,9 +184,10 @@ fn tool_chip(ui: &egui::Ui, rect: egui::Rect, hovered: bool, open: bool) {
     } else {
         Palette::sheen(10)
     };
+    let round = Radius::scaled(Radius::SM, scale(ui.ctx().content_rect().height()));
     ui.painter().rect(
         rect,
-        CornerRadius::same(7),
+        CornerRadius::same(round),
         fill,
         Stroke::new(1.0, p.border),
         StrokeKind::Middle,
@@ -285,7 +287,10 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
         }
         ui.painter().rect_filled(
             egui::Rect::from_min_size(egui::pos2(wx, cy - 4.0), egui::vec2(w, 8.0)),
-            CornerRadius::same(4),
+            CornerRadius::same(Radius::scaled(
+                Radius::XS,
+                scale(ui.ctx().content_rect().height()),
+            )),
             if is_current {
                 palette.accent
             } else if resp.hovered() {
@@ -637,7 +642,10 @@ fn draw_notifications(
     let dnd = state.notifications.dnd;
     ui.painter().rect_filled(
         switch,
-        CornerRadius::same(9),
+        CornerRadius::same(Radius::scaled(
+            Radius::MD,
+            scale(ui.ctx().content_rect().height()),
+        )),
         if dnd { palette.accent } else { palette.faint },
     );
     ui.painter().circle_filled(
@@ -694,8 +702,14 @@ fn draw_notifications(
             egui::pos2(card.min.x + 12.0, y),
             egui::vec2(card.width() - 24.0, 42.0),
         );
-        ui.painter()
-            .rect_filled(row, CornerRadius::same(9), palette.badge);
+        ui.painter().rect_filled(
+            row,
+            CornerRadius::same(Radius::scaled(
+                Radius::MD,
+                scale(ui.ctx().content_rect().height()),
+            )),
+            palette.badge,
+        );
         icon_at(
             ui,
             egui::pos2(row.min.x + 18.0, row.center().y),

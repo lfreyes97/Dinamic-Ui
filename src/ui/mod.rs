@@ -42,6 +42,8 @@ pub use component::{
 #[cfg(feature = "bar")]
 #[allow(unused_imports)] // lo usan los módulos hermanos vía `use super::*`
 use panel::*;
+mod tokens;
+pub(crate) use tokens::{scale, Radius, Space};
 #[cfg(feature = "activities")]
 mod activities;
 #[cfg(feature = "activities")]
@@ -297,10 +299,10 @@ const ICON_MD: f32 = 14.0; // acción principal y tarjetas
 const ICON_LG: f32 = 16.0; // indicadores de sistema
 const ICON_XL: f32 = 20.0; // estados vacíos
 
-// ── Escala de espaciado (múltiplos de 2 px) ─────────────────────────────
-const SP_S: f32 = 4.0;
-const SP_M: f32 = 6.0;
-const SP_L: f32 = 8.0;
+// ── Escala de espaciado: alias de la capa 3 (`tokens.rs`) ────────────────
+const SP_S: f32 = Space::XS;
+const SP_M: f32 = Space::SM;
+const SP_L: f32 = Space::MD;
 
 // Aliases para mantener la intención en el código.
 const ICON_ACTION: f32 = ICON_MD;
