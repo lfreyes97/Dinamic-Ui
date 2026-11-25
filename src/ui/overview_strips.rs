@@ -14,19 +14,23 @@ pub fn strip_rect(state: &UiState, screen_w: i32, screen_h: i32) -> (i32, i32, i
     let hidden = 1.0 - crate::smootherstep(state.overview.progress);
     let slide = |size: i32| (hidden * size as f32).round() as i32;
     let cfg = &state.shared.config.overview;
+    // La franja vive dentro del área que no reservan topbar/taskbar.
+    let [top, right, bottom, left] = super::reservations(state);
+    let avail_w = (screen_w - left - right).max(0);
+    let avail_h = (screen_h - top - bottom).max(0);
     match state.overview.kind {
         OverviewKind::StripH => {
-            let h = cfg.strip_h_height.resolve(screen_h as f32);
+            let h = cfg.strip_h_height.resolve(avail_h as f32).min(avail_h);
             match cfg.strip_h_side {
-                Side::Bottom => (0, screen_h - h + slide(h), screen_w, h),
-                _ => (0, -slide(h), screen_w, h),
+                Side::Bottom => (left, screen_h - bottom - h + slide(h), avail_w, h),
+                _ => (left, top - slide(h), avail_w, h),
             }
         }
         OverviewKind::StripV => {
-            let w = cfg.strip_v_width.resolve(screen_w as f32);
+            let w = cfg.strip_v_width.resolve(avail_w as f32).min(avail_w);
             match cfg.strip_v_side {
-                Side::Left => (-slide(w), 0, w, screen_h),
-                _ => (screen_w - w + slide(w), 0, w, screen_h),
+                Side::Left => (left - slide(w), top, w, avail_h),
+                _ => (screen_w - right - w + slide(w), top, w, avail_h),
             }
         }
         _ => (0, 0, screen_w, screen_h),

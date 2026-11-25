@@ -55,22 +55,26 @@ pub fn set_enabled(state: &mut UiState, on: bool) {
 pub fn taskbar_rect(state: &UiState, screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
     let cfg = &state.shared.config.taskbar;
     let size = cfg.size as i32;
+    // Solo se ceden las reservas perpendiculares: la reserva de este lado es
+    // la de la propia barra y no debe desplazarla.
+    let [top, _, bottom, _] = super::reservations(state);
     match cfg.side {
         Side::Bottom => (0, screen_h - size, screen_w, size),
-        Side::Top => (0, 0, screen_w, size),
-        Side::Left => (0, 0, size, screen_h),
-        Side::Right => (screen_w - size, 0, size, screen_h),
+        Side::Top => (0, top, screen_w, size),
+        Side::Left => (0, top, size, (screen_h - top - bottom).max(0)),
+        Side::Right => (screen_w - size, top, size, (screen_h - top - bottom).max(0)),
     }
 }
 
 /// Zona sensible aunque esté oculta: una franja fina en el borde.
 pub fn hot_rect(state: &UiState, screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
     let cfg = &state.shared.config.taskbar;
+    let [top, _, bottom, _] = super::reservations(state);
     match cfg.side {
         Side::Bottom => (0, screen_h - HOT, screen_w, HOT),
-        Side::Top => (0, 0, screen_w, HOT),
-        Side::Left => (0, 0, HOT, screen_h),
-        Side::Right => (screen_w - HOT, 0, HOT, screen_h),
+        Side::Top => (0, top, screen_w, HOT),
+        Side::Left => (0, top, HOT, (screen_h - top - bottom).max(0)),
+        Side::Right => (screen_w - HOT, top, HOT, (screen_h - top - bottom).max(0)),
     }
 }
 

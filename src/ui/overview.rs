@@ -253,14 +253,16 @@ pub(super) fn handle_key(state: &mut UiState, key: Keysym) -> bool {
 /// Overview: rejilla de workspaces con las ventanas en su posición relativa.
 fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
+    // El velo y el contenido dejan libres las zonas reservadas por topbar/taskbar.
+    let safe = super::safe_rect(state, screen);
     ui.painter().rect_filled(
-        screen,
+        safe,
         CornerRadius::same(Radius::of(Radius::NONE)),
         Palette::scrim(168),
     );
     // Registrado antes que las tarjetas: un clic en ventana gana sobre el fondo.
     let backdrop = ui.interact(
-        screen,
+        safe,
         ui.scope_id().with(egui::IdSalt::new("overview-backdrop")),
         egui::Sense::click(),
     );
@@ -269,11 +271,11 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     }
 
     let query = state.overview.query.clone();
-    search_pill(ui, screen, &query, "Busca apps, ventanas, workspaces…");
+    search_pill(ui, safe, &query, "Busca apps, ventanas, workspaces…");
     if !query.is_empty() {
         text_at(
             ui,
-            egui::pos2(screen.center().x, screen.min.y + 60.0),
+            egui::pos2(safe.center().x, safe.min.y + 60.0),
             egui::Align2::CENTER_CENTER,
             format!("{} coincidencias", match_count(state)),
             9.0,
@@ -289,8 +291,8 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let rows = ids.len().div_ceil(cols);
     let gap = 14.0;
     let area = egui::Rect::from_min_max(
-        screen.min + egui::vec2(26.0, 76.0),
-        screen.max - egui::vec2(26.0, 44.0),
+        safe.min + egui::vec2(26.0, 76.0),
+        safe.max - egui::vec2(26.0, 44.0),
     );
     let card_w = ((area.width() - gap * (cols as f32 - 1.0)) / cols as f32).min(560.0);
     let card_h = ((area.height() - gap * (rows as f32 - 1.0)) / rows as f32).min(340.0);
@@ -301,7 +303,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         area.center().y - total_h / 2.0,
     );
 
-    let monitor = screen.size();
+    let monitor = safe.size();
     let aspect = monitor.x.max(1.0) / monitor.y.max(1.0);
     let moved = pointer_moved(ui);
     let active_address = state.shared.snapshot.window_address.clone();
@@ -484,7 +486,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     if query.is_empty() {
         hint_bar(
             ui,
-            screen,
+            safe,
             &[
                 ("← →", "navega"),
                 ("↵", "abre"),
@@ -493,7 +495,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
             ],
         );
     } else {
-        hint_bar(ui, screen, &[("↵", "enfoca la primera"), ("Esc", "limpia")]);
+        hint_bar(ui, safe, &[("↵", "enfoca la primera"), ("Esc", "limpia")]);
     }
 }
 

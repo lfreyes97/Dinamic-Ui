@@ -43,6 +43,7 @@ fn bar_height(state: &UiState) -> f32 {
 
 /// Rect de la franja superior.
 pub fn topbar_rect(state: &UiState, screen_w: i32) -> (i32, i32, i32, i32) {
+    // El panel superior ocupa todo el ancho; el launcher cede debajo de él.
     (0, 0, screen_w, bar_height(state) as i32)
 }
 

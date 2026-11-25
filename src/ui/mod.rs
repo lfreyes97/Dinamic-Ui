@@ -42,6 +42,8 @@ pub use component::{
 #[cfg(feature = "bar")]
 #[allow(unused_imports)] // lo usan los módulos hermanos vía `use super::*`
 use panel::*;
+mod reserve;
+pub use reserve::{reservations, safe_rect, Edges};
 mod tokens;
 pub(crate) use tokens::{scale, Radius, Space};
 #[cfg(feature = "activities")]
@@ -335,6 +337,23 @@ pub fn draw_params(state: &UiState) -> (f32, f32, f32) {
     // La notificación tiene tarjeta propia: la isla no cambia de ancho.
     let pill_w = crate::lerp(m.island_w as f32, m.bar_w as f32, t);
     (t, panel_t, pill_w)
+}
+
+/// Área segura en enteros, para los `input_region` del event loop.
+pub fn safe_rect_ints(state: &UiState, screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
+    let r = safe_rect(
+        state,
+        egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(screen_w as f32, screen_h as f32),
+        ),
+    );
+    (
+        r.min.x.round() as i32,
+        r.min.y.round() as i32,
+        r.width().round() as i32,
+        r.height().round() as i32,
+    )
 }
 
 pub fn draw(

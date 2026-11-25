@@ -2,7 +2,6 @@
 // el previewer interactivo (feature `previewer`) la reutiliza sin compositor.
 
 #[cfg(feature = "taskbar")]
-use dinamic_ui::config::Side;
 use dinamic_ui::{config, control, gfx, ipc, needs, power, sysinfo, theme, ui};
 
 use std::time::{Duration, Instant};
@@ -36,7 +35,7 @@ use smithay_client_toolkit::{
     },
 };
 use theme::Palette;
-use ui::{metrics, UiState};
+use ui::{metrics, reservations, UiState};
 use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_region, wl_seat, wl_surface},
@@ -142,33 +141,6 @@ impl Reservations {
 
 /// Contribución de cada componente a la reserva por borde. El dock no aporta:
 /// es autohide por diseño (`docs/DOCK.md`), así que no reserva hueco permanente.
-#[cfg_attr(
-    not(any(feature = "topbar", feature = "taskbar")),
-    allow(unused_variables, unused_mut)
-)]
-fn reserve_zones(state: &UiState) -> Zones {
-    let mut zones = [0i32; 4];
-    #[cfg(feature = "topbar")]
-    if state.topbar.enabled {
-        zones[0] = state.shared.config.topbar.height as i32;
-    }
-    #[cfg(feature = "taskbar")]
-    if state.taskbar.enabled
-        && !state.shared.config.taskbar.autohide
-        && state.taskbar.progress > 0.5
-    {
-        let size = state.shared.config.taskbar.size as i32;
-        let edge = match state.shared.config.taskbar.side {
-            Side::Top => 0,
-            Side::Right => 1,
-            Side::Bottom => 2,
-            Side::Left => 3,
-        };
-        zones[edge] = zones[edge].max(size);
-    }
-    zones
-}
-
 struct DinamicUi {
     registry_state: RegistryState,
     seat_state: SeatState,
@@ -525,7 +497,7 @@ impl DinamicUi {
         // Reservas: cambian con topbar, taskbar (lado y autohide) y reload.
         // El surface principal no se redimensiona, así que la animación sigue
         // siendo nuestra y el input region solo filtra clics.
-        self.reservations.sync(reserve_zones(&self.ui_state));
+        self.reservations.sync(reservations(&self.ui_state));
 
         let (t, panel_t, pill_w) = ui::draw_params(&self.ui_state);
         // El input region lo declaran los componentes activos. El surface no
@@ -909,72 +881,3 @@ impl smithay_client_toolkit::dispatch2::Dispatch2<wl_region::WlRegion, DinamicUi
 }
 
 smithay_client_toolkit::delegate_dispatch2!(DinamicUi);
-
-#[cfg(test)]
-mod tests {
-    #[cfg(all(feature = "topbar", feature = "taskbar"))]
-    #[test]
-    fn reserve_zones_topbar_y_taskbar_por_borde() {
-        use super::*;
-        use dinamic_ui::config::{Config, Side, TaskbarConfig, TopbarConfig};
-
-        let cfg = Config {
-            topbar: TopbarConfig {
-                enabled: true,
-                height: 34,
-                mode_control: true,
-            },
-            taskbar: TaskbarConfig {
-                enabled: true,
-                side: Side::Bottom,
-                size: 48,
-                autohide: false,
-            },
-            ..Default::default()
-        };
-        config::set(cfg);
-
-        let mut state = UiState::new_preview();
-        state.shared.config = config::get();
-        state.topbar.enabled = true;
-        state.taskbar.enabled = true;
-        state.taskbar.progress = 1.0;
-        assert_eq!(
-            reserve_zones(&state),
-            [34, 0, 48, 0],
-            "topbar arriba + taskbar abajo"
-        );
-
-        // La misma taskbar, ahora en el borde derecho.
-        let mut cfg = config::get().as_ref().clone();
-        cfg.taskbar.side = Side::Right;
-        config::set(cfg);
-        state.shared.config = config::get();
-        assert_eq!(
-            reserve_zones(&state),
-            [34, 48, 0, 0],
-            "taskbar a la derecha"
-        );
-
-        // Autohide nunca reserva, aunque esté desplegada.
-        let mut cfg = config::get().as_ref().clone();
-        cfg.taskbar.autohide = true;
-        config::set(cfg);
-        state.shared.config = config::get();
-        assert_eq!(reserve_zones(&state), [34, 0, 0, 0], "taskbar en autohide");
-
-        // La animación de entrada solo reserva pasada la mitad.
-        let mut cfg = config::get().as_ref().clone();
-        cfg.taskbar.autohide = false;
-        config::set(cfg);
-        state.shared.config = config::get();
-        state.taskbar.progress = 0.4;
-        assert_eq!(reserve_zones(&state), [34, 0, 0, 0], "progress 0.4");
-        state.taskbar.progress = 0.6;
-        assert_eq!(reserve_zones(&state), [34, 48, 0, 0], "progress 0.6");
-
-        state.topbar.enabled = false;
-        state.taskbar.enabled = false;
-        assert_eq!(reserve_zones(&state), [0, 0, 0, 0], "todo apagado");
-    }
-}

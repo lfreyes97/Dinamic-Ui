@@ -883,7 +883,7 @@ impl Component for Overview {
         }
         use super::overview::OverviewKind;
         match state.overview.kind {
-            OverviewKind::Workspaces => vec![(0, 0, screen_w, screen_h)],
+            OverviewKind::Workspaces => vec![super::safe_rect_ints(state, screen_w, screen_h)],
             OverviewKind::StripH | OverviewKind::StripV => {
                 vec![super::overview_strips::strip_rect(
                     state, screen_w, screen_h,
@@ -998,7 +998,7 @@ impl Component for Activities {
         screen_h: i32,
     ) -> Vec<(i32, i32, i32, i32)> {
         if state.activities.open {
-            vec![(0, 0, screen_w, screen_h)]
+            vec![super::safe_rect_ints(state, screen_w, screen_h)]
         } else {
             Vec::new()
         }

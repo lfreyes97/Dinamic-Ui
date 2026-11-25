@@ -139,13 +139,15 @@ pub(super) fn handle_key(state: &mut UiState, key: Keysym) -> bool {
 /// Overview de actividades: buscador, apps instaladas y tira de ventanas abiertas.
 pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     let screen = ui.max_rect();
+    // Igual que la rejilla: el velo y el contenido dejan libres topbar/taskbar.
+    let safe = super::safe_rect(state, screen);
     ui.painter().rect_filled(
-        screen,
+        safe,
         CornerRadius::same(Radius::of(Radius::NONE)),
         Palette::scrim(176),
     );
     let backdrop = ui.interact(
-        screen,
+        safe,
         ui.scope_id().with("ov-act-backdrop"),
         egui::Sense::click(),
     );
@@ -154,7 +156,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     }
 
     let query = state.activities.query.clone();
-    search_pill(ui, screen, &query, "Busca aplicaciones…");
+    search_pill(ui, safe, &query, "Busca aplicaciones…");
 
     let tiles = tiles(state);
     state.activities.selected = state.activities.selected.min(tiles.len().saturating_sub(1));
@@ -162,7 +164,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
 
     // Zona de la cuadrícula: entre el buscador y la tira de ventanas.
     // Las medidas del mockup son para 720p: se escalan con la pantalla.
-    let k = ui_scale(screen.height());
+    let k = ui_scale(safe.height());
     // La tira de ventanas es una fracción de la pantalla (1/5 por defecto), como las franjas del
     // overview: con medidas fijas se quedaba en una barra de ~70 px.
     let film_h = state
@@ -170,16 +172,16 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         .config
         .activities
         .strip_height
-        .resolve(screen.height()) as f32;
-    let film_y = screen.max.y - 40.0 - film_h;
-    let top = screen.min.y + 92.0 * k.sqrt();
+        .resolve(safe.height()) as f32;
+    let film_y = safe.max.y - 40.0 - film_h;
+    let top = safe.min.y + 92.0 * k.sqrt();
     let cols = COLS.min(tiles.len().max(1));
     let rows = tiles.len().div_ceil(cols.max(1)).max(1);
     let (pitch_x, pitch_y, tile) = (104.0 * k, 96.0 * k, 56.0 * k);
     let block_h = rows as f32 * pitch_y;
     let free = (film_y - 24.0 - top - block_h).max(0.0);
     let origin = egui::pos2(
-        screen.center().x - cols as f32 * pitch_x / 2.0,
+        safe.center().x - cols as f32 * pitch_x / 2.0,
         top + free * 0.4,
     );
 
@@ -191,7 +193,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         };
         text_at(
             ui,
-            egui::pos2(screen.center().x, top + 60.0),
+            egui::pos2(safe.center().x, top + 60.0),
             egui::Align2::CENTER_CENTER,
             message,
             TEXT_BODY,
@@ -293,9 +295,9 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     // Tira de ventanas abiertas: la activa primero y tantas como caben, con una vista esquemática
     // grande de cada una (tiene la proporción del monitor).
     let active = state.shared.snapshot.window_address.clone();
-    let monitor = screen.size();
+    let monitor = safe.size();
     let aspect = monitor.x.max(1.0) / monitor.y.max(1.0);
-    let film = film_layout(screen.width(), film_h, aspect);
+    let film = film_layout(safe.width(), film_h, aspect);
     let all = order_windows(&state.shared.clients, &active);
     let shown = all.len().min(film.capacity);
     let (card_w, gap, pad) = (film.card.0, film.gap, film.pad);
@@ -304,7 +306,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     for (i, win) in all.iter().take(shown).enumerate() {
         let r = egui::Rect::from_min_size(
             egui::pos2(
-                screen.center().x - film_w / 2.0 + i as f32 * (card_w + gap),
+                safe.center().x - film_w / 2.0 + i as f32 * (card_w + gap),
                 film_y,
             ),
             egui::vec2(card_w, film_h),
@@ -389,7 +391,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
     if all.len() > shown {
         text_at(
             ui,
-            egui::pos2(screen.max.x - 60.0, film_y - 10.0),
+            egui::pos2(safe.max.x - 60.0, film_y - 10.0),
             egui::Align2::RIGHT_CENTER,
             match all.len() - shown {
                 1 => "+1 ventana más".to_string(),
@@ -402,7 +404,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
 
     hint_bar(
         ui,
-        screen,
+        safe,
         &[
             ("← → ↑ ↓", "navega"),
             ("↵", "abre o enfoca"),
