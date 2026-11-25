@@ -21,6 +21,14 @@ fn render(name: &str, windows_behind: bool, state: UiState) {
 }
 
 pub(super) fn render_sized(name: &str, size: (f32, f32), windows_behind: bool, mut state: UiState) {
+    // `just preview-one <nombre>`: con este env var solo se escribe ese PNG.
+    if std::env::var("DINAMIC_UI_PREVIEW_ONLY")
+        .ok()
+        .filter(|only| !only.is_empty() && only != name)
+        .is_some()
+    {
+        return;
+    }
     let mut fonts_ready = false;
     let mut harness = Harness::builder()
         .with_size(egui::vec2(size.0, size.1))

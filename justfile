@@ -137,6 +137,10 @@ build-minimal:
 preview:
     cargo test ui_preview -- --ignored --nocapture --test-threads=1
 
+# Renderiza un solo escenario: just preview-one topbar (o topbar-quick, overview, ...)
+preview-one name:
+    DINAMIC_UI_PREVIEW_ONLY="{{name}}" cargo test ui_preview -- --ignored --nocapture --test-threads=1
+
 # Previsualizador interactivo: ventana normal con los componentes compilados,
 # datos de ejemplo y registro de acciones (no necesita Hyprland). docs/PREVIEWER.md.
 previewer *args:
