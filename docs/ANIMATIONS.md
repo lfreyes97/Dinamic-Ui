@@ -28,8 +28,12 @@ opacidades complementarias calculadas con `smoothstep`:
 - barra: `smoothstep(0.25, 0.85, t)`
 
 La primitiva es `egui::Ui::set_opacity` (docs.rs/egui/0.37.0/egui/struct.Ui.html).
-La interacción de la isla se desactiva cuando su opacidad baja de 0.9 para que no
-bloquee los botones de la barra.
+La interacción de la isla se limita al modo isla (`t < 0.5`) para que no bloquee
+los botones de la barra. Icono, hora y chip `▲` comparten opacidad y escala
+propias, derivadas de `island_progress`, y se encogen antes de que el rect
+termine de retraerse (el contenido lidera, la envuelta va detrás). La zona de
+hover con histéresis sigue al rect animado, así que el recorrido de salida no se
+corta a mitad.
 
 ## 3. Panel
 
@@ -57,9 +61,13 @@ Ya no se piden frame callbacks de Wayland (antes 60 despertars/s en reposo). Un 
 
 El socket de control es **level-triggered**: en cuanto Hyprland escribe un comando,
 el callback lo aceita, lo encola en `pending_control` y marca `tick = true`, así que
-el keybind se atiende en el mismo ciclo, sin esperar al timer de 250 ms. El ratón y
-el teclado también marcan `tick = true` en sus handlers para que dock e isla
-reaccionen de inmediato.
+el keybind se atiende en el mismo ciclo, sin esperar al timer de 250 ms. El ratón
+marca `tick = true` y mete sus eventos en `pending_events` (`has_input`). El
+teclado no genera eventos de egui: los componentes cambian el estado directamente,
+así que `press_key`/`repeat_key` marcan también `input_dirty` para forzar el frame
+en ese mismo tick. Mientras un overlay tiene el teclado en exclusiva el intervalo
+del timer baja a 16 ms, de modo que escribir en el buscador no depende del tick
+lento de reposo.
 
 **Mediciones (release, reposo):** ~0,25 % de un core, 130 MB RSS, ~31 wakeups/s.
 Antes del salto de `run_ui`: 20,7 % (debug) / 2,9 % (release). Con frame callbacks
