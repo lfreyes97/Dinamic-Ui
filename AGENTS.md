@@ -53,7 +53,10 @@ Instrucciones para agentes que trabajen en este repositorio.
 
 ## Verificación
 
-- `just ci` y `just lint-matrix no` antes de considerar cerrado un cambio.
+- Iteración diaria: `just ci-fast` (fmt + check-fast + test-fast, perfil sin debuginfo y
+  dependencias sin codegen). Es lo rápido; no incluye clippy ni la matriz.
+- Antes de un commit: `just ci`. La matriz **no** va en el gate diario: `just lint-matrix no`
+  se corre solo antes de push (compila ~21 variantes, tarda ~1 min y usa ~900 MB de target).
 - `just preview` corre **en serie** (`--test-threads=1`): varios harness wgpu en
   paralelo segfaultean en la GPU híbrida del R3.
 - Cambiar features rompe la matriz fácil: usar `#[cfg(...)]` bloques, nunca

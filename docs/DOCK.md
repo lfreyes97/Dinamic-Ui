@@ -3,15 +3,19 @@
 ## Comportamiento
 
 - El layer surface cubre toda la pantalla; el dock se dibuja abajo centrado.
-- Aparece (`slide in` desde abajo, ~0,2 s) cuando el cursor llega a los **24 px
-  inferiores** y se oculta al salir de los **72 px** que reclama el dock (histéresis):
-  así el cursor puede estar sobre la parte alta del dock sin que se esconda. La
-  posición se consulta por IPC (`cursorpos`) cada 120 ms.
+- Aparece (`slide in` desde abajo, ~0,2 s) cuando el cursor entra en una **franja
+  inferior acotada**: los **24 px finales**, pero solo en el ancho del dock más
+  32 px a cada lado. Ya visible, se mantiene mientras el cursor esté sobre el dock
+  más un margen de 12 px (histéresis). Antes ambas zonas ocupaban todo el borde
+  inferior y cualquier paso por abajo lo desplegaba. La geometría la calcula
+  `dock.rs` (`dock_rect`, `activate_zone`, `persist_zone`) y la usan el dibujo,
+  `input_rects` y la detección de cursor: no pueden desincronizarse. La posición
+  se consulta por IPC (`cursorpos`) cada 120 ms.
 - **Zona reservada**: el dock es siempre autohide (`DockConfig` no tiene aún
   `autohide`), así que **no reserva** hueco: la franja aparece y desaparece con
   el dock. Las reservas reales (`exclusive_zone`) viven en surfaces auxiliares
   y hoy solo las usan topbar y taskbar. Si se añade `dock.autohide`, con
-  `false` se reservarían los 72 px de forma permanente, como una barra fija.
+  `false` se reservaría de forma permanente el alto del dock, como una barra fija.
 - Elementos: apps fijadas (`[dock] pinned`) + ventanas mapeadas (`j/clients`),
   sin duplicar por `class`.
 - **Moverse entre ventanas**: una sola ventana → enfocar por dirección; varias →
