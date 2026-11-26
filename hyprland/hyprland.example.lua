@@ -293,6 +293,12 @@ hl.bind("PRINT", hl.dsp.exec_cmd(dinamicUi .. " --screenshots"))
 hl.bind(mainMod .. " + SHIFT + O", hl.dsp.exec_cmd(dinamicUi .. " --overview-activities"))
 hl.bind(mainMod .. " + ALT + O", hl.dsp.exec_cmd(dinamicUi .. " --overview-strip-h"))
 hl.bind(mainMod .. " + CTRL + O", hl.dsp.exec_cmd(dinamicUi .. " --overview-strip-v"))
+-- Switchers: Alt+Tab (ventanas en MRU) y Super+Tab (workspaces). El bind se
+-- repite mientras se mantiene el modificador: cada Tab cicla; soltarlo aplica.
+hl.bind("ALT + TAB",              hl.dsp.exec_cmd(dinamicUi .. " --window-switcher"), { repeating = true })
+hl.bind("ALT + SHIFT + TAB",      hl.dsp.exec_cmd(dinamicUi .. " --window-switcher-prev"), { repeating = true })
+hl.bind(mainMod .. " + TAB",      hl.dsp.exec_cmd(dinamicUi .. " --workspace-switcher"), { repeating = true })
+hl.bind(mainMod .. " + SHIFT + TAB", hl.dsp.exec_cmd(dinamicUi .. " --workspace-switcher-prev"), { repeating = true })
 
 -- Control de la isla/barra/panel (socket de control, sin depender del foco del layer)
 hl.bind(mainMod .. " + I",          hl.dsp.exec_cmd(dinamicUi .. " --toggle"))
