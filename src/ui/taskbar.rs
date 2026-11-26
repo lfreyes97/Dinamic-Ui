@@ -319,23 +319,28 @@ fn tray_button(
     let _ = response.on_hover_text(icon.tip.clone());
 }
 
-/// Un clic en una app: la lanza si no tiene ventanas; si ya tiene el foco, pasa a la
-/// siguiente de sus ventanas (igual que el dock).
+/// Un clic en una app: la lanza si no tiene ventanas; con varias, vuelve a la
+/// más recientemente enfocada; si ya tenía el foco, pasa a la siguiente.
 fn activate(state: &mut UiState, app: &Item, active: bool) {
     if app.windows.is_empty() {
         state.shared.dock_action = Some(DockAction::Launch(app.command.clone()));
         return;
     }
     let current = &state.shared.snapshot.window_address;
-    let index = if active {
-        app.windows
+    let address = if active {
+        let index = app
+            .windows
             .iter()
             .position(|w| &w.address == current)
-            .map_or(0, |i| (i + 1) % app.windows.len())
+            .map_or(0, |i| (i + 1) % app.windows.len());
+        app.windows[index].address.clone()
     } else {
-        0
+        state
+            .shared
+            .last_focused_of(&app.name, &app.windows)
+            .unwrap_or_else(|| app.windows[0].address.clone())
     };
-    state.shared.dock_action = Some(DockAction::Focus(app.windows[index].address.clone()));
+    state.shared.dock_action = Some(DockAction::Focus(address));
 }
 
 // ── Colocación: una sola fuente para el dibujo y para la zona de entrada ─────
@@ -705,7 +710,7 @@ fn draw_overflow(
     ui.painter().rect(
         card,
         CornerRadius::same(Radius::of(Radius::CARD)),
-        Palette::with_alpha(palette.raised, 250),
+        Palette::with_alpha(pal().solid(), 250),
         Stroke::new(1.0, palette.border),
         StrokeKind::Middle,
     );
@@ -826,6 +831,35 @@ mod tests {
             Side::Right => {
                 egui::Rect::from_min_size(egui::pos2(w - size, 0.0), egui::vec2(size, h))
             }
+        }
+    }
+
+    #[test]
+    fn un_clic_vuelve_a_la_ventana_mas_reciente_de_la_app() {
+        let mut state = UiState::new_preview();
+        let win = |address: &str| crate::ipc::ClientInfo {
+            class: "kitty".into(),
+            title: address.into(),
+            address: address.into(),
+            mapped: true,
+            workspace: 1,
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 10,
+        };
+        let app = Item {
+            name: "kitty".into(),
+            glyph: "",
+            command: "kitty".into(),
+            windows: vec![win("a"), win("b")],
+        };
+        state.shared.touch_window("a");
+        state.shared.touch_window("b");
+        activate(&mut state, &app, false);
+        match state.shared.dock_action.take() {
+            Some(DockAction::Focus(address)) => assert_eq!(address, "b"),
+            other => panic!("esperaba Focus(b), got {other:?}"),
         }
     }
 

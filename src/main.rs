@@ -388,6 +388,11 @@ impl DinamicUi {
                 let address = snapshot.window_address.clone();
                 self.ui_state.shared.touch_window(&address);
             }
+            if snapshot.workspace != self.last_snapshot.workspace {
+                if let Ok(id) = snapshot.workspace.parse::<u32>() {
+                    self.ui_state.shared.touch_workspace(id);
+                }
+            }
             self.last_snapshot = snapshot.clone();
             self.ui_state.shared.snapshot = snapshot;
             dirty = true;

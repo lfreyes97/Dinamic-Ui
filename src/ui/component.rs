@@ -27,25 +27,31 @@ pub struct UpdateCtx {
     pub cursor: Option<(i32, i32)>,
 }
 
-/// Zona que reclama entrada mientras el dock está visible (misma que `input_rects`).
+/// Histéresis del autohide con zonas acotadas al ancho del dock: la franja de
+/// activación es corta y, una vez visible, la permanencia cubre el dock más un
+/// margen. Ambas viven en `dock.rs` para que dibujo, entrada y detección no
+/// puedan desincronizarse.
 #[cfg(feature = "dock")]
-const DOCK_HIT_H: i32 = 72;
-/// Franja inferior que DESPLEGA el dock cuando está oculto.
-#[cfg(feature = "dock")]
-const DOCK_ACTIVATE_H: i32 = 24;
-
-/// Histéresis del autohide: entrar cuesta menos que salir. Once visible, el cursor
-/// puede estar sobre cualquier parte del dock (72 px), no solo en la franja de 24.
-#[cfg(feature = "dock")]
-fn dock_should_show(visible: bool, forced: bool, y: i32, screen_h: i32) -> bool {
+fn dock_should_show(
+    visible: bool,
+    forced: bool,
+    cursor: Option<(i32, i32)>,
+    screen_w: i32,
+    screen_h: i32,
+    dock: Option<egui::Rect>,
+) -> bool {
     if forced {
         return true;
     }
-    if visible {
-        y >= screen_h - DOCK_HIT_H
+    let (Some((x, y)), Some(dock)) = (cursor, dock) else {
+        return visible;
+    };
+    let (zx, zy, zw, zh) = if visible {
+        super::dock::persist_zone(dock, screen_w, screen_h)
     } else {
-        y >= screen_h - DOCK_ACTIVATE_H
-    }
+        super::dock::activate_zone(dock, screen_w, screen_h)
+    };
+    x >= zx && x < zx + zw && y >= zy && y < zy + zh
 }
 
 /// Un componente del shell: dibujo, entrada, comandos y su propia lógica de host.
@@ -815,7 +821,10 @@ impl Component for Dock {
         if state.dock.dock_progress <= 0.01 || taskbar_on(state) {
             Vec::new()
         } else {
-            vec![(0, screen_h - DOCK_HIT_H, screen_w, DOCK_HIT_H)]
+            match super::dock::dock_rect(state, screen_w, screen_h) {
+                Some(dock) => vec![super::dock::persist_zone(dock, screen_w, screen_h)],
+                None => Vec::new(),
+            }
         }
     }
 
@@ -826,12 +835,20 @@ impl Component for Dock {
                 state.dock.dock_visible = false;
                 dirty = true;
             }
-        } else if let Some((_, y)) = ctx.cursor {
-            // El dock no depende de la feature `taskbar`. Con histéresis: aparece al
-            // llegar a 24 px del borde, pero no se oculta hasta salir de los 72 px
-            // que reclama (así el cursor puede estar sobre el dock sin que se vaya).
+        } else if ctx.cursor.is_some() {
+            // El dock no depende de la feature `taskbar`. Aparece solo al entrar en
+            // su franja acotada y se mantiene mientras el cursor esté sobre el dock
+            // (más un margen), no en todo el borde inferior.
             let forced = std::env::var_os("DINAMIC_UI_DOCK").is_some();
-            let visible = dock_should_show(state.dock.dock_visible, forced, y, ctx.screen_h);
+            let dock = super::dock::dock_rect(state, ctx.screen_w, ctx.screen_h);
+            let visible = dock_should_show(
+                state.dock.dock_visible,
+                forced,
+                ctx.cursor,
+                ctx.screen_w,
+                ctx.screen_h,
+                dock,
+            );
             if visible != state.dock.dock_visible {
                 state.dock.dock_visible = visible;
                 dirty = true;
@@ -1253,26 +1270,92 @@ impl Component for Osd {
 mod dock_tests {
     use super::*;
 
-    const H: i32 = 768;
+    const W: i32 = 1920;
+    const H: i32 = 1080;
 
-    #[test]
-    fn oculto_aparece_solo_en_la_franja_de_24px() {
-        assert!(dock_should_show(false, false, H - 23, H));
-        assert!(dock_should_show(false, false, H - 24, H));
-        assert!(!dock_should_show(false, false, H - 25, H));
+    /// Dock de 5 iconos centrado: x=836..1084, y=1014..1070.
+    fn dock() -> egui::Rect {
+        egui::Rect::from_min_size(egui::pos2(836.0, 1014.0), egui::vec2(248.0, 56.0))
     }
 
     #[test]
-    fn visible_se_mantiene_sobre_todo_el_dock_de_72px() {
-        // El cursor puede estar en la parte alta del dock (por encima de la franja).
-        assert!(dock_should_show(true, false, H - 70, H));
-        assert!(dock_should_show(true, false, H - 24, H));
-        assert!(!dock_should_show(true, false, H - 73, H));
+    fn oculto_aparece_solo_bajo_el_dock() {
+        let d = dock();
+        assert!(dock_should_show(
+            false,
+            false,
+            Some((900, H - 20)),
+            W,
+            H,
+            Some(d)
+        ));
+        assert!(!dock_should_show(
+            false,
+            false,
+            Some((100, H - 20)),
+            W,
+            H,
+            Some(d)
+        ));
+        assert!(!dock_should_show(
+            false,
+            false,
+            Some((1150, H - 20)),
+            W,
+            H,
+            Some(d)
+        ));
+        assert!(!dock_should_show(
+            false,
+            false,
+            Some((900, H - 30)),
+            W,
+            H,
+            Some(d)
+        ));
+    }
+
+    #[test]
+    fn visible_se_mantiene_sobre_el_dock_mas_un_margen() {
+        let d = dock();
+        assert!(dock_should_show(
+            true,
+            false,
+            Some((900, H - 65)),
+            W,
+            H,
+            Some(d)
+        ));
+        assert!(dock_should_show(
+            true,
+            false,
+            Some((900, H - 24)),
+            W,
+            H,
+            Some(d)
+        ));
+        assert!(!dock_should_show(
+            true,
+            false,
+            Some((100, H - 24)),
+            W,
+            H,
+            Some(d)
+        ));
+        assert!(!dock_should_show(
+            true,
+            false,
+            Some((900, H - 80)),
+            W,
+            H,
+            Some(d)
+        ));
     }
 
     #[test]
     fn env_var_fuerza_visible() {
-        assert!(dock_should_show(false, true, 0, H));
-        assert!(dock_should_show(true, true, 0, H));
+        let d = dock();
+        assert!(dock_should_show(false, true, Some((0, 0)), W, H, Some(d)));
+        assert!(dock_should_show(true, true, Some((0, 0)), W, H, Some(d)));
     }
 }

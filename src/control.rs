@@ -29,6 +29,7 @@ pub enum Command {
     WindowSwitcherPrev,
     WorkspaceSwitcher,
     WorkspaceSwitcherPrev,
+    SwitcherConfirm,
     Taskbar,
     Topbar,
     Menu,
@@ -58,6 +59,7 @@ impl Command {
             Self::WindowSwitcherPrev => "window-switcher-prev",
             Self::WorkspaceSwitcher => "workspace-switcher",
             Self::WorkspaceSwitcherPrev => "workspace-switcher-prev",
+            Self::SwitcherConfirm => "switcher-confirm",
             Self::Taskbar => "taskbar",
             Self::Topbar => "topbar",
             Self::Menu => "menu",
@@ -83,7 +85,8 @@ impl Command {
             Self::WindowSwitcher
             | Self::WindowSwitcherPrev
             | Self::WorkspaceSwitcher
-            | Self::WorkspaceSwitcherPrev => Some(("switcher", cfg!(feature = "switcher"))),
+            | Self::WorkspaceSwitcherPrev
+            | Self::SwitcherConfirm => Some(("switcher", cfg!(feature = "switcher"))),
             Self::Activities => Some(("activities", cfg!(feature = "activities"))),
             Self::Dashboard => Some(("dashboard", cfg!(feature = "dashboard"))),
             Self::ConfigPanel => Some(("config-panel", cfg!(feature = "config-panel"))),
@@ -118,6 +121,7 @@ impl Command {
             "window-switcher-prev" => Some(Self::WindowSwitcherPrev),
             "workspace-switcher" => Some(Self::WorkspaceSwitcher),
             "workspace-switcher-prev" => Some(Self::WorkspaceSwitcherPrev),
+            "switcher-confirm" => Some(Self::SwitcherConfirm),
             "taskbar" => Some(Self::Taskbar),
             "topbar" => Some(Self::Topbar),
             "menu" => Some(Self::Menu),

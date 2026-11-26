@@ -49,6 +49,8 @@ pub struct Shared {
     icons: IconCache,
     /// Orden MRU de ventanas por dirección: la más reciente, primero.
     pub mru: Vec<String>,
+    /// Orden MRU de workspaces por id: el visitado más recientemente, primero.
+    pub workspace_mru: Vec<u32>,
     /// Destello breve cuando cambia el workspace/ventana.
     pub pulse: f32,
     // ── Colas diferidas ───────────────────────────────────────────────
@@ -100,6 +102,31 @@ impl Shared {
         }
     }
 
+    /// Ventana más recientemente enfocada entre las de una clase, según el MRU
+    /// global. Así un clic en el dock/taskbar vuelve a la ventana que dejaste,
+    /// en vez de elegir siempre la primera.
+    pub fn last_focused_of(
+        &self,
+        class: &str,
+        windows: &[crate::ipc::ClientInfo],
+    ) -> Option<String> {
+        self.mru.iter().find_map(|address| {
+            windows
+                .iter()
+                .find(|w| &w.address == address && w.class.eq_ignore_ascii_case(class))
+                .map(|w| w.address.clone())
+        })
+    }
+
+    /// Mueve un workspace al frente del MRU, sin duplicados.
+    pub fn touch_workspace(&mut self, id: u32) {
+        self.workspace_mru.retain(|&w| w != id);
+        self.workspace_mru.insert(0, id);
+        if self.workspace_mru.len() > 32 {
+            self.workspace_mru.truncate(32);
+        }
+    }
+
     /// Textura del icono de una clase/nombre de app. La primera llamada lo pide al
     /// hilo de carga; mientras no esté listo (o si solo existe en SVG) devuelve
     /// `None` y quien llama dibuja su glifo de reserva.
@@ -134,6 +161,7 @@ impl Shared {
             #[cfg(feature = "icons")]
             icons: IconCache::new(),
             mru: Vec::new(),
+            workspace_mru: Vec::new(),
             pulse: 0.0,
             pending_commands: Vec::new(),
             pending_spawns: Vec::new(),

@@ -34,7 +34,14 @@ pub struct SwitcherState {
     /// Solo se arma al ver el modificador pulsado: evita confirmar con una
     /// actualización de modifiers ajena a este switcher.
     armed: bool,
+    /// Tiempo desde el último ciclo/evento de modificador. Si se queda abierto
+    /// sin actividad, se cierra para no retener el teclado en Exclusive.
+    age: f32,
 }
+
+/// Segundos de inactividad antes de soltar el teclado. Un Alt+Tab sostenido
+/// cicla con cada repetición del bind, lo que reinicia este contador.
+const IDLE_TIMEOUT: f32 = 3.0;
 
 impl SwitcherState {
     pub fn visible(&self) -> bool {
@@ -85,13 +92,21 @@ fn items(state: &UiState) -> Vec<Item> {
                 .collect()
         }
         Some(SwitcherKind::Workspaces) => {
-            let mut ids = state.shared.snapshot.occupied.clone();
             let current = overview::current_ws(state);
-            if !ids.contains(&current) {
-                ids.push(current);
+            // Recién visitados primero (el actual suele estar al frente). Los
+            // ocupados que nunca se visitaron entran al final, en orden numérico.
+            let mut ids: Vec<u32> = state.shared.workspace_mru.clone();
+            let mut rest = state.shared.snapshot.occupied.clone();
+            if !rest.contains(&current) {
+                rest.push(current);
             }
-            ids.sort_unstable();
-            ids.dedup();
+            rest.sort_unstable();
+            rest.dedup();
+            for id in rest {
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
             ids.into_iter()
                 .take(20)
                 .map(|id| Item {
@@ -142,6 +157,7 @@ pub(super) fn open(state: &mut UiState, kind: SwitcherKind, backwards: bool) {
         SwitcherKind::Workspaces => HoldModifier::Super,
     });
     state.switcher.armed = false;
+    state.switcher.age = 0.0;
     let count = items(state).len();
     state.switcher.selected = if kind == SwitcherKind::Windows && count > 1 {
         1
@@ -159,6 +175,7 @@ pub(super) fn cycle(state: &mut UiState, backwards: bool) {
     }
     let delta = if backwards { count - 1 } else { 1 };
     state.switcher.selected = (state.switcher.selected + delta) % count;
+    state.switcher.age = 0.0;
 }
 
 pub(super) fn activate(state: &mut UiState) {
@@ -180,6 +197,7 @@ pub fn on_modifiers(state: &mut UiState, mods: Modifiers) {
     if !state.switcher.open {
         return;
     }
+    state.switcher.age = 0.0;
     let Some(hold) = state.switcher.hold else {
         return;
     };
@@ -518,14 +536,25 @@ impl Component for SwitcherComponent {
     }
 
     fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
+        let before = state.switcher.progress;
+        if state.switcher.open {
+            state.switcher.age += ctx.dt;
+            // Nunca retener el teclado en Exclusive si no llega la soltura del
+            // modificador (p. ej. switcher abierto por CLI o evento perdido).
+            if state.switcher.age >= IDLE_TIMEOUT {
+                close(state);
+            }
+        }
         let s = &mut state.switcher;
-        let before = s.progress;
         s.progress = approach(s.progress, if s.open { 1.0 } else { 0.0 }, ctx.dt * 9.0);
         (s.progress - before).abs() > 0.0005
     }
 
-    fn wants_keyboard(&self, state: &UiState) -> bool {
-        state.switcher.open
+    /// El switcher NO pide teclado: en esta máquina Hyprland no suelta bien el
+    /// foco Exclusive de un layer surface. Las teclas las maneja Hyprland
+    /// (binds repetibles) y la confirmación llega como comando `switcher-confirm`.
+    fn wants_keyboard(&self, _state: &UiState) -> bool {
+        false
     }
 
     fn on_key(
@@ -538,6 +567,12 @@ impl Component for SwitcherComponent {
 
     fn on_command(&mut self, command: &str, state: &mut UiState) -> bool {
         use control::Command;
+        if command == "switcher-confirm" {
+            if state.switcher.open {
+                activate(state);
+            }
+            return true;
+        }
         let (kind, backwards) = match control::Command::parse(command) {
             Some(Command::WindowSwitcher) => (SwitcherKind::Windows, false),
             Some(Command::WindowSwitcherPrev) => (SwitcherKind::Windows, true),
@@ -557,6 +592,25 @@ impl Component for SwitcherComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inactividad_cierra_y_no_retiene_el_teclado() {
+        let mut state = UiState::new_preview();
+        open(&mut state, SwitcherKind::Windows, false);
+        assert!(state.switcher.open);
+        let ctx = UpdateCtx {
+            dt: 1.0,
+            screen_w: 1920,
+            screen_h: 1080,
+            cursor: None,
+        };
+        let mut component = super::SwitcherComponent;
+        for _ in 0..4 {
+            component.update(&mut state, &ctx);
+        }
+        assert!(!state.switcher.open, "tras 3 s de inactividad se cierra");
+        assert!(!component.wants_keyboard(&state));
+    }
 
     #[test]
     fn mru_orders_windows_from_shared_state() {
@@ -592,6 +646,35 @@ mod tests {
         state.switcher.kind = Some(SwitcherKind::Windows);
         let keys: Vec<String> = items(&state).into_iter().map(|i| i.key).collect();
         assert_eq!(keys, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn el_switcher_no_robe_el_teclado_y_confirma_por_comando() {
+        let mut state = UiState::new_preview();
+        state.shared.snapshot.occupied = vec![1, 2];
+        let mut component = super::SwitcherComponent;
+        assert!(!component.wants_keyboard(&state));
+        component.on_command("workspace-switcher", &mut state);
+        assert!(state.switcher.open);
+        assert!(
+            !component.wants_keyboard(&state),
+            "ni abierto toma el teclado"
+        );
+        component.on_command("switcher-confirm", &mut state);
+        assert!(!state.switcher.open);
+        assert_eq!(state.shared.pending_commands.len(), 1);
+    }
+
+    #[test]
+    fn workspaces_se_ordenan_por_visita_reciente() {
+        let mut state = UiState::new_preview();
+        state.shared.snapshot.occupied = vec![1, 2, 3, 5];
+        state.shared.snapshot.workspace = "3".into();
+        state.shared.touch_workspace(5);
+        state.shared.touch_workspace(2);
+        state.switcher.kind = Some(SwitcherKind::Workspaces);
+        let keys: Vec<String> = items(&state).into_iter().map(|i| i.key).collect();
+        assert_eq!(keys, vec!["2", "5", "1", "3"]);
     }
 
     #[test]

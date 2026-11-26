@@ -27,16 +27,21 @@ struct DockItem {
     command: String,
     windows: Vec<crate::ipc::ClientInfo>,
 }
-/// Dock inferior: se desliza desde abajo cuando el cursor llega al borde.
-pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
-    let cfg = &config::get().dock;
-    if !cfg.enabled || state.dock.dock_progress <= 0.01 {
-        return;
-    }
-    let screen = ui.max_rect();
 
-    // Un elemento por app fijada + uno por clase en ejecución, con TODAS sus
-    // ventanas para poder moverse entre ellas.
+const ITEM: f32 = 42.0;
+const GAP: f32 = 6.0;
+const H: f32 = 56.0;
+const BOTTOM: f32 = 10.0;
+/// Margen horizontal de la franja de activación alrededor del ancho del dock.
+const ACTIVATE_MARGIN_X: i32 = 32;
+/// Margen de la zona de permanencia alrededor del dock desplegado.
+const PERSIST_MARGIN: i32 = 12;
+/// Alto de la franja inferior que despliega el dock cuando está oculto.
+const ACTIVATE_H: i32 = 24;
+
+/// Un elemento por app fijada + uno por clase en ejecución, con TODAS sus ventanas.
+fn dock_items(state: &UiState) -> Vec<DockItem> {
+    let cfg = &config::get().dock;
     let mut items: Vec<DockItem> = Vec::new();
     for pinned in &cfg.pinned {
         let key = pinned.to_lowercase();
@@ -70,14 +75,60 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
             });
         }
     }
+    items
+}
+
+/// Rect del dock ya desplegado. Una sola fuente para dibujo, entrada e histéresis.
+pub(super) fn dock_rect(state: &UiState, screen_w: i32, screen_h: i32) -> Option<egui::Rect> {
+    if !config::get().dock.enabled {
+        return None;
+    }
+    let items = dock_items(state);
+    if items.is_empty() {
+        return None;
+    }
+    let w = 14.0 + items.len() as f32 * (ITEM + GAP) - GAP;
+    Some(egui::Rect::from_min_size(
+        egui::pos2(
+            ((screen_w as f32 - w) / 2.0).round(),
+            screen_h as f32 - BOTTOM - H,
+        ),
+        egui::vec2(w, H),
+    ))
+}
+
+/// Franja acotada que DESPLIEGA el dock: solo bajo el dock (más un margen), no
+/// todo el borde inferior.
+pub(super) fn activate_zone(
+    dock: egui::Rect,
+    screen_w: i32,
+    screen_h: i32,
+) -> (i32, i32, i32, i32) {
+    let x = (dock.min.x as i32 - ACTIVATE_MARGIN_X).max(0);
+    let right = (dock.max.x as i32 + ACTIVATE_MARGIN_X).min(screen_w);
+    (x, screen_h - ACTIVATE_H, (right - x).max(1), ACTIVATE_H)
+}
+
+/// Zona de PERMANENCIA una vez visible: el dock y un margen, sin ocupar todo el borde.
+pub(super) fn persist_zone(dock: egui::Rect, screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
+    let x = (dock.min.x as i32 - PERSIST_MARGIN).max(0);
+    let right = (dock.max.x as i32 + PERSIST_MARGIN).min(screen_w);
+    let y = (dock.min.y as i32 - PERSIST_MARGIN).max(0);
+    (x, y, (right - x).max(1), (screen_h - y).max(1))
+}
+
+/// Dock inferior: se desliza desde abajo cuando el cursor llega a su franja.
+pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
+    let cfg = &config::get().dock;
+    if !cfg.enabled || state.dock.dock_progress <= 0.01 {
+        return;
+    }
+    let screen = ui.max_rect();
+    let items = dock_items(state);
     if items.is_empty() {
         return;
     }
 
-    const ITEM: f32 = 42.0;
-    const GAP: f32 = 6.0;
-    const H: f32 = 56.0;
-    const BOTTOM: f32 = 10.0;
     let w = 14.0 + items.len() as f32 * (ITEM + GAP) - GAP;
     let hidden = (1.0 - state.dock.dock_progress) * (H + BOTTOM + 12.0);
     let dock = egui::Rect::from_min_size(
@@ -175,8 +226,6 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
         if response.clicked() {
             if item.windows.is_empty() {
                 state.shared.dock_action = Some(DockAction::Launch(item.command.clone()));
-            } else if item.windows.len() == 1 {
-                state.shared.dock_action = Some(DockAction::Focus(item.windows[0].address.clone()));
             } else if active {
                 // Ya está activa: ciclar a la siguiente ventana.
                 let current = item
@@ -188,11 +237,13 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                 state.shared.dock_action =
                     Some(DockAction::Focus(item.windows[next].address.clone()));
             } else {
-                state.dock.dock_menu = if state.dock.dock_menu == Some(i) {
-                    None
-                } else {
-                    Some(i)
-                };
+                // Varias ventanas: volver a la más recientemente enfocada de esta
+                // app. El menú explícito sigue en clic derecho.
+                let address = state
+                    .shared
+                    .last_focused_of(&item.name, &item.windows)
+                    .unwrap_or_else(|| item.windows[0].address.clone());
+                state.shared.dock_action = Some(DockAction::Focus(address));
             }
         }
         if response.secondary_clicked() && running {
@@ -216,10 +267,11 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                 ),
                 egui::vec2(menu_w, menu_h),
             );
+            drop_shadow(ui, menu, 12, 8, 24, 90);
             ui.painter().rect(
                 menu,
                 CornerRadius::same(Radius::of(Radius::CARD)),
-                pal().card_fill,
+                Palette::with_alpha(pal().solid(), 250),
                 Stroke::new(1.0, pal().border),
                 StrokeKind::Middle,
             );
@@ -241,12 +293,23 @@ pub(super) fn draw_dock(ui: &mut egui::Ui, state: &mut UiState, palette: Palette
                     ui.scope_id().with(("dock-menu-win", j)),
                     egui::Sense::click(),
                 );
-                if r.hovered() {
+                let active_win = win.address == state.shared.snapshot.window_address;
+                if r.hovered() || active_win {
                     ui.painter().rect_filled(
                         row,
                         CornerRadius::same(Radius::of(Radius::SM)),
                         palette.badge,
                     );
+                }
+                if active_win {
+                    ui.painter().rect_stroke(
+                        row,
+                        CornerRadius::same(Radius::of(Radius::SM)),
+                        Stroke::new(1.0, palette.accent),
+                        StrokeKind::Middle,
+                    );
+                }
+                if r.hovered() {
                     ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
                 }
                 text_at(
