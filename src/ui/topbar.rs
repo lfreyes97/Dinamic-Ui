@@ -410,7 +410,7 @@ pub(super) fn draw_topbar(ui: &mut egui::Ui, state: &mut UiState, palette: Palet
             egui::pos2(bar.center().x + 80.0, cy - 8.0),
             egui::vec2(16.0, 16.0),
         );
-        if mode_chip(ui, rect, ic::CARET_DOWN, palette, "topbar-mode-down") {
+        if mode_chip(ui, rect, ic::CARET_DOWN, palette, "topbar-mode-down", 1.0) {
             dispatch_command("topbar", state);
         }
     }

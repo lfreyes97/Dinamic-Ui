@@ -429,6 +429,7 @@ pub(super) fn mode_chip(
     icon: &str,
     palette: Palette,
     id: &'static str,
+    scale: f32,
 ) -> bool {
     let response = ui.interact(
         rect,
@@ -451,7 +452,7 @@ pub(super) fn mode_chip(
         rect.center(),
         egui::Align2::CENTER_CENTER,
         icon,
-        icon_font(ICON_XS),
+        icon_font(ICON_XS * scale),
         palette.text,
     );
     if response.hovered() {

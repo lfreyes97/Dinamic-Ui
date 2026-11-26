@@ -334,8 +334,11 @@ impl Component for BarShell {
                 true
             }
             "collapse" => {
+                // Vuelve al reposo, no al compacto enganchado: `Esc` y
+                // `--collapse` deben coincidir con lo que documenta la UI.
                 bar.expanded = false;
                 bar.show_panel = false;
+                bar.island_compact = false;
                 true
             }
             "compact" => {
@@ -358,14 +361,26 @@ impl Component for BarShell {
     fn update(&mut self, state: &mut UiState, ctx: &UpdateCtx) -> bool {
         let mut dirty = false;
         let bar = &mut state.bar;
-        // Zona del notch: franja superior centrada.
+        // Zona del notch con histéresis: entrar cuesta menos que salir, y salir
+        // se mide sobre el rect animado (no sobre una franja fija de 18 px) para
+        // que el chip y la píldora se retraigan al mismo tiempo.
         if bar.suppressed {
             bar.island_active = false;
         } else if let Some((x, y)) = ctx.cursor {
-            let near_top = std::env::var_os("DINAMIC_UI_ISLAND").is_some()
-                || (y <= 18 && (x - ctx.screen_w / 2).abs() <= 100);
-            if near_top != bar.island_active {
-                bar.island_active = near_top;
+            let (enter, exit) =
+                super::bar::notch_hover_zones(ctx.screen_w as f32, bar.island_progress);
+            let point = egui::pos2(x as f32, y as f32);
+            // `DINAMIC_UI_ISLAND` fuerza el despliegue; si el IPC no devuelve
+            // cursor se conserva el estado anterior (como antes del cambio),
+            // para que un fallo puntual del `cursorpos` no cierre la píldora.
+            let inside = std::env::var_os("DINAMIC_UI_ISLAND").is_some()
+                || if bar.island_active {
+                    exit.contains(point)
+                } else {
+                    enter.contains(point)
+                };
+            if inside != bar.island_active {
+                bar.island_active = inside;
                 dirty = true;
             }
         }
@@ -406,9 +421,10 @@ impl Component for BarShell {
     }
 
     fn on_key(&mut self, state: &mut UiState, key: Keysym) -> bool {
-        // Esc nunca cierra el proceso: solo deshace la capa superior.
-        if key == Keysym::Escape && state.bar.expanded {
-            state.bar.expanded = false;
+        // Esc nunca cierra el proceso: deshace hasta el notch. El panel se
+        // encarga antes (z-order inverso), así que aquí solo queda barra/compacto.
+        if key == Keysym::Escape && (state.bar.expanded || state.bar.island_compact) {
+            dispatch_command("collapse", state);
             return true;
         }
         false
