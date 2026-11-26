@@ -186,6 +186,10 @@ struct DinamicUi {
     /// El timer de calloop pone `tick` y se reprograma con `tick_interval`.
     tick: bool,
     tick_interval: Duration,
+    /// El teclado no genera eventos de egui: los componentes cambian el estado
+    /// directamente. Esto fuerza un frame en el mismo tick de la tecla, sin
+    /// esperar al timer de 250 ms ni a un evento de IPC.
+    input_dirty: bool,
     last_rendered: bool,
     exit: bool,
 }
@@ -262,6 +266,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         qh: qh.clone(),
         tick: false,
         tick_interval: Duration::from_millis(16),
+        input_dirty: false,
         last_rendered: false,
         exit: false,
     };
@@ -304,7 +309,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             app.tick = false;
             let qh = app.qh.clone();
             app.draw(&qh);
-            app.tick_interval = if app.last_rendered || app.gfx.needs_repaint() {
+            // Con un overlay que tiene el teclado en exclusiva (menú, actividades,
+            // overview, switcher) el frame debe ser de 16 ms: así la búsqueda no
+            // depende del timer lento de reposo aunque no haya animación activa.
+            app.tick_interval = if app.last_rendered
+                || app.gfx.needs_repaint()
+                || ui::wants_keyboard(&app.ui_state)
+            {
                 Duration::from_millis(16)
             } else {
                 Duration::from_millis(250)
@@ -352,7 +363,7 @@ impl DinamicUi {
     }
 
     fn draw(&mut self, qh: &QueueHandle<Self>) {
-        let mut dirty = false;
+        let mut dirty = std::mem::take(&mut self.input_dirty);
 
         // Comandos del socket de control (keybinds de Hyprland).
         let pending_control = std::mem::take(&mut self.pending_control);
@@ -760,6 +771,7 @@ impl KeyboardHandler for DinamicUi {
     ) {
         // Redibujar al instante: el menu y las animaciones no esperan al timer.
         self.tick = true;
+        self.input_dirty = true;
         // Los componentes consumen la tecla de arriba abajo. Esc nunca cierra el
         // proceso: solo deshace la capa superior (salir: botón del panel o `--quit`).
         ui::dispatch_key(&mut self.ui_state, event.keysym);
@@ -771,8 +783,13 @@ impl KeyboardHandler for DinamicUi {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
-        _: KeyEvent,
+        event: KeyEvent,
     ) {
+        // El autorepetido del compositor llega aquí, no por `press_key`. Sin esto,
+        // mantener BackSpace o una letra no seguía escribiendo en el buscador.
+        self.tick = true;
+        self.input_dirty = true;
+        ui::dispatch_key(&mut self.ui_state, event.keysym);
     }
 
     fn release_key(
@@ -796,6 +813,7 @@ impl KeyboardHandler for DinamicUi {
         _: u32,
     ) {
         // Soltar Alt/Super confirma el switcher (Tab solo cicla la selección).
+        self.input_dirty = true;
         let before = ui::wants_keyboard(&self.ui_state);
         ui::switcher_modifiers(&mut self.ui_state, mods);
         if before != ui::wants_keyboard(&self.ui_state) {
