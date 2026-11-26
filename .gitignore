@@ -6,5 +6,6 @@
 .prowl/logs/
 .prowl/editor/
 .prowl/setup-applies.json
+.prowl/index-refresh.lock
 .prowl-setup.lock
 # /prowl-agent: derived state

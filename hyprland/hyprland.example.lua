@@ -40,7 +40,17 @@ local terminal    = "kitty"
 local fileManager = "nautilus"
 local menu        = "rofi -show drun"
 local HOME = os.getenv("HOME") or ""
-local REPO = os.getenv("DINAMIC_UI_REPO") or (HOME .. "/Projects/Dinamic-Ui")
+local function is_dir(path)
+    local f = io.open(path, "r")
+    if not f then return false end
+    f:close()
+    return true
+end
+-- El repo puede estar en "Proyectos" o "Projects" según la máquina; la variable
+-- de entorno manda y el fallback comprueba cuál existe de verdad.
+local REPO = os.getenv("DINAMIC_UI_REPO")
+    or (is_dir(HOME .. "/Proyectos/Dinamic-Ui") and (HOME .. "/Proyectos/Dinamic-Ui"))
+    or (HOME .. "/Projects/Dinamic-Ui")
 local dinamicUi = REPO .. "/target/release/dinamic-ui"
 
 -------------------
@@ -74,6 +84,13 @@ end)
 
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
+
+-- Sin warp del puntero al cambiar de workspace/foco: evita el salto al centro.
+hl.config({
+    cursor = {
+        no_warps = true,
+    },
+})
 
 
 -----------------------
@@ -299,6 +316,14 @@ hl.bind("ALT + TAB",              hl.dsp.exec_cmd(dinamicUi .. " --window-switch
 hl.bind("ALT + SHIFT + TAB",      hl.dsp.exec_cmd(dinamicUi .. " --window-switcher-prev"), { repeating = true })
 hl.bind(mainMod .. " + TAB",      hl.dsp.exec_cmd(dinamicUi .. " --workspace-switcher"), { repeating = true })
 hl.bind(mainMod .. " + SHIFT + TAB", hl.dsp.exec_cmd(dinamicUi .. " --workspace-switcher-prev"), { repeating = true })
+-- Soltar Alt/Super confirma el switcher. El shell NO toma el teclado: lo hace
+-- Hyprland con estos binds y este evento (0 = release, 1 = press).
+hl.on("input.keyboard.key", function(keycode, _, state)
+    if state ~= 0 then return end
+    if keycode == 64 or keycode == 108 or keycode == 133 or keycode == 134 then
+        hl.exec_cmd(dinamicUi .. " --switcher-confirm")
+    end
+end)
 
 -- Control de la isla/barra/panel (socket de control, sin depender del foco del layer)
 hl.bind(mainMod .. " + I",          hl.dsp.exec_cmd(dinamicUi .. " --toggle"))

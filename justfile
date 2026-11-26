@@ -93,6 +93,9 @@ lint-colors:
     @! grep -rnE 'Color32::(from_gray|from_rgb|from_rgba|from_black_alpha|from_white_alpha)' src | grep -v -e '^src/theme.rs' -e '^src/ui/sample.rs' || { echo "colores fijos fuera de theme.rs: usa tokens (docs/DESIGN_TOKENS.md)"; exit 1; }
     @echo "colores: sin literales fuera de theme.rs"
 
+# Verificación rápida para iterar (sin debuginfo; matriz solo antes de push).
+ci-fast: fmt-check check-fast test-fast
+
 # Todo lo que debe pasar antes de un commit
 ci: fmt-check check lint lint-colors test
 
