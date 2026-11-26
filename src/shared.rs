@@ -47,6 +47,8 @@ pub struct Shared {
     pub settings: crate::actions::SettingsState,
     #[cfg(feature = "icons")]
     icons: IconCache,
+    /// Orden MRU de ventanas por dirección: la más reciente, primero.
+    pub mru: Vec<String>,
     /// Destello breve cuando cambia el workspace/ventana.
     pub pulse: f32,
     // ── Colas diferidas ───────────────────────────────────────────────
@@ -86,6 +88,18 @@ impl Default for Shared {
 }
 
 impl Shared {
+    /// Mueve una ventana al frente del MRU, sin duplicados.
+    pub fn touch_window(&mut self, address: &str) {
+        if address.is_empty() {
+            return;
+        }
+        self.mru.retain(|a| a != address);
+        self.mru.insert(0, address.to_string());
+        if self.mru.len() > 64 {
+            self.mru.truncate(64);
+        }
+    }
+
     /// Textura del icono de una clase/nombre de app. La primera llamada lo pide al
     /// hilo de carga; mientras no esté listo (o si solo existe en SVG) devuelve
     /// `None` y quien llama dibuja su glifo de reserva.
@@ -119,6 +133,7 @@ impl Shared {
             settings: crate::actions::SettingsState::default(),
             #[cfg(feature = "icons")]
             icons: IconCache::new(),
+            mru: Vec::new(),
             pulse: 0.0,
             pending_commands: Vec::new(),
             pending_spawns: Vec::new(),

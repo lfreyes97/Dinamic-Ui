@@ -54,7 +54,9 @@ pub fn safe_rect(state: &UiState, screen: egui::Rect) -> egui::Rect {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(feature = "topbar", feature = "taskbar"))]
     use super::*;
+    #[cfg(all(feature = "topbar", feature = "taskbar"))]
     use crate::config::{Config, Side, TaskbarConfig, TopbarConfig};
 
     #[cfg(all(feature = "topbar", feature = "taskbar"))]
@@ -109,6 +111,7 @@ mod tests {
         assert_eq!(reservations(&state), [34, 48, 0, 0], "progress 0.6");
     }
 
+    #[cfg(all(feature = "topbar", feature = "taskbar"))]
     #[test]
     fn safe_rect_descuenta_las_reservas() {
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1366.0, 768.0));

@@ -25,6 +25,10 @@ pub enum Command {
     ConfigPanel,
     OverviewStripH,
     OverviewStripV,
+    WindowSwitcher,
+    WindowSwitcherPrev,
+    WorkspaceSwitcher,
+    WorkspaceSwitcherPrev,
     Taskbar,
     Topbar,
     Menu,
@@ -50,6 +54,10 @@ impl Command {
             Self::ConfigPanel => "config-panel",
             Self::OverviewStripH => "overview-strip-h",
             Self::OverviewStripV => "overview-strip-v",
+            Self::WindowSwitcher => "window-switcher",
+            Self::WindowSwitcherPrev => "window-switcher-prev",
+            Self::WorkspaceSwitcher => "workspace-switcher",
+            Self::WorkspaceSwitcherPrev => "workspace-switcher-prev",
             Self::Taskbar => "taskbar",
             Self::Topbar => "topbar",
             Self::Menu => "menu",
@@ -72,6 +80,10 @@ impl Command {
             Self::Overview | Self::OverviewStripH | Self::OverviewStripV => {
                 Some(("overview", cfg!(feature = "overview")))
             }
+            Self::WindowSwitcher
+            | Self::WindowSwitcherPrev
+            | Self::WorkspaceSwitcher
+            | Self::WorkspaceSwitcherPrev => Some(("switcher", cfg!(feature = "switcher"))),
             Self::Activities => Some(("activities", cfg!(feature = "activities"))),
             Self::Dashboard => Some(("dashboard", cfg!(feature = "dashboard"))),
             Self::ConfigPanel => Some(("config-panel", cfg!(feature = "config-panel"))),
@@ -84,7 +96,7 @@ impl Command {
         }
     }
 
-    fn parse(s: &str) -> Option<Self> {
+    pub(crate) fn parse(s: &str) -> Option<Self> {
         match s.trim() {
             "toggle" => Some(Self::Toggle),
             "expand" => Some(Self::Expand),
@@ -102,6 +114,10 @@ impl Command {
             "config-panel" | "config" => Some(Self::ConfigPanel),
             "overview-strip-h" => Some(Self::OverviewStripH),
             "overview-strip-v" => Some(Self::OverviewStripV),
+            "window-switcher" => Some(Self::WindowSwitcher),
+            "window-switcher-prev" => Some(Self::WindowSwitcherPrev),
+            "workspace-switcher" => Some(Self::WorkspaceSwitcher),
+            "workspace-switcher-prev" => Some(Self::WorkspaceSwitcherPrev),
             "taskbar" => Some(Self::Taskbar),
             "topbar" => Some(Self::Topbar),
             "menu" => Some(Self::Menu),

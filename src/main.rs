@@ -1,7 +1,6 @@
 // El bucle de eventos Wayland del shell. La lógica vive en la lib (`src/lib.rs`);
 // el previewer interactivo (feature `previewer`) la reutiliza sin compositor.
 
-#[cfg(feature = "taskbar")]
 use dinamic_ui::{config, control, gfx, ipc, needs, power, sysinfo, theme, ui};
 
 use std::time::{Duration, Instant};
@@ -385,6 +384,10 @@ impl DinamicUi {
         self.ipc.poll();
         let snapshot = self.ipc.snapshot().clone();
         if snapshot != self.last_snapshot {
+            if snapshot.window_address != self.last_snapshot.window_address {
+                let address = snapshot.window_address.clone();
+                self.ui_state.shared.touch_window(&address);
+            }
             self.last_snapshot = snapshot.clone();
             self.ui_state.shared.snapshot = snapshot;
             dirty = true;
@@ -783,10 +786,16 @@ impl KeyboardHandler for DinamicUi {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
-        _: Modifiers,
+        mods: Modifiers,
         _: RawModifiers,
         _: u32,
     ) {
+        // Soltar Alt/Super confirma el switcher (Tab solo cicla la selección).
+        let before = ui::wants_keyboard(&self.ui_state);
+        ui::switcher_modifiers(&mut self.ui_state, mods);
+        if before != ui::wants_keyboard(&self.ui_state) {
+            self.tick = true;
+        }
     }
 }
 

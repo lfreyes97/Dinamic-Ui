@@ -38,6 +38,15 @@ pub use component::{
     dispatch_command, dispatch_key, input_rects, needs, update_components, wants_keyboard,
     UpdateCtx,
 };
+// Soltura del modificador del switcher (estilo GNOME: confirmar al soltar).
+#[cfg(feature = "switcher")]
+pub use switcher::on_modifiers as switcher_modifiers;
+#[cfg(not(feature = "switcher"))]
+pub fn switcher_modifiers(
+    _state: &mut UiState,
+    _mods: smithay_client_toolkit::seat::keyboard::Modifiers,
+) {
+}
 
 #[cfg(feature = "bar")]
 #[allow(unused_imports)] // lo usan los módulos hermanos vía `use super::*`
@@ -45,6 +54,7 @@ use panel::*;
 mod reserve;
 pub use reserve::{reservations, safe_rect, Edges};
 mod tokens;
+#[allow(unused_imports)] // `scale` solo lo usan los módulos con feature
 pub(crate) use tokens::{scale, Radius, Space};
 #[cfg(feature = "activities")]
 mod activities;
@@ -79,6 +89,8 @@ pub mod panel;
 mod quick_settings;
 #[cfg(feature = "screenshots")]
 pub mod screenshots;
+#[cfg(feature = "switcher")]
+mod switcher;
 #[cfg(feature = "taskbar")]
 mod taskbar;
 #[cfg(feature = "topbar")]
@@ -208,6 +220,8 @@ pub struct UiState {
     pub osd: osd::OsdState,
     #[cfg(feature = "screenshots")]
     pub screenshots: screenshots::ScreenshotState,
+    #[cfg(feature = "switcher")]
+    pub switcher: switcher::SwitcherState,
     #[cfg(feature = "activities")]
     pub activities: activities::ActivitiesState,
     #[cfg(feature = "dashboard")]
@@ -262,6 +276,8 @@ impl UiState {
             osd: osd::OsdState::default(),
             #[cfg(feature = "screenshots")]
             screenshots: screenshots::ScreenshotState::default(),
+            #[cfg(feature = "switcher")]
+            switcher: switcher::SwitcherState::default(),
             #[cfg(feature = "activities")]
             activities: activities::ActivitiesState::default(),
             #[cfg(feature = "dashboard")]

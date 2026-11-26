@@ -141,6 +141,8 @@ pub fn build_components() -> Vec<Box<dyn Component>> {
     components.push(Box::new(CommandMenu));
     #[cfg(feature = "screenshots")]
     components.push(Box::new(Screenshots));
+    #[cfg(feature = "switcher")]
+    components.push(Box::new(switcher::SwitcherComponent));
     // El OSD va encima de todo: el aviso de volumen/brillo también se ve con un
     // overview o el menú abiertos, y no reclama entrada.
     #[cfg(feature = "osd")]
@@ -174,6 +176,10 @@ pub(super) fn close_overlays(state: &mut UiState) {
     #[cfg(feature = "screenshots")]
     {
         state.screenshots.open = false;
+    }
+    #[cfg(feature = "switcher")]
+    {
+        state.switcher.open = false;
     }
     let _ = state;
 }
@@ -957,6 +963,10 @@ impl Component for Overview {
             {
                 state.activities.open = false;
             }
+            #[cfg(feature = "switcher")]
+            {
+                state.switcher.open = false;
+            }
             #[cfg(feature = "dashboard")]
             {
                 state.dashboard.open = false;
@@ -1040,6 +1050,10 @@ impl Component for Activities {
             {
                 state.overview.overview = false;
             }
+            #[cfg(feature = "switcher")]
+            {
+                state.switcher.open = false;
+            }
             #[cfg(feature = "dashboard")]
             {
                 state.dashboard.open = false;
@@ -1096,6 +1110,10 @@ impl Component for CommandMenu {
                 #[cfg(feature = "activities")]
                 {
                     state.activities.open = false;
+                }
+                #[cfg(feature = "switcher")]
+                {
+                    state.switcher.open = false;
                 }
                 #[cfg(feature = "dashboard")]
                 {
