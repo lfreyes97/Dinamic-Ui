@@ -380,6 +380,7 @@ pub fn draw(
     panel_t: f32,
     pill_w: f32,
 ) {
+    state.shared.begin_frame();
     crate::theme::set_current(palette);
     tokens::set_scale(ui.ctx().content_rect().height());
     let mut visuals = egui::Visuals::dark();

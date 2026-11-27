@@ -51,6 +51,10 @@ pub struct Shared {
     pub mru: Vec<String>,
     /// Orden MRU de workspaces por id: el visitado más recientemente, primero.
     pub workspace_mru: Vec<u32>,
+    /// Margen horizontal de la franja de activación del dock (px).
+    pub dock_activate_margin: i32,
+    /// Margen de permanencia alrededor del dock desplegado (px).
+    pub dock_persist_margin: i32,
     /// Destello breve cuando cambia el workspace/ventana.
     pub pulse: f32,
     // ── Colas diferidas ───────────────────────────────────────────────
@@ -70,15 +74,43 @@ pub struct Shared {
 #[cfg(feature = "icons")]
 struct IconCache {
     loader: crate::appicons::AppIcons,
+    /// RGBA listo esperando su turno para subir a GPU.
+    pending: Vec<(String, Vec<u8>)>,
     textures: HashMap<String, TextureHandle>,
+    theme: String,
+    theme_config: String,
+    /// Presupuesto de subidas por frame: reparte el tirón al abrir un overlay.
+    budget: usize,
 }
+
+/// Texturas nuevas como máximo por frame (a 60 fps, ~480/s).
+#[cfg(feature = "icons")]
+const ICON_UPLOAD_BUDGET: usize = 8;
 
 #[cfg(feature = "icons")]
 impl IconCache {
     fn new() -> Self {
         Self {
             loader: crate::appicons::AppIcons::new(),
+            pending: Vec::new(),
             textures: HashMap::new(),
+            theme: crate::appicons::AppIcons::theme(),
+            theme_config: config::get().icons.theme.clone().unwrap_or_default(),
+            budget: ICON_UPLOAD_BUDGET,
+        }
+    }
+
+    fn begin_frame(&mut self) {
+        self.budget = ICON_UPLOAD_BUDGET;
+        // Comparamos la config en crudo: `AppIcons::theme()` consulta GTK y es
+        // mejor no hacerlo en cada frame.
+        let raw = config::get().icons.theme.clone().unwrap_or_default();
+        if raw != self.theme_config {
+            self.theme_config = raw;
+            self.loader = crate::appicons::AppIcons::new();
+            self.textures.clear();
+            self.pending.clear();
+            self.theme = crate::appicons::AppIcons::theme();
         }
     }
 }
@@ -128,14 +160,16 @@ impl Shared {
     }
 
     /// Textura del icono de una clase/nombre de app. La primera llamada lo pide al
-    /// hilo de carga; mientras no esté listo (o si solo existe en SVG) devuelve
-    /// `None` y quien llama dibuja su glifo de reserva.
+    /// hilo de carga; mientras no esté listo devuelve `None` y quien llama dibuja
+    /// su glifo de reserva. Las subidas a GPU se reparten por frames.
     #[cfg(feature = "icons")]
     pub fn icon(&mut self, ctx: &egui::Context, class: &str) -> Option<TextureHandle> {
         let cache = &mut self.icons;
         cache.loader.request(class);
-        for (name, rgba) in cache.loader.drain() {
-            let size = crate::appicons::SIZE as usize;
+        cache.pending.extend(cache.loader.drain());
+        let size = crate::appicons::SIZE as usize;
+        while cache.budget > 0 && !cache.pending.is_empty() {
+            let (name, rgba) = cache.pending.remove(0);
             let image = egui::ColorImage::from_rgba_unmultiplied([size, size], &rgba);
             let handle = ctx.load_texture(
                 format!("appicon-{name}"),
@@ -143,9 +177,20 @@ impl Shared {
                 egui::TextureOptions::LINEAR,
             );
             cache.textures.insert(name, handle);
+            cache.budget -= 1;
         }
         cache.textures.get(&class.to_lowercase()).cloned()
     }
+
+    /// Prepara el frame en curso (presupuesto de iconos y tema).
+    /// Lo llama `ui::draw` antes de dibujar cualquier componente.
+    #[cfg(feature = "icons")]
+    pub fn begin_frame(&mut self) {
+        self.icons.begin_frame();
+    }
+
+    #[cfg(not(feature = "icons"))]
+    pub fn begin_frame(&mut self) {}
 
     pub fn new() -> Self {
         Self {
@@ -162,6 +207,8 @@ impl Shared {
             icons: IconCache::new(),
             mru: Vec::new(),
             workspace_mru: Vec::new(),
+            dock_activate_margin: 32,
+            dock_persist_margin: 12,
             pulse: 0.0,
             pending_commands: Vec::new(),
             pending_spawns: Vec::new(),

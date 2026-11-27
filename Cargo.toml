@@ -25,6 +25,7 @@ png = { version = "0.18.1", optional = true }
 # Solo el previsualizador interactivo (feature `previewer`): ventana normal, sin
 # layer-shell. El shell no lo usa. Ver docs/PREVIEWER.md.
 eframe = { version = "0.37", optional = true, default-features = false, features = ["wgpu", "wayland", "x11"] }
+resvg = { version = "0.50.0", optional = true }
 
 [profile.release]
 opt-level = 2
@@ -37,8 +38,8 @@ default = ["bar", "dock", "taskbar", "topbar", "overview", "switcher", "osd", "s
 bar = []
 # Topbar GNOME-like: reloj, estado y desplegables.
 topbar = ["bar"]
-# Iconos reales de app (tema freedesktop, solo PNG). La activan sus consumidores.
-icons = ["dep:freedesktop-icons", "dep:png"]
+# Iconos reales de app (tema freedesktop: PNG o SVG rasterizado). La activan sus consumidores.
+icons = ["dep:freedesktop-icons", "dep:png", "dep:resvg"]
 dock = ["icons"]
 # Otra vista sobre el modelo del dock (reservada: aún sin implementar).
 taskbar = ["dock"]
@@ -65,7 +66,6 @@ wallpaper = ["bar", "dep:image"]
 # Previsualizador interactivo (binario `previewer`, `just previewer`): ventana eframe
 # con los componentes compilados y datos de ejemplo. No afecta al build del shell.
 previewer = ["dep:eframe"]
-
 # Previsualizador: requiere la feature; con `cargo build` normal no se compila.
 [[bin]]
 name = "previewer"

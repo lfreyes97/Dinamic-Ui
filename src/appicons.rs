@@ -1,12 +1,15 @@
 //! Iconos reales de apps (feature `icons`).
 //!
-//! Resuelve `class` de Hyprland → `Icon=` del `.desktop` → PNG del tema activo
-//! (con herencia, vía `freedesktop-icons`). Solo PNG: sin SVG ni procesos externos;
-//! si un icono es SVG, no hay textura y la UI cae a un glifo Phosphor.
-//! La decodificación va en un hilo propio para no congelar el render.
+//! Resuelve `class` de Hyprland → `Icon=` del `.desktop` → PNG o SVG del tema
+//! activo (con herencia, vía `freedesktop-icons`). Los SVG se rasterizan con
+//! `resvg` en el hilo de iconos; si no hay textura, la UI cae al glifo Phosphor.
+//! El RGBA reescalado se guarda en `$XDG_CACHE_HOME/dinamic-ui/icons` con clave
+//! tema+ruta+mtime, así que no se decodifica de nuevo al reiniciar.
 
 use std::{
+    collections::hash_map::DefaultHasher,
     collections::{HashMap, HashSet},
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
     sync::{
         mpsc::{self, Sender},
@@ -16,22 +19,42 @@ use std::{
 };
 
 pub const SIZE: u32 = 48;
+/// Sube de versión cuando cambia el formato del caché en disco.
+const CACHE_VERSION: u8 = 2;
 
 type ReadyIcons = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
-#[derive(Default)]
 pub struct AppIcons {
     names: HashMap<String, String>,
+    theme: String,
     ready: ReadyIcons,
     tx: Option<Sender<(String, String)>>,
+    /// Incluye los fallos: una clase que no resolvió no se reintenta por frame.
     requested: HashSet<String>,
+}
+
+impl Default for AppIcons {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AppIcons {
     pub fn new() -> Self {
-        let mut this = Self::default();
+        let mut this = Self {
+            names: HashMap::new(),
+            theme: resolve_theme(),
+            ready: Arc::new(Mutex::new(Vec::new())),
+            tx: None,
+            requested: HashSet::new(),
+        };
         this.scan_desktop_files();
         this
+    }
+
+    /// Tema vigente, para detectar cambios con `--reload` desde `Shared`.
+    pub fn theme() -> String {
+        resolve_theme()
     }
 
     fn scan_desktop_files(&mut self) {
@@ -49,24 +72,21 @@ impl AppIcons {
 
     pub fn request(&mut self, class: &str) {
         let key = class.to_lowercase();
-        if !self.requested.insert(key.clone()) {
+        if key.is_empty() || !self.requested.insert(key.clone()) {
             return;
         }
         let Some(icon_name) = self.names.get(&key).cloned() else {
             return;
         };
+        let theme = self.theme.clone();
+        let ready = Arc::clone(&self.ready);
         let tx = self.tx.get_or_insert_with(|| {
             let (tx, rx) = mpsc::channel::<(String, String)>();
-            let ready = Arc::clone(&self.ready);
             thread::Builder::new()
                 .name("dinamic-ui-appicons".into())
                 .spawn(move || {
-                    let theme = resolve_theme();
                     for (class, name) in rx {
-                        let Some(path) = icon_path(&name, &theme) else {
-                            continue;
-                        };
-                        if let Some(rgba) = decode_png_icon(&path) {
+                        if let Some(rgba) = load_or_decode(&name, &theme) {
                             if let Ok(mut ready) = ready.lock() {
                                 ready.push((class, rgba));
                             }
@@ -98,7 +118,59 @@ fn resolve_theme() -> String {
         .unwrap_or_else(|| "hicolor".to_string())
 }
 
-/// Ruta del PNG del icono, o `None` si no existe o solo hay SVG.
+/// Caché en disco de los RGBA ya reescalados, como la de miniaturas.
+fn cache_dir() -> Option<PathBuf> {
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))?;
+    Some(base.join("dinamic-ui").join("icons"))
+}
+
+/// La clave incluye tema, ruta real, mtime y tamaño: un cambio de icono o de
+/// tema invalida el archivo sin tocar los demás.
+fn cache_file(name: &str, theme: &str, path: &Path) -> Option<PathBuf> {
+    let meta = std::fs::metadata(path).ok()?;
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let mut hasher = DefaultHasher::new();
+    (CACHE_VERSION, theme, name, path, meta.len(), mtime, SIZE).hash(&mut hasher);
+    Some(cache_dir()?.join(format!("{:016x}.rgba", hasher.finish())))
+}
+
+/// Sirve el RGBA cacheado o lo decodifica/rasteriza y lo guarda. Se llama en el
+/// hilo de iconos, nunca en el de render.
+fn load_or_decode(name: &str, theme: &str) -> Option<Vec<u8>> {
+    let path = icon_path(name, theme)?;
+    if let Some(file) = cache_file(name, theme, &path) {
+        if let Ok(bytes) = std::fs::read(&file) {
+            if bytes.len() == SIZE as usize * SIZE as usize * 4 {
+                return Some(bytes);
+            }
+        }
+    }
+    let is_svg = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("svg"));
+    let rgba = if is_svg {
+        decode_svg_icon(&path)
+    } else {
+        decode_png_icon(&path)
+    }?;
+    if let Some(file) = cache_file(name, theme, &path) {
+        if let Some(dir) = file.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(&file, &rgba);
+    }
+    Some(rgba)
+}
+
+/// Ruta del icono (PNG o SVG) en el tema activo, con herencia.
 fn icon_path(name: &str, theme: &str) -> Option<PathBuf> {
     let path = if Path::new(name).is_absolute() {
         PathBuf::from(name)
@@ -109,11 +181,43 @@ fn icon_path(name: &str, theme: &str) -> Option<PathBuf> {
             .with_cache()
             .find()?
     };
-    let is_png = path
+    let valid = path
         .extension()
         .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("png"));
-    is_png.then_some(path)
+        .is_some_and(|e| e.eq_ignore_ascii_case("png") || e.eq_ignore_ascii_case("svg"));
+    valid.then_some(path)
+}
+
+/// Rasteriza un SVG a `SIZE × SIZE` con `resvg`. La salida de tiny-skia está
+/// premultiplicada; la convertimos a RGBA normal para egui.
+fn decode_svg_icon(path: &Path) -> Option<Vec<u8>> {
+    let svg = std::fs::read(path).ok()?;
+    let mut opt = resvg::usvg::Options {
+        resources_dir: path.parent().map(Path::to_path_buf),
+        ..Default::default()
+    };
+    opt.fontdb_mut().load_system_fonts();
+    let tree = resvg::usvg::Tree::from_data(&svg, &opt).ok()?;
+    let size = tree.size();
+    if size.width() <= 0.0 || size.height() <= 0.0 {
+        return None;
+    }
+    let scale = (SIZE as f32 / size.width()).min(SIZE as f32 / size.height());
+    let tx = (SIZE as f32 - size.width() * scale) / 2.0;
+    let ty = (SIZE as f32 - size.height() * scale) / 2.0;
+    let transform = resvg::tiny_skia::Transform::from_row(scale, 0.0, 0.0, scale, tx, ty);
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(SIZE, SIZE)?;
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+    Some(
+        pixmap
+            .pixels()
+            .iter()
+            .flat_map(|p| {
+                let c = p.demultiply();
+                [c.red(), c.green(), c.blue(), c.alpha()]
+            })
+            .collect(),
+    )
 }
 
 /// Decodifica un PNG a `SIZE × SIZE` RGBA (sin premultiplicar).
@@ -243,7 +347,34 @@ mod tests {
     }
 
     #[test]
-    fn svg_is_rejected_for_fallback() {
-        assert!(icon_path("/no/existe/icono.svg", "hicolor").is_none());
+    fn svg_is_accepted_for_rasterization() {
+        assert!(icon_path("/no/existe/icono.svg", "hicolor").is_some());
+        assert!(icon_path("/no/existe/icono.txt", "hicolor").is_none());
+    }
+
+    #[test]
+    fn svg_se_rasteriza_a_rgba_de_48px() {
+        let dir = std::env::temp_dir().join(format!("dinamic-ui-appicons-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("test.svg");
+        std::fs::write(
+            &path,
+            "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48'><rect width='48' height='48' fill='#ff0000'/></svg>",
+        )
+        .unwrap();
+        let rgba = decode_svg_icon(&path).expect("rasteriza el SVG");
+        assert_eq!(rgba.len(), SIZE as usize * SIZE as usize * 4);
+        assert_eq!(&rgba[..4], &[255, 0, 0, 255]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn cache_file_cambia_con_el_tema_y_es_estable() {
+        let path = Path::new(file!());
+        let a = cache_file("firefox", "tema-a", path).unwrap();
+        let b = cache_file("firefox", "tema-b", path).unwrap();
+        assert_ne!(a, b);
+        assert_eq!(a, cache_file("firefox", "tema-a", path).unwrap());
+        assert_eq!(a.extension().unwrap(), "rgba");
     }
 }
