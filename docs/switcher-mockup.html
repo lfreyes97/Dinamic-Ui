@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dinamic UI — Window switcher: ideas de diseño</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0b;
+    --panel: rgba(20, 20, 23, .91);
+    --surface: #161618;
+    --raised: #1d1d20;
+    --inset: #101012;
+    --border: rgba(255, 255, 255, .09);
+    --text: #e6e6e8;
+    --muted: #8b8b93;
+    --faint: #5c5c63;
+    --accent: #dd9999;
+    --accent-soft: rgba(221, 153, 153, .16);
+    --accent-line: rgba(221, 153, 153, .55);
+  }
+
+  body {
+    margin: 0; min-height: 100vh; padding: 38px 26px 64px;
+    background:
+      radial-gradient(circle at 12% -10%, #1b1416 0%, transparent 42%),
+      radial-gradient(circle at 90% 110%, #12161c 0%, transparent 44%),
+      #0b0b0d;
+    color: var(--text);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  header { max-width: 1320px; margin: 0 auto 32px; }
+  h1 { margin: 0 0 7px; font-size: 20px; font-weight: 600; letter-spacing: -.3px; }
+  header p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.65; max-width: 900px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 17px; margin-top: 14px; font-size: 10.5px; color: var(--faint); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .dot.accent { background: var(--accent); }
+
+  .idea {
+    max-width: 1320px; margin: 0 auto 34px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 258px; gap: 22px;
+    align-items: start;
+  }
+  @media (max-width: 1000px) { .idea { grid-template-columns: 1fr; } }
+
+  .head { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .head .num { font-size: 10px; letter-spacing: 1.4px; color: var(--accent); }
+  .head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .head .tagline { margin: 0 0 0 auto; font-size: 10.5px; color: var(--faint); }
+
+  .notes { font-size: 11px; line-height: 1.6; color: var(--muted); border-left: 1px solid var(--border); padding-left: 16px; }
+  .notes h3 { margin: 0 0 8px; font-size: 9px; letter-spacing: 1.3px; text-transform: uppercase; color: var(--faint); }
+  .notes .row { margin-bottom: 12px; }
+  .notes b { display: block; color: var(--text); font-weight: 500; font-size: 11px; margin-bottom: 2px; }
+  .notes code { color: var(--accent); font-size: 10px; }
+  .notes .cost { color: var(--faint); font-size: 10px; }
+
+  .screen {
+    position: relative; height: 316px; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--border);
+    background:
+      radial-gradient(ellipse 60% 75% at 16% -4%, rgba(221, 153, 153, .12), transparent 60%),
+      radial-gradient(ellipse 52% 60% at 92% 108%, rgba(127, 200, 255, .09), transparent 62%),
+      linear-gradient(165deg, #181a20 0%, #101216 52%, #0b0c0f 100%);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .42);
+  }
+  .screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px);
+    background-size: 26px 26px; opacity: .35;
+  }
+  .scrim { position: absolute; inset: 0; background: rgba(7, 7, 9, .7); }
+  .scrim.strong { background: rgba(7, 7, 9, .8); }
+
+  .win {
+    position: absolute; border-radius: 7px; background: rgba(28, 29, 34, .62);
+    border: 1px solid var(--border); overflow: hidden;
+  }
+  .win .titlebar { height: 15px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 4px; padding: 0 7px; }
+  .win .titlebar i { width: 4px; height: 4px; border-radius: 50%; background: #4b4b51; }
+  .win .titlebar i:first-child { background: var(--accent); }
+
+  .label {
+    position: absolute; top: 17px; left: 50%; transform: translateX(-50%);
+    font-size: 8.5px; letter-spacing: 2.1px; color: var(--faint); white-space: nowrap;
+  }
+  .hint {
+    position: absolute; z-index: 9; bottom: 13px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 13px; font-size: 9px; color: var(--faint); white-space: nowrap;
+  }
+  .hint kbd { font: inherit; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; background: rgba(255, 255, 255, .03); margin-right: 3px; }
+
+  .card { border-radius: 10px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 12px 30px rgba(0, 0, 0, .42); }
+  .card.sel { background: rgba(34, 26, 28, .94); border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-soft), 0 16px 36px rgba(0, 0, 0, .5); }
+  .icobox {
+    display: grid; place-items: center; border-radius: 8px;
+    background: rgba(255, 255, 255, .04); border: 1px solid var(--border); color: var(--text);
+  }
+  .icobox svg { width: 19px; height: 19px; }
+  .icobox.pink { color: var(--accent); }
+  .mini { position: absolute; border-radius: 3px; background: rgba(150, 155, 170, .18); border: 1px solid rgba(255, 255, 255, .08); }
+  .mini.hot { background: rgba(221, 153, 153, .28); border-color: var(--accent-line); }
+  .wire { position: relative; border-radius: 5px; background: var(--inset); border: 1px solid var(--border); overflow: hidden; }
+  .pill { font-size: 7.5px; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; background: rgba(255, 255, 255, .03); white-space: nowrap; }
+
+  /* 00 · actual */
+  .hero { position: absolute; z-index: 4; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 262px; height: 158px; padding: 10px; text-align: center; }
+  .hero .icobox { width: 30px; height: 30px; margin: 0 auto 7px; }
+  .hero .t { font-size: 10.5px; color: var(--text); }
+  .hero .s { font-size: 8px; color: var(--muted); margin-top: 2px; }
+  .hero .wire { height: 42px; margin-top: 10px; }
+  .flank { position: absolute; z-index: 3; top: 46%; transform: translateY(-50%); width: 148px; height: 122px; padding: 12px 8px; text-align: center; background: rgba(22, 22, 24, .92); }
+  .flank .icobox { width: 28px; height: 28px; margin: 0 auto 10px; }
+  .flank .t { font-size: 9.5px; color: var(--text); }
+  .flank .s { font-size: 8px; color: var(--muted); margin-top: 3px; }
+  .flank.left { left: calc(50% - 291px); }
+  .flank.right { left: calc(50% + 143px); }
+
+  /* 01 · filmstrip */
+  .strip { position: absolute; z-index: 4; left: 50%; top: 51%; transform: translate(-50%, -50%); display: flex; align-items: flex-end; gap: 8px; }
+  .frame { width: 76px; height: 100px; padding: 8px 6px; opacity: .72; }
+  .frame.sel { width: 132px; height: 134px; opacity: 1; padding: 10px 8px; }
+  .frame .wire { height: 52px; }
+  .frame.sel .wire { height: 76px; }
+  .frame .cap { margin-top: 7px; font-size: 8px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frame.sel .cap { color: var(--text); font-size: 9px; }
+  .frame .sub { font-size: 7px; color: var(--faint); margin-top: 2px; }
+
+  /* 02 · rejilla */
+  .groups { position: absolute; z-index: 4; inset: 40px 30px 34px; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+  .group-head { font-size: 8px; letter-spacing: 1.4px; color: var(--faint); margin-bottom: 6px; display: flex; align-items: center; gap: 7px; }
+  .group-head b { color: var(--muted); font-weight: 500; letter-spacing: .3px; }
+  .group-head .line { flex: 1; height: 1px; background: var(--border); }
+  .tiles { display: flex; gap: 8px; }
+  .tile { position: relative; width: 104px; height: 74px; padding: 7px; overflow: hidden; }
+  .tile .wire { height: 38px; }
+  .tile .cap { margin-top: 5px; font-size: 7.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.sel .cap { color: var(--text); }
+  .tile .badge { position: absolute; top: 6px; right: 6px; font-size: 7px; color: var(--faint); }
+
+  /* 03 · lista + preview */
+  .split { position: absolute; z-index: 4; inset: 44px 30px 36px; display: grid; grid-template-columns: 1fr 224px; gap: 16px; align-items: center; }
+  .rows { display: flex; flex-direction: column; gap: 5px; }
+  .rows .row { display: flex; align-items: center; gap: 9px; height: 36px; border-radius: 8px; padding: 0 9px; border: 1px solid transparent; }
+  .rows .row.sel { background: rgba(34, 26, 28, .94); border-color: var(--accent-line); }
+  .rows .row .icobox { width: 24px; height: 24px; border-radius: 6px; flex: none; }
+  .rows .row .icobox svg { width: 14px; height: 14px; }
+  .rows .row .name { font-size: 9.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rows .row.sel .name { color: var(--text); }
+  .rows .row .meta { margin-left: auto; font-size: 7.5px; color: var(--faint); }
+  .preview { height: 186px; padding: 11px; text-align: center; }
+  .preview .icobox { width: 32px; height: 32px; margin: 0 auto 8px; }
+  .preview .t { font-size: 10px; color: var(--text); }
+  .preview .s { font-size: 8px; color: var(--muted); margin: 3px 0 10px; }
+  .preview .wire { height: 74px; }
+
+  /* 04 · pila */
+  .stack { position: absolute; z-index: 4; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 440px; height: 190px; }
+  .layer { position: absolute; border-radius: 12px; }
+  .layer.back2 { inset: 22px 0 0 0; background: rgba(20, 20, 23, .62); border: 1px solid var(--border); transform: scale(.9); opacity: .5; }
+  .layer.back1 { inset: 11px 0 0 0; background: rgba(22, 22, 25, .8); border: 1px solid var(--border); transform: scale(.95); opacity: .78; }
+  .layer.front { inset: 0 0 14px 0; }
+  .layer.front .icobox { width: 40px; height: 40px; margin: 20px auto 12px; }
+  .layer.front .t { text-align: center; font-size: 12px; color: var(--text); }
+  .layer.front .s { text-align: center; font-size: 8.5px; color: var(--muted); margin-top: 4px; }
+  .layer.front .wire { height: 44px; margin: 14px 28px 0; }
+  .counter { position: absolute; z-index: 5; top: 20px; right: 24px; font-size: 8px; letter-spacing: 1.2px; color: var(--faint); }
+
+  /* 05 · solo ventanas */
+  .wincards { position: absolute; z-index: 4; left: 50%; top: 51%; transform: translate(-50%, -50%); display: flex; align-items: flex-end; gap: 12px; }
+  .wincard { width: 138px; height: 112px; overflow: hidden; }
+  .wincard.sel { width: 232px; height: 158px; }
+  .wincard .tb { height: 21px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-bottom: 1px solid var(--border); background: rgba(255, 255, 255, .025); }
+  .wincard .tb i { width: 4px; height: 4px; border-radius: 50%; background: #4b4b51; flex: none; }
+  .wincard .tb i:first-child { background: var(--accent); }
+  .wincard .tb .icobox { width: 15px; height: 15px; border-radius: 4px; margin-left: 2px; flex: none; }
+  .wincard .tb .icobox svg { width: 10px; height: 10px; }
+  .wincard .tb .wt { font-size: 8px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wincard.sel .tb .wt { color: var(--text); font-size: 9px; }
+  .wincard .body { position: relative; height: calc(100% - 21px); padding: 9px; }
+  .wincard .dim { position: absolute; bottom: 6px; right: 8px; font-size: 7px; color: var(--faint); }
+  .wincard.sel .dim { color: var(--accent); }
+
+  /* 06 · cascada */
+  .cascade { position: absolute; z-index: 4; left: 50%; top: 51%; transform: translate(-50%, -50%); width: 388px; height: 200px; }
+  .cw { position: absolute; width: 300px; height: 126px; border-radius: 9px; overflow: hidden; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 10px 26px rgba(0, 0, 0, .36); }
+  .cw.d1 { left: 0; top: 0; opacity: .55; }
+  .cw.d2 { left: 28px; top: 16px; opacity: .7; }
+  .cw.d3 { left: 56px; top: 32px; opacity: .85; }
+  .cw.front { left: 84px; top: 48px; background: rgba(34, 26, 28, .96); border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-soft), 0 16px 34px rgba(0, 0, 0, .5); }
+  .cw .tb { height: 20px; display: flex; align-items: center; gap: 5px; padding: 0 7px; border-bottom: 1px solid var(--border); background: rgba(255, 255, 255, .025); }
+  .cw .tb i { width: 4px; height: 4px; border-radius: 50%; background: #4b4b51; flex: none; }
+  .cw .tb i:first-child { background: var(--accent); }
+  .cw .tb .icobox { width: 15px; height: 15px; border-radius: 4px; flex: none; }
+  .cw .tb .icobox svg { width: 10px; height: 10px; }
+  .cw .tb .wt { font-size: 8px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cw.front .tb .wt { color: var(--text); font-size: 9px; }
+  .cw .body { position: relative; height: calc(100% - 20px); padding: 9px; }
+  .cw .dim { position: absolute; bottom: 6px; right: 8px; font-size: 7px; color: var(--faint); }
+  .cw.front .dim { color: var(--accent); }
+
+  .foot { max-width: 1320px; margin: 8px auto 0; font-size: 11px; color: var(--faint); line-height: 1.75; border-top: 1px solid var(--border); padding-top: 16px; }
+  .foot code { color: var(--muted); background: rgba(255, 255, 255, .05); padding: 1px 5px; border-radius: 4px; }
+  .foot b { color: var(--muted); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><path d="M3.6 12h16.8M12 3.5c4.2 4.6 4.2 12.4 0 17M12 3.5c-4.2 4.6-4.2 12.4 0 17"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M14 4l-4 16"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M7.5 9.5c3-.6 6.4-.2 9 1.4M8 12.8c2.5-.4 5.2 0 7.3 1.2"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></symbol>
+</svg>
+
+<header>
+  <h1>Window switcher — ideas de diseño</h1>
+  <p>Alternativas para <code>Alt+Tab</code> (MRU de ventanas) construidas sobre el estado que ya tiene el shell: <code>Shared.mru</code>, <code>Shared.clients</code> (class, título, workspace, x/y/w/h) y <code>hint_bar</code>. Ninguna propuesta necesita IPC nuevo ni capturas de pantalla: las miniaturas son el <b>wireframe de la geometría real</b> de la ventana, como en el switcher actual.</p>
+  <div class="legend">
+    <span><i class="dot accent"></i> selección / acento (base0B)</span>
+    <span><i class="dot"></i> superficie y bordes del esquema</span>
+    <span>vista previa = geometría, no bitmap</span>
+  </div>
+</header>
+
+<!-- 00 · REFERENCIA -->
+<section class="idea">
+  <div class="head"><span class="num">00</span><h2>Actual — tarjeta protagonista</h2><p class="tagline">referencia · <code>src/ui/switcher.rs</code></p></div>
+  <div class="screen">
+    <div class="scrim strong"></div>
+    <div class="win" style="left:5%;top:9%;width:39%;height:44%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="win" style="left:53%;top:16%;width:40%;height:54%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="label">VENTANAS · ORDEN MRU</div>
+    <div class="flank left card"><div class="icobox"><svg><use href="#i-globe"/></svg></div><div class="t">Hyprland docs · Firefox</div><div class="s">workspace 1</div></div>
+    <div class="hero card sel">
+      <div class="icobox pink"><svg><use href="#i-code"/></svg></div>
+      <div class="t">src/main.rs — Code</div><div class="s">workspace 2 · hace 1 min</div>
+      <div class="wire"><div class="mini hot" style="left:8%;top:18%;width:44%;height:56%"></div><div class="mini" style="left:58%;top:30%;width:32%;height:40%"></div></div>
+    </div>
+    <div class="flank right card"><div class="icobox"><svg><use href="#i-folder"/></svg></div><div class="t">~/Projects · Nautilus</div><div class="s">workspace 3</div></div>
+    <div class="hint"><span><kbd>← →</kbd> elige</span><span><kbd>↵</kbd> abre</span><span><kbd>Esc</kbd> cierra</span></div>
+  </div>
+  <aside class="notes">
+    <div class="row"><h3>Lo que ya funciona</h3><b>Héroe + dos vecinos</b>Muy legible para 3–6 ventanas. El marco del héroe y el wireframe dicen “qué ventana es” sin captura.</div>
+    <div class="row"><h3>Límite</h3><b>Se queda corto con MRU largo</b>Solo se ven 3 tarjetas y el título se trunca a 22 caracteres en <code>items()</code>.</div>
+    <div class="row cost"><h3>Coste</h3>Ya implementado. Las ideas siguientes son alternativas, no correcciones.</div>
+  </aside>
+</section>
+
+<!-- 01 · FILMSTRIP -->
+<section class="idea">
+  <div class="head"><span class="num">01</span><h2>Filmstrip — la selección crece</h2><p class="tagline">evolución del actual · MRU corto y medio</p></div>
+  <div class="screen">
+    <div class="scrim"></div>
+    <div class="win" style="left:7%;top:12%;width:33%;height:40%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="win" style="left:59%;top:22%;width:34%;height:48%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="label">VENTANAS · ORDEN MRU</div>
+    <div class="strip">
+      <div class="frame card"><div class="wire"><div class="mini" style="left:14%;top:20%;width:58%;height:50%"></div></div><div class="cap">Hyprland docs</div><div class="sub">ws 1</div></div>
+      <div class="frame card"><div class="wire"><div class="mini hot" style="left:10%;top:18%;width:46%;height:54%"></div><div class="mini" style="left:62%;top:34%;width:28%;height:34%"></div></div><div class="cap">src/main.rs</div><div class="sub">ws 2</div></div>
+      <div class="frame card sel"><div class="wire"><div class="mini hot" style="left:12%;top:16%;width:52%;height:58%"></div><div class="mini" style="left:68%;top:36%;width:24%;height:32%"></div></div><div class="cap">src/main.rs — Code</div><div class="sub">ws 2 · seleccionada</div></div>
+      <div class="frame card"><div class="wire"><div class="mini" style="left:20%;top:26%;width:56%;height:46%"></div></div><div class="cap">~/Projects</div><div class="sub">ws 3</div></div>
+      <div class="frame card"><div class="wire"><div class="mini" style="left:10%;top:22%;width:38%;height:52%"></div><div class="mini" style="left:54%;top:30%;width:34%;height:44%"></div></div><div class="cap">Kitty</div><div class="sub">ws 2</div></div>
+    </div>
+    <div class="hint"><span><kbd>← →</kbd> elige</span><span><kbd>↵</kbd> abre</span><span><kbd>Esc</kbd> cierra</span></div>
+  </div>
+  <aside class="notes">
+    <div class="row"><h3>Idea</h3><b>Misma rejilla, más contexto</b>Cinco tarjetas visibles en lugar de tres. La selección crece y las demás bajan de opacidad: se lee el orden MRU de un vistazo.</div>
+    <div class="row"><h3>Cuándo</h3><b>Ciclar rápido</b>Cuando alternas entre 3–8 ventanas y quieres ver la vecina siguiente antes de soltar Alt.</div>
+    <div class="row cost"><h3>Coste</h3>Bajo: reutiliza <code>items()</code>, <code>hint_bar</code> y la animación <code>animate_bool_with_time</code>. Solo cambia el layout en <code>draw_window_cards</code>.</div>
+  </aside>
+</section>
+
+<!-- 02 · REJILLA POR WORKSPACE -->
+<section class="idea">
+  <div class="head"><span class="num">02</span><h2>Rejilla agrupada por workspace</h2><p class="tagline">densidad · MRU largo y multinivel</p></div>
+  <div class="screen">
+    <div class="scrim"></div>
+    <div class="win" style="left:6%;top:13%;width:30%;height:34%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="win" style="left:62%;top:18%;width:31%;height:42%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="label">VENTANAS · AGRUPADO POR WORKSPACE</div>
+    <div class="groups">
+      <div>
+        <div class="group-head"><span>01</span><b>Principal</b><span class="line"></span><span>3 ventanas</span></div>
+        <div class="tiles">
+          <div class="tile card sel"><span class="badge">1</span><div class="wire"><div class="mini hot" style="left:10%;top:16%;width:52%;height:58%"></div></div><div class="cap">Hyprland docs</div></div>
+          <div class="tile card"><span class="badge">2</span><div class="wire"><div class="mini" style="left:16%;top:24%;width:58%;height:48%"></div></div><div class="cap">Nautilus</div></div>
+          <div class="tile card"><span class="badge">3</span><div class="wire"><div class="mini" style="left:12%;top:26%;width:40%;height:44%"></div><div class="mini" style="left:58%;top:20%;width:30%;height:52%"></div></div><div class="cap">Kitty</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="group-head"><span>02</span><b>Desarrollo</b><span class="line"></span><span>2 ventanas</span></div>
+        <div class="tiles">
+          <div class="tile card"><span class="badge">1</span><div class="wire"><div class="mini" style="left:10%;top:18%;width:62%;height:54%"></div></div><div class="cap">src/main.rs — Code</div></div>
+          <div class="tile card"><span class="badge">2</span><div class="wire"><div class="mini" style="left:20%;top:28%;width:50%;height:44%"></div></div><div class="cap">Obsidian</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="hint"><span><kbd>← → ↑ ↓</kbd> elige</span><span><kbd>1–9</kbd> salta al ws</span><span><kbd>Esc</kbd> cierra</span></div>
+  </div>
+  <aside class="notes">
+    <div class="row"><h3>Idea</h3><b>El workspace como agrupador</b>Cabecera con número, nombre y conteo. Mantiene la geometría en cada tarjeta y deja de esconder ventanas fuera del MRU inmediato.</div>
+    <div class="row"><h3>Cuándo</h3><b>Muchas ventanas, varios escritorios</b>Útil si sueles tener el mismo proyecto repartido entre 3–4 workspaces.</div>
+    <div class="row cost"><h3>Coste</h3>Medio: <code>ClientInfo.workspace</code> y <code>name_of(id)</code> ya existen. Hay que decidir el orden de grupos (MRU de workspaces) y paginar si pasan de ~8 tarjetas.</div>
+  </aside>
+</section>
+
+<!-- 03 · LISTA + PREVIEW -->
+<section class="idea">
+  <div class="head"><span class="num">03</span><h2>Lista MRU + vista previa lateral</h2><p class="tagline">legibilidad · títulos largos y MRU extenso</p></div>
+  <div class="screen">
+    <div class="scrim"></div>
+    <div class="win" style="left:5%;top:11%;width:31%;height:38%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="win" style="left:63%;top:20%;width:32%;height:46%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="label">VENTANAS · ORDEN MRU</div>
+    <div class="split">
+      <div class="rows">
+        <div class="row"><span class="icobox"><svg><use href="#i-globe"/></svg></span><span class="name">Hyprland docs — Firefox</span><span class="meta">ws 1</span></div>
+        <div class="row"><span class="icobox"><svg><use href="#i-folder"/></svg></span><span class="name">~/Projects — Nautilus</span><span class="meta">ws 3</span></div>
+        <div class="row sel"><span class="icobox pink"><svg><use href="#i-code"/></svg></span><span class="name">src/main.rs — Code</span><span class="meta">ws 2 · 1 min</span></div>
+        <div class="row"><span class="icobox"><svg><use href="#i-term"/></svg></span><span class="name">kitty — zsh</span><span class="meta">ws 2</span></div>
+        <div class="row"><span class="icobox"><svg><use href="#i-music"/></svg></span><span class="name">Spotify</span><span class="meta">ws 4</span></div>
+        <div class="row"><span class="icobox"><svg><use href="#i-image"/></svg></span><span class="name">capture.png — GIMP</span><span class="meta">ws 4</span></div>
+      </div>
+      <div class="preview card sel">
+        <div class="icobox pink"><svg><use href="#i-code"/></svg></div>
+        <div class="t">src/main.rs — Code</div><div class="s">workspace 2 · hace 1 min</div>
+        <div class="wire"><div class="mini hot" style="left:8%;top:16%;width:48%;height:58%"></div><div class="mini" style="left:62%;top:28%;width:30%;height:42%"></div></div>
+      </div>
+    </div>
+    <div class="hint"><span><kbd>↑ ↓</kbd> elige</span><span><kbd>↵</kbd> abre</span><span><kbd>Esc</kbd> cierra</span></div>
+  </div>
+  <aside class="notes">
+    <div class="row"><h3>Idea</h3><b>Texto primero, imagen después</b>La lista aguanta títulos completos y MRUs de 10+ ventanas; la vista previa mantiene la identidad visual de la tarjeta actual.</div>
+    <div class="row"><h3>Cuándo</h3><b>Mismo título en varias ventanas</b>Archivos, terminals o ventanas del navegador se distinguen mejor por ws y posición que por miniaturas pequeñas.</div>
+    <div class="row cost"><h3>Coste</h3>Bajo-medio: puro <code>text_at</code> + un <code>draw_window_wire</code>. Ojo: el “hace 1 min” del mockup requeriría guardar un timestamp por ventana; hoy no existe.</div>
+  </aside>
+</section>
+
+<!-- 04 · PILA EN PROFUNDIDAD -->
+<section class="idea">
+  <div class="head"><span class="num">04</span><h2>Pila en profundidad</h2><p class="tagline">expresiva · pocas ventanas, mucho MRU</p></div>
+  <div class="screen">
+    <div class="scrim"></div>
+    <div class="win" style="left:8%;top:14%;width:30%;height:36%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="win" style="left:60%;top:17%;width:33%;height:47%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="label">VENTANAS · ORDEN MRU</div>
+    <div class="counter">03 / 06</div>
+    <div class="stack">
+      <div class="layer back2"></div>
+      <div class="layer back1"></div>
+      <div class="layer front card sel"><div class="icobox pink"><svg><use href="#i-code"/></svg></div><div class="t">src/main.rs — Code</div><div class="s">workspace 2 · la más reciente</div><div class="wire"><div class="mini hot" style="left:9%;top:16%;width:48%;height:58%"></div><div class="mini" style="left:63%;top:28%;width:28%;height:42%"></div></div></div>
+    </div>
+    <div class="hint"><span><kbd>← →</kbd> pasa a la siguiente capa</span><span><kbd>↵</kbd> abre</span><span><kbd>Esc</kbd> cierra</span></div>
+  </div>
+  <aside class="notes">
+    <div class="row"><h3>Idea</h3><b>El MRU como pila física</b>Dos capas desplazadas y atenuadas detrás sugieren “lo que viene después” sin mostrar tres tarjetas completas. El contador <code>03 / 06</code> da la posición exacta.</div>
+    <div class="row"><h3>Cuándo</h3><b>Estética / poco espacio</b>Overlay muy centrado y limpio; bueno si quieres diferenciar el switcher del overview sin añadir otra rejilla.</div>
+    <div class="row cost"><h3>Coste</h3>Bajo en egui: tres <code>rect_filled</code> con escala y alfa (ya hay <code>Palette::with_alpha</code>). Contras: las capas traseras no son clicables con precisión.</div>
+  </aside>
+</section>
+
+<!-- 05 · SOLO VENTANAS -->
+<section class="idea">
+  <div class="head"><span class="num">05</span><h2>Solo ventanas — la ventana es la tarjeta</h2><p class="tagline">sin workspace · identidad pura de ventana</p></div>
+  <div class="screen">
+    <div class="scrim"></div>
+    <div class="win" style="left:6%;top:12%;width:32%;height:40%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="win" style="left:61%;top:19%;width:32%;height:47%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="label">VENTANAS · ORDEN MRU</div>
+    <div class="counter">SOLO VENTANAS</div>
+    <div class="wincards">
+      <div class="wincard card">
+        <div class="tb"><i></i><i></i><i></i><span class="icobox"><svg><use href="#i-globe"/></svg></span><span class="wt">Hyprland docs — Firefox</span></div>
+        <div class="body"><div class="mini" style="left:14%;top:20%;width:62%;height:52%"></div><span class="dim">1440 × 820</span></div>
+      </div>
+      <div class="wincard card sel">
+        <div class="tb"><i></i><i></i><i></i><span class="icobox pink"><svg><use href="#i-code"/></svg></span><span class="wt">src/main.rs — Code</span></div>
+        <div class="body"><div class="mini hot" style="left:10%;top:14%;width:52%;height:56%"></div><div class="mini" style="left:66%;top:30%;width:26%;height:38%"></div><span class="dim">1280 × 720</span></div>
+      </div>
+      <div class="wincard card">
+        <div class="tb"><i></i><i></i><i></i><span class="icobox"><svg><use href="#i-folder"/></svg></span><span class="wt">~/Projects — Nautilus</span></div>
+        <div class="body"><div class="mini" style="left:20%;top:26%;width:52%;height:44%"></div><span class="dim">900 × 640</span></div>
+      </div>
+    </div>
+    <div class="hint"><span><kbd>← →</kbd> elige</span><span><kbd>↵</kbd> abre</span><span><kbd>Esc</kbd> cierra</span></div>
+  </div>
+  <aside class="notes">
+    <div class="row"><h3>Idea</h3><b>La ventana es la tarjeta</b>Cada tarjeta se dibuja como una ventana de verdad: barra de título con icono y título, y dentro el wireframe de su geometría. No hay número de workspace, ni grupo, ni conteo, ni etiqueta “ws N”.</div>
+    <div class="row"><h3>Datos</h3><b>Solo <code>ClientInfo</code></b><code>class</code>, <code>title</code> y <code>x/y/w/h</code>; el orden lo da <code>Shared.mru</code>. El tamaño <code>W × H</code> se calcula directamente. Sin <code>snapshot.workspace</code>, sin <code>name_of()</code>, sin <code>occupied</code>.</div>
+    <div class="row"><h3>Cuándo</h3><b>Pensar en ventanas, no en escritorios</b>Especialmente útil con varias ventanas de la misma app: el título completo y la forma de la ventana bastan para distinguirlas.</div>
+    <div class="row cost"><h3>Coste</h3>Bajo: reutiliza <code>items()</code> cambiando el subtitle por <code>W × H</code>, y <code>draw_window_wire</code> pasa a ser el contenido principal. <code>hint_bar</code> intacto.</div>
+  </aside>
+</section>
+
+<!-- 06 · CASCADA -->
+<section class="idea">
+  <div class="head"><span class="num">06</span><h2>Cascada — el MRU apilado en diagonal</h2><p class="tagline">sin workspace · la pila como historial</p></div>
+  <div class="screen">
+    <div class="scrim"></div>
+    <div class="win" style="left:7%;top:11%;width:31%;height:38%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="win" style="left:62%;top:18%;width:31%;height:46%"><div class="titlebar"><i></i><i></i><i></i></div></div>
+    <div class="label">VENTANAS · ORDEN MRU</div>
+    <div class="counter">EN CASCADA</div>
+    <div class="cascade">
+      <div class="cw d1"><div class="tb"><i></i><i></i><i></i><span class="icobox"><svg><use href="#i-music"/></svg></span><span class="wt">Spotify</span></div><div class="body"></div></div>
+      <div class="cw d2"><div class="tb"><i></i><i></i><i></i><span class="icobox"><svg><use href="#i-term"/></svg></span><span class="wt">kitty — zsh</span></div><div class="body"></div></div>
+      <div class="cw d3"><div class="tb"><i></i><i></i><i></i><span class="icobox"><svg><use href="#i-globe"/></svg></span><span class="wt">Hyprland docs — Firefox</span></div><div class="body"></div></div>
+      <div class="cw front"><div class="tb"><i></i><i></i><i></i><span class="icobox pink"><svg><use href="#i-code"/></svg></span><span class="wt">src/main.rs — Code</span></div>
+        <div class="body"><div class="mini hot" style="left:10%;top:14%;width:52%;height:56%"></div><div class="mini" style="left:66%;top:30%;width:26%;height:38%"></div><span class="dim">1280 × 720</span></div>
+      </div>
+    </div>
+    <div class="hint"><span><kbd>← →</kbd> sube una capa</span><span><kbd>↵</kbd> abre</span><span><kbd>Esc</kbd> cierra</span></div>
+  </div>
+  <aside class="notes">
+    <div class="row"><h3>Idea</h3><b>Cascada = historial visible</b>Cada ventana del MRU se apila con un desplazamiento diagonal fijo; la activa queda al frente y las anteriores asoman solo por la barra de título. Tab se lee como “subir una capa”.</div>
+    <div class="row"><h3>Datos</h3><b>Solo <code>ClientInfo</code> + <code>mru</code></b>El offset (28 × 16 px) es constante y no depende de la posición real de la ventana. Sin workspace, sin grupos, sin <code>occupied</code>.</div>
+    <div class="row"><h3>Cuándo</h3><b>Pocas ventanas, mucho orden</b>4–6 ventanas y quieres percibir la antigüedad de un vistazo sin recurrir a una rejilla ni a una lista.</div>
+    <div class="row cost"><h3>Coste</h3>Bajo: cuatro rects con offset y el frente reutiliza <code>draw_window_wire</code>. Límite: con MRU largo hay que topar las capas en 4–5 o agrupar las más antiguas.</div>
+  </aside>
+</section>
+
+<div class="foot">
+  <b>Recomendación:</b> probar <b>01</b> primero — es el cambio más pequeño sobre <code>draw_window_cards</code> y resuelve el límite de “solo 3 visibles”. Si el MRU crece de verdad, saltar a <b>03</b>; <b>02</b> solo merece la pena si además quieres navegación por workspace. Para una variante <b>netamente de ventanas</b>, la <b>05</b> (la tarjeta es la propia ventana) o la <b>06</b> (el MRU como cascada). Todas comparten <code>items()</code>, <code>hint_bar</code>, el scrim y los tokens de <code>DESIGN_TOKENS.md</code>. El acento y los grises del mockup son orientativos: en runtime los da la paleta activa.
+</div>
+
+</body>
+</html>

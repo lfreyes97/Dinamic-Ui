@@ -111,6 +111,12 @@ pinned = ["firefox", "code", "kitty"]
 # strip_h_height = 0.2      # 1/5 del alto  (154 px en 1366×768)
 # strip_v_width = 0.1667    # 1/6 del ancho (228 px en 1366×768)
 
+# Switcher de ventanas (Alt+Tab). `cards` = tarjeta protagonista + vecinas;
+# `cascade` = MRU apilado en diagonal, sin workspace. También se puede forzar con
+# la variable DINAMIC_UI_SWITCHER_STYLE=cascade.
+# [switcher]
+# style = "cascade"          # cards | cascade
+
 # Actividades (lanzador: apps instaladas + ventanas abiertas).
 # [activities]
 # strip_height = 0.2        # alto de la tira de ventanas: fracción de la pantalla (1/5) o píxeles
