@@ -8,7 +8,7 @@ use smithay_client_toolkit::seat::keyboard::Modifiers;
 use super::component::{close_overlays, Component, DrawCtx};
 use super::overlay::hint_bar;
 use super::*;
-use crate::{approach, control};
+use crate::{approach, config, control};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwitcherKind {
@@ -238,6 +238,11 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, _palette: Palette) {
     let p = pal();
     match state.switcher.kind {
         Some(SwitcherKind::Workspaces) => draw_workspace_dock(ui, state, safe, p),
+        Some(SwitcherKind::Windows)
+            if state.shared.config.switcher.style == config::WindowSwitcherStyle::Cascade =>
+        {
+            draw_window_cascade(ui, state, safe, screen, p)
+        }
         _ => draw_window_cards(ui, state, safe, screen, p),
     }
 }
@@ -436,7 +441,11 @@ fn draw_window_cards(
             p.muted,
         );
         if is_hero {
-            draw_window_wire(ui, hero_r, item, screen, p);
+            let preview = egui::Rect::from_min_size(
+                hero_r.min + egui::vec2(50.0, 142.0),
+                egui::vec2(260.0, 56.0),
+            );
+            draw_window_wire(ui, preview, item, screen, p);
         }
     }
 
@@ -468,18 +477,234 @@ fn draw_window_cards(
     );
 }
 
+/// Capas de la cascada y su desplazamiento, medidos a 720p.
+const CASCADE_LAYERS: usize = 4;
+const CASCADE_W: f32 = 300.0;
+const CASCADE_H: f32 = 126.0;
+const CASCADE_DX: f32 = 28.0;
+const CASCADE_DY: f32 = 16.0;
+const CASCADE_TB: f32 = 20.0;
+
+/// Rects de la pila, de atrás hacia delante, centrados en `center`.
+fn cascade_rects(center: egui::Pos2, layers: usize, s: f32) -> Vec<egui::Rect> {
+    let w = CASCADE_W * s;
+    let h = CASCADE_H * s;
+    let dx = CASCADE_DX * s;
+    let dy = CASCADE_DY * s;
+    let span = (layers.saturating_sub(1) as f32) * dx;
+    let span_y = (layers.saturating_sub(1) as f32) * dy;
+    let left = center.x - w / 2.0 - span / 2.0;
+    let top = center.y - h / 2.0 - span_y / 2.0;
+    (0..layers)
+        .map(|i| {
+            egui::Rect::from_min_size(
+                egui::pos2(left + i as f32 * dx, top + i as f32 * dy),
+                egui::vec2(w, h),
+            )
+        })
+        .collect()
+}
+
+/// Etiqueta puramente de ventana: `1280 × 720`. Sin workspace, sin nombre.
+fn size_label(geom: Option<(i32, i32, i32, i32)>) -> Option<String> {
+    geom.map(|(_, _, w, h)| format!("{w} × {h}"))
+}
+
+/// Cascada del MRU: cada ventana se apila en diagonal y la elegida queda al
+/// frente. Solo usa `class`, `título` y geometría; deliberadamente sin workspace.
+fn draw_window_cascade(
+    ui: &mut egui::Ui,
+    state: &mut UiState,
+    safe: egui::Rect,
+    screen: egui::Rect,
+    p: Palette,
+) {
+    ui.painter().rect_filled(
+        safe,
+        CornerRadius::same(Radius::of(Radius::NONE)),
+        Palette::scrim(176),
+    );
+    let all = items(state);
+    if all.is_empty() {
+        hint_bar(ui, safe, &[("Esc", "cierra")]);
+        return;
+    }
+    state.switcher.selected = state.switcher.selected.min(all.len() - 1);
+    let idx = state.switcher.selected;
+
+    let take = all.len().min(CASCADE_LAYERS);
+    let start = idx.saturating_sub(take - 1).min(all.len() - take);
+    let mut shown: Vec<(usize, Item)> =
+        (start..start + take).map(|i| (i, all[i].clone())).collect();
+    // Orden estable: la seleccionada se dibuja la última (al frente).
+    shown.sort_by_key(|(i, _)| *i == idx);
+
+    let s = super::tokens::current_scale();
+    let rects = cascade_rects(safe.center(), shown.len(), s);
+    let tb = CASCADE_TB * s;
+    let mut picked = None;
+    let mut double = false;
+
+    for (layer, ((original, item), rect)) in shown.iter().zip(rects.iter()).enumerate() {
+        let front = layer == shown.len() - 1;
+        let fill = if front {
+            p.accent_soft
+        } else {
+            Palette::with_alpha(p.card_fill, 225)
+        };
+        drop_shadow(
+            ui,
+            rect.translate(egui::vec2(0.0, 2.0)),
+            10,
+            8,
+            22,
+            if front { 90 } else { 55 },
+        );
+        ui.painter().rect(
+            *rect,
+            CornerRadius::same(Radius::of(if front { Radius::LG } else { Radius::MD })),
+            fill,
+            Stroke::new(
+                if front { 1.5 } else { 1.0 },
+                if front { p.accent } else { p.border },
+            ),
+            StrokeKind::Middle,
+        );
+
+        // Barra de título: tres puntos, icono y título completo.
+        let titlebar = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), tb));
+        ui.painter().rect_filled(
+            titlebar,
+            CornerRadius::same(Radius::of(Radius::MD)),
+            Palette::sheen(if front { 10 } else { 6 }),
+        );
+        ui.painter().line_segment(
+            [
+                egui::pos2(rect.min.x, rect.min.y + tb),
+                egui::pos2(rect.max.x, rect.min.y + tb),
+            ],
+            Stroke::new(1.0, p.border),
+        );
+        let dot_y = rect.min.y + tb / 2.0;
+        let dot_x = rect.min.x + 9.0 * s;
+        let dot_r = 2.0 * s;
+        ui.painter()
+            .circle_filled(egui::pos2(dot_x, dot_y), dot_r, p.accent);
+        for n in 1..3 {
+            ui.painter().circle_filled(
+                egui::pos2(dot_x + n as f32 * 8.0 * s, dot_y),
+                dot_r,
+                p.faint,
+            );
+        }
+        let icon_size = 12.0 * s;
+        let icon_center = egui::pos2(rect.min.x + 32.0 * s + icon_size / 2.0, dot_y);
+        if !item.class.is_empty() {
+            if let Some(texture) = state.shared.icon(ui.ctx(), &item.class) {
+                egui::Image::new(egui::load::SizedTexture::new(
+                    texture.id(),
+                    egui::vec2(icon_size, icon_size),
+                ))
+                .paint_at(
+                    ui,
+                    egui::Rect::from_center_size(icon_center, egui::vec2(icon_size, icon_size)),
+                );
+            } else {
+                icon_at(ui, icon_center, dock_icon(&item.class), icon_size, p.text);
+            }
+        } else {
+            icon_at(ui, icon_center, ic::SQUARES_FOUR, icon_size, p.text);
+        }
+        text_at(
+            ui,
+            egui::pos2(rect.min.x + 44.0 * s + icon_size, dot_y),
+            egui::Align2::LEFT_CENTER,
+            &item.title,
+            if front { TEXT_BODY } else { TEXT_CAPTION },
+            if front { p.text } else { p.muted },
+        );
+
+        // Cuerpo: solo la ventana activa muestra su geometría real.
+        let body = egui::Rect::from_min_size(
+            egui::pos2(rect.min.x, rect.min.y + tb),
+            egui::vec2(rect.width(), rect.height() - tb),
+        );
+        ui.painter().rect_filled(
+            body.shrink(1.0),
+            CornerRadius::same(Radius::of(Radius::SM)),
+            if front {
+                p.inset
+            } else {
+                Palette::with_alpha(p.inset, 160)
+            },
+        );
+        if front {
+            let preview = egui::Rect::from_min_size(
+                body.min + egui::vec2(10.0 * s, 8.0 * s),
+                egui::vec2(body.width() - 20.0 * s, body.height() - 30.0 * s),
+            );
+            draw_window_wire(ui, preview, item, screen, p);
+            if let Some(label) = size_label(item.geom) {
+                text_at(
+                    ui,
+                    egui::pos2(rect.max.x - 10.0 * s, body.max.y - 7.0 * s),
+                    egui::Align2::RIGHT_CENTER,
+                    label,
+                    TEXT_CAPTION,
+                    p.accent,
+                );
+            }
+        }
+
+        // El frente es clicable entero; las capas detrás solo por la franja visible.
+        let hit = if front {
+            *rect
+        } else {
+            egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), CASCADE_DY * s))
+        };
+        let resp = ui.interact(
+            hit,
+            ui.scope_id().with(("sw-cascade", original)),
+            egui::Sense::click(),
+        );
+        if resp.clicked() {
+            picked = Some(*original);
+        }
+        if resp.double_clicked() {
+            picked = Some(*original);
+            double = true;
+        }
+    }
+
+    if let Some(i) = picked {
+        state.switcher.selected = i;
+        if double {
+            activate(state);
+        }
+    } else {
+        let clicks = ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary));
+        let hover = ui.input(|i| i.pointer.hover_pos());
+        if clicks
+            && hover.is_some_and(|pos| safe.contains(pos) && !rects.iter().any(|r| r.contains(pos)))
+        {
+            close(state);
+        }
+    }
+    hint_bar(
+        ui,
+        safe,
+        &[("← →", "sube capa"), ("↵", "abre"), ("Esc", "cierra")],
+    );
+}
+
 /// Miniatura de la geometría real de la ventana (`ClientInfo.x/y/w/h`).
 fn draw_window_wire(
     ui: &mut egui::Ui,
-    hero: egui::Rect,
+    preview: egui::Rect,
     item: &Item,
     screen: egui::Rect,
     p: Palette,
 ) {
-    let preview = egui::Rect::from_min_size(
-        egui::pos2(hero.min.x + 50.0, hero.min.y + 142.0),
-        egui::vec2(260.0, 56.0),
-    );
     let round = CornerRadius::same(Radius::of(Radius::XS));
     ui.painter().rect_filled(preview, round, p.inset);
     ui.painter().rect(
@@ -675,6 +900,26 @@ mod tests {
         state.switcher.kind = Some(SwitcherKind::Workspaces);
         let keys: Vec<String> = items(&state).into_iter().map(|i| i.key).collect();
         assert_eq!(keys, vec!["2", "5", "1", "3"]);
+    }
+
+    #[test]
+    fn cascade_rects_form_a_centered_diagonal_stack() {
+        let rects = cascade_rects(egui::pos2(0.0, 0.0), CASCADE_LAYERS, 1.0);
+        assert_eq!(rects.len(), CASCADE_LAYERS);
+        assert_eq!(rects[1].min.x - rects[0].min.x, CASCADE_DX);
+        assert_eq!(rects[1].min.y - rects[0].min.y, CASCADE_DY);
+        let union = rects.iter().fold(rects[0], |acc, rect| acc.union(*rect));
+        assert!(union.center().x.abs() < 0.001);
+        assert!(union.center().y.abs() < 0.001);
+    }
+
+    #[test]
+    fn size_label_is_pure_window_geometry() {
+        assert_eq!(
+            size_label(Some((12, 34, 1280, 720))).as_deref(),
+            Some("1280 × 720")
+        );
+        assert_eq!(size_label(None), None);
     }
 
     #[test]

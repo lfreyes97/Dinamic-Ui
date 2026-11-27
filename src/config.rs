@@ -6,6 +6,7 @@
 use std::{
     env, fs,
     path::PathBuf,
+    str::FromStr,
     sync::{Arc, RwLock},
 };
 
@@ -37,6 +38,7 @@ pub struct Config {
     pub taskbar: TaskbarConfig,
     pub topbar: TopbarConfig,
     pub overview: OverviewConfig,
+    pub switcher: SwitcherConfig,
     pub activities: ActivitiesConfig,
     pub quick_settings: QuickSettingsConfig,
 }
@@ -194,6 +196,47 @@ impl Default for OverviewConfig {
             strip_v_width: StripSize::Fraction(1.0 / 6.0),
         }
     }
+}
+
+/// Implementación visual del switcher de ventanas (feature `switcher`).
+/// Cada variante es una maqueta de `docs/switcher-mockup.html` llevada a código.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowSwitcherStyle {
+    /// Tarjeta protagonista con las dos vecinas del MRU (implementación original).
+    #[default]
+    Cards,
+    /// MRU apilado en diagonal, con la ventana activa al frente y sin workspace.
+    Cascade,
+}
+
+impl WindowSwitcherStyle {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cards => "cards",
+            Self::Cascade => "cascade",
+        }
+    }
+}
+
+impl FromStr for WindowSwitcherStyle {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "cards" => Ok(Self::Cards),
+            "cascade" => Ok(Self::Cascade),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Switcher (features `switcher`). La pestaña de workspaces no cambia.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(default)]
+pub struct SwitcherConfig {
+    /// Estilo del switcher de ventanas (`Alt+Tab`). `cards` por defecto.
+    pub style: WindowSwitcherStyle,
 }
 
 /// Tamaño de una franja: píxeles fijos (`154`, entero) o fracción de la pantalla (`0.2`).
@@ -425,6 +468,11 @@ pub fn reload() -> Result<(), String> {
     if let Ok(v) = env::var("DINAMIC_UI_THEME") {
         config.theme.name = Some(v);
     }
+    if let Ok(v) = env::var("DINAMIC_UI_SWITCHER_STYLE") {
+        if let Ok(style) = v.parse() {
+            config.switcher.style = style;
+        }
+    }
 
     config.sizes.bar_h = config.sizes.bar_h.clamp(24, 48);
     config.sizes.panel_h = config.sizes.panel_h.clamp(80, 480);
@@ -482,5 +530,15 @@ mod tests {
         let default: Config = toml::from_str("").unwrap();
         assert_eq!(default.overview.strip_h_height, StripSize::Fraction(0.2));
         assert_eq!(default.overview.strip_h_side, Side::Top);
+    }
+
+    #[test]
+    fn switcher_style_defaults_to_cards_and_accepts_cascade() {
+        let default: Config = toml::from_str("").unwrap();
+        assert_eq!(default.switcher.style, WindowSwitcherStyle::Cards);
+        let cascade: Config = toml::from_str("[switcher]\nstyle = \"cascade\"\n").unwrap();
+        assert_eq!(cascade.switcher.style, WindowSwitcherStyle::Cascade);
+        assert_eq!(WindowSwitcherStyle::Cascade.as_str(), "cascade");
+        assert!("galeria".parse::<WindowSwitcherStyle>().is_err());
     }
 }
