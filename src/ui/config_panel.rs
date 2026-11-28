@@ -1739,7 +1739,8 @@ mod tests {
     #[test]
     fn resolve_page_falls_back_to_the_first_visible_page() {
         let visible = [Page::Theme, Page::Keys, Page::Toml];
-        assert_eq!(resolve_page(7, &visible), Some(Page::Keys));
+        // `PAGES` incluye `Switcher` en el índice 7: `Keys` pasó al 8.
+        assert_eq!(resolve_page(8, &visible), Some(Page::Keys));
         // «Bars» (índice 1) no está visible: se muestra la primera.
         assert_eq!(resolve_page(1, &visible), Some(Page::Theme));
         assert_eq!(resolve_page(99, &visible), Some(Page::Theme));
