@@ -103,6 +103,11 @@ impl NeedTracker {
         }
     }
 
+    /// Cambia la histéresis en caliente (lo usa `--tune needs.hold=`).
+    pub fn set_hold(&mut self, hold: Duration) {
+        self.hold = hold;
+    }
+
     /// Actualiza el estado con lo pedido ahora y devuelve lo que debe seguir vivo.
     pub fn update(&mut self, now: Instant, requested: Needs) -> Needs {
         for (i, need) in ALL_NEEDS.iter().enumerate() {

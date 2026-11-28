@@ -32,6 +32,8 @@ pub struct Gfx {
     renderer: Renderer,
     start: Instant,
     needs_repaint: bool,
+    /// Icono de cursor que pidió egui este frame; `main` lo aplica al wl_pointer.
+    pub cursor_icon: egui::CursorIcon,
 }
 
 impl Gfx {
@@ -140,6 +142,7 @@ impl Gfx {
             renderer,
             start: Instant::now(),
             needs_repaint: false,
+            cursor_icon: egui::CursorIcon::Default,
         })
     }
 
@@ -195,6 +198,7 @@ impl Gfx {
             .viewport_output
             .get(&egui::ViewportId::ROOT)
             .is_some_and(|v| v.repaint_delay <= std::time::Duration::from_millis(16));
+        self.cursor_icon = full_output.platform_output.cursor_icon;
 
         // Aplicar primero las texturas: `drain` vacía el delta, así que un
         // retorno anticipado más abajo no dispara el panic de `TexturesDelta`.
