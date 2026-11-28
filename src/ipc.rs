@@ -170,8 +170,10 @@ impl HyprlandIpc {
             return;
         };
         // Hyprland con config Lua no acepta la sintaxis clásica `dispatch ...`.
-        // Traducimos las dos órdenes que usa la UI a `eval` con la API Lua.
-        let request = if let Some(id) = command.strip_prefix("workspace ") {
+        // Traducimos las órdenes que usa la UI a `eval` con la API Lua.
+        let request = if let Some(move_request) = move_window_request(command) {
+            move_request
+        } else if let Some(id) = command.strip_prefix("workspace ") {
             format!("dispatch hl.dsp.focus({{ workspace = {id} }})")
         } else if let Some(class) = command.strip_prefix("focuswindow class:") {
             format!(
@@ -340,6 +342,20 @@ fn demo_snapshot() -> HyprlandSnapshot {
     }
 }
 
+/// Traduce `movewindow address:<addr> <ws>` al dispatcher Lua de Hyprland 0.57.
+/// `follow = false` deja el foco donde está: el overview sigue abierto.
+fn move_window_request(command: &str) -> Option<String> {
+    let rest = command.strip_prefix("movewindow address:")?;
+    let (address, ws) = rest.split_once(' ')?;
+    let ws: u32 = ws.trim().parse().ok()?;
+    if address.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "dispatch hl.dsp.window.move({{ workspace = {ws}, window = 'address:{address}', follow = false }})"
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -356,5 +372,16 @@ mod tests {
             .collect();
         occupied.sort_unstable();
         assert_eq!(occupied, vec![1, 2]);
+    }
+
+    #[test]
+    fn move_window_request_uses_the_lua_dispatcher_without_following() {
+        let request = move_window_request("movewindow address:0x1234 7").unwrap();
+        assert_eq!(
+            request,
+            "dispatch hl.dsp.window.move({ workspace = 7, window = 'address:0x1234', follow = false })"
+        );
+        assert!(move_window_request("movewindow address:0x1234 no-numero").is_none());
+        assert!(move_window_request("focuswindow address:0x1234").is_none());
     }
 }

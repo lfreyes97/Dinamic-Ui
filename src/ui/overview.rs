@@ -25,6 +25,13 @@ impl OverviewKind {
     }
 }
 
+/// Ventana en arrastre: origen y dirección para el comando de movimiento.
+#[derive(Debug, Clone)]
+pub struct OverviewDrag {
+    pub address: String,
+    pub from_ws: u32,
+}
+
 /// Estado del overview.
 #[derive(Default)]
 pub struct OverviewState {
@@ -40,6 +47,10 @@ pub struct OverviewState {
     pub query: String,
     /// Elemento seleccionado con el teclado o el cursor.
     pub selected: usize,
+    /// Arrastre de una miniatura a otra workspace (solo la rejilla modal).
+    pub drag: Option<OverviewDrag>,
+    /// Workspace resaltado como destino mientras se arrastra.
+    pub drop_target: Option<u32>,
 }
 
 impl OverviewState {
@@ -75,6 +86,49 @@ pub(super) fn strip_ids(state: &UiState) -> Vec<u32> {
     let count = state.shared.config.workspaces.count.clamp(1, 20);
     let ids = model::workspace_ids(&state.shared.snapshot.occupied, current_ws(state), 20);
     model::pad_workspace_ids(ids, count as usize, count)
+}
+
+/// Rectángulos de las cards de la rejilla, en el mismo orden que `grid_ids`.
+/// Los usa el dibujo y también el hit-test del drag & drop para no desincronizarse.
+pub(super) fn grid_card_rects(state: &UiState, screen: egui::Rect) -> Vec<(u32, egui::Rect)> {
+    let safe = super::safe_rect(state, screen);
+    let ids = grid_ids(state);
+    let cols = ids.len().clamp(1, 3);
+    let rows = ids.len().div_ceil(cols);
+    let gap = 14.0;
+    let area = egui::Rect::from_min_max(
+        safe.min + egui::vec2(26.0, 76.0),
+        safe.max - egui::vec2(26.0, 44.0),
+    );
+    let card_w = ((area.width() - gap * (cols as f32 - 1.0)) / cols as f32).min(560.0);
+    let card_h = ((area.height() - gap * (rows as f32 - 1.0)) / rows as f32).min(340.0);
+    let total_w = cols as f32 * card_w + gap * (cols as f32 - 1.0);
+    let total_h = rows as f32 * card_h + gap * (rows as f32 - 1.0);
+    let origin = egui::pos2(
+        area.center().x - total_w / 2.0,
+        area.center().y - total_h / 2.0,
+    );
+    ids.into_iter()
+        .enumerate()
+        .map(|(i, id)| {
+            let base = egui::Rect::from_min_size(
+                egui::pos2(
+                    origin.x + (i % cols) as f32 * (card_w + gap),
+                    origin.y + (i / cols) as f32 * (card_h + gap),
+                ),
+                egui::vec2(card_w, card_h),
+            );
+            (id, base)
+        })
+        .collect()
+}
+
+/// Workspace cuya card contiene `pos`, si alguna.
+pub(super) fn card_at(cards: &[(u32, egui::Rect)], pos: egui::Pos2) -> Option<u32> {
+    cards
+        .iter()
+        .find(|(_, rect)| rect.contains(pos))
+        .map(|(id, _)| *id)
 }
 
 /// Abre una vista (o cambia de vista si ya estaba abierta) con la selección inicial.
@@ -283,37 +337,18 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         );
     }
 
-    let ids = grid_ids(state);
+    let cards = grid_card_rects(state, screen);
     let current = current_ws(state);
-    state.overview.selected = state.overview.selected.min(ids.len() - 1);
-
-    let cols = ids.len().clamp(1, 3);
-    let rows = ids.len().div_ceil(cols);
-    let gap = 14.0;
-    let area = egui::Rect::from_min_max(
-        safe.min + egui::vec2(26.0, 76.0),
-        safe.max - egui::vec2(26.0, 44.0),
-    );
-    let card_w = ((area.width() - gap * (cols as f32 - 1.0)) / cols as f32).min(560.0);
-    let card_h = ((area.height() - gap * (rows as f32 - 1.0)) / rows as f32).min(340.0);
-    let total_w = cols as f32 * card_w + gap * (cols as f32 - 1.0);
-    let total_h = rows as f32 * card_h + gap * (rows as f32 - 1.0);
-    let origin = egui::pos2(
-        area.center().x - total_w / 2.0,
-        area.center().y - total_h / 2.0,
-    );
+    state.overview.selected = state.overview.selected.min(cards.len().saturating_sub(1));
 
     let monitor = safe.size();
     let aspect = monitor.x.max(1.0) / monitor.y.max(1.0);
     let moved = pointer_moved(ui);
     let active_address = state.shared.snapshot.window_address.clone();
 
-    for (i, id) in ids.iter().enumerate() {
-        let x = origin.x + (i % cols) as f32 * (card_w + gap);
-        let y = origin.y + (i / cols) as f32 * (card_h + gap);
-        let base = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(card_w, card_h));
+    for (i, (id, base)) in cards.iter().enumerate() {
         let card_response = ui.interact(
-            base,
+            *base,
             ui.scope_id().with(("overview-card", *id)),
             egui::Sense::click(),
         );
@@ -331,12 +366,15 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         let card = base.translate(egui::vec2(0.0, -2.0 * lift));
 
         drop_shadow(ui, card, 9, 8, 22, 90);
-        let fill = if is_current {
+        let is_target = state.overview.drop_target == Some(*id);
+        let fill = if is_target || is_current {
             crate::theme::mix(palette.raised, palette.accent, 0.12)
         } else {
             palette.raised
         };
-        let (width, color) = if is_current {
+        let (width, color) = if is_target {
+            (2.0, palette.accent)
+        } else if is_current {
             (1.0, Palette::with_alpha(palette.accent, 140))
         } else if selected {
             (1.5, palette.text)
@@ -436,7 +474,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
             let response = ui.interact(
                 rect,
                 ui.scope_id().with(("overview-win", &win.address)),
-                egui::Sense::click(),
+                egui::Sense::click_and_drag(),
             );
             mini_window(
                 ui,
@@ -476,10 +514,70 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
             if response.hovered() {
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             }
+            if response.drag_started() {
+                state.overview.drag = Some(OverviewDrag {
+                    address: win.address.clone(),
+                    from_ws: *id,
+                });
+            }
+            if response.dragged() {
+                let pos = ui.input(|i| i.pointer.latest_pos());
+                state.overview.drop_target = pos.and_then(|p| card_at(&cards, p)).filter(|ws| {
+                    state
+                        .overview
+                        .drag
+                        .as_ref()
+                        .is_some_and(|d| d.from_ws != *ws)
+                });
+            }
+            if response.drag_stopped() {
+                let drag = state.overview.drag.take();
+                let target = state.overview.drop_target.take();
+                if let (Some(drag), Some(target)) = (drag, target) {
+                    if drag.from_ws != target {
+                        state.shared.overview_move = Some((drag.address, target));
+                    }
+                }
+            }
             if response.clicked() {
                 state.shared.overview_focus = Some(win.address.clone());
             }
             ui.set_opacity(previous);
+        }
+    }
+
+    // Fantasma del arrastre: sigue al puntero y muestra qué ventana se mueve.
+    if let Some(drag) = state.overview.drag.clone() {
+        ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
+        if let Some(pos) = ui.input(|i| i.pointer.latest_pos()) {
+            let title = state
+                .shared
+                .clients
+                .iter()
+                .find(|c| c.address == drag.address)
+                .map(|c| c.title.clone())
+                .unwrap_or_default();
+            let ghost =
+                egui::Rect::from_center_size(pos + egui::vec2(0.0, -18.0), egui::vec2(150.0, 32.0));
+            ui.painter().rect_filled(
+                ghost,
+                CornerRadius::same(Radius::of(Radius::SM)),
+                Palette::with_alpha(palette.raised, 240),
+            );
+            ui.painter().rect_stroke(
+                ghost,
+                CornerRadius::same(Radius::of(Radius::SM)),
+                Stroke::new(1.5, palette.accent),
+                StrokeKind::Middle,
+            );
+            text_at(
+                ui,
+                ghost.center(),
+                egui::Align2::CENTER_CENTER,
+                truncate(&title, 20),
+                9.0,
+                palette.text,
+            );
         }
     }
 
@@ -490,6 +588,7 @@ fn draw_workspaces(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
             &[
                 ("← →", "navega"),
                 ("↵", "abre"),
+                ("arrastra", "mueve de workspace"),
                 ("1–9", "salta"),
                 ("Esc", "cierra"),
             ],
@@ -505,5 +604,28 @@ pub(super) fn draw_overview(ui: &mut egui::Ui, state: &mut UiState, palette: Pal
         OverviewKind::Workspaces => draw_workspaces(ui, state, palette),
         OverviewKind::StripH => super::overview_strips::draw_strip_h(ui, state, palette),
         OverviewKind::StripV => super::overview_strips::draw_strip_v(ui, state, palette),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn card_at_devuelve_el_workspace_bajo_el_puntero() {
+        let cards = vec![
+            (
+                1u32,
+                egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 80.0)),
+            ),
+            (
+                2u32,
+                egui::Rect::from_min_size(egui::pos2(110.0, 0.0), egui::vec2(100.0, 80.0)),
+            ),
+        ];
+        assert_eq!(card_at(&cards, egui::pos2(10.0, 10.0)), Some(1));
+        assert_eq!(card_at(&cards, egui::pos2(150.0, 40.0)), Some(2));
+        assert_eq!(card_at(&cards, egui::pos2(105.0, 40.0)), None);
+        assert_eq!(card_at(&[], egui::pos2(0.0, 0.0)), None);
     }
 }

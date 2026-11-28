@@ -614,6 +614,14 @@ impl DinamicUi {
         for command in self.ui_state.shared.pending_commands.drain(..) {
             self.ipc.dispatch(&command);
         }
+        // Drag & drop del overview: la UI solo dejó la pareja (ventana, destino).
+        #[cfg(feature = "overview")]
+        if let Some((address, ws)) = self.ui_state.shared.overview_move.take() {
+            self.ipc
+                .dispatch(&format!("movewindow address:{address} {ws}"));
+            // Refrescar clientes ya en el próximo frame, no dentro de 400 ms.
+            self.last_clients_query = Instant::now() - Duration::from_millis(400);
+        }
         // La UI solo encola ajustes: `apply_tune` tiene el `set_config` del núcleo.
         for payload in std::mem::take(&mut self.ui_state.shared.pending_tune) {
             self.apply_tune(&payload);
