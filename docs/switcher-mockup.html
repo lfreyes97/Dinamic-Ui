@@ -428,6 +428,8 @@
 
 <div class="foot">
   <b>Recomendación:</b> probar <b>01</b> primero — es el cambio más pequeño sobre <code>draw_window_cards</code> y resuelve el límite de “solo 3 visibles”. Si el MRU crece de verdad, saltar a <b>03</b>; <b>02</b> solo merece la pena si además quieres navegación por workspace. Para una variante <b>netamente de ventanas</b>, la <b>05</b> (la tarjeta es la propia ventana) o la <b>06</b> (el MRU como cascada). Todas comparten <code>items()</code>, <code>hint_bar</code>, el scrim y los tokens de <code>DESIGN_TOKENS.md</code>. El acento y los grises del mockup son orientativos: en runtime los da la paleta activa.
+  <br><b>Medidas:</b> las tarjetas son fracciones de la pantalla (referencia 1280×720, factor <code>min(ancho/1280, alto/720)</code>); el wireframe usa una sola escala, así que conserva la geometría y la ratio de cada ventana.
+  <br><b>Cambio en vivo:</b> <code>dinamic-ui --tune=switcher.style=grid</code> (acepta <code>cards</code>, <code>filmstrip</code>, <code>grid</code>, <code>list</code>, <code>stack</code>, <code>windows</code> y <code>cascade</code>), con <code>dinamic-ui --switcher-style-next</code> para ciclarlos, o desde <code>--config-panel</code> → <b>Switcher</b>.
 </div>
 
 </body>

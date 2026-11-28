@@ -111,11 +111,14 @@ pinned = ["firefox", "code", "kitty"]
 # strip_h_height = 0.2      # 1/5 del alto  (154 px en 1366×768)
 # strip_v_width = 0.1667    # 1/6 del ancho (228 px en 1366×768)
 
-# Switcher de ventanas (Alt+Tab). `cards` = tarjeta protagonista + vecinas;
-# `cascade` = MRU apilado en diagonal, sin workspace. También se puede forzar con
-# la variable DINAMIC_UI_SWITCHER_STYLE=cascade.
+# Switcher de ventanas (Alt+Tab). Una implementación por maqueta de
+# docs/switcher-mockup.html: cards (00), filmstrip (01), grid (02), list (03),
+# stack (04), windows (05, sin workspace) y cascade (06, sin workspace).
+# En vivo: dinamic-ui --switcher-style-next (cicla los 7), o
+# dinamic-ui --tune=switcher.style=grid (o DINAMIC_UI_SWITCHER_STYLE
+# al arrancar, o editar el archivo y --reload).
 # [switcher]
-# style = "cascade"          # cards | cascade
+# style = "cascade"          # cards | filmstrip | grid | list | stack | windows | cascade
 
 # Actividades (lanzador: apps instaladas + ventanas abiertas).
 # [activities]

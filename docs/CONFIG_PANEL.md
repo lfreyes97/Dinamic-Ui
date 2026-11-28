@@ -5,8 +5,10 @@ Páginas de ajustes con navegación lateral (feature `config-panel`, comando `--
 Plan: Fase 6.5 de `docs/WIDGETS_PLAN.md`. Guía visual: `docs/config-panel-mockup.html` (líneas de
 diseño, no medidas).
 
-**Estado: maqueta de solo lectura terminada.** Muestra los valores reales de la configuración
-cargada. Editar y guardar (`toml_edit`) no está hecho: ver «Fuera de alcance».
+**Estado: panel de solo lectura con una página interactiva.** Muestra los valores reales de la
+configuración cargada y, en la página **Switcher**, permite cambiar el estilo de `Alt+Tab` en vivo.
+El cambio se encola como `tune:switcher.style=<valor>` en `Shared.pending_tune` y `main.rs` lo aplica
+con `apply_tune()`; no se escribe `config.toml`. Editar y guardar (`toml_edit`) sigue sin estar hecho.
 
 ## Qué hay
 
@@ -29,6 +31,7 @@ cargada. Editar y guardar (`toml_edit`) no está hecho: ver «Fuera de alcance»
   | Workspaces | `bar`, `overview` (lo usan la barra y los overviews) |
   | Notificaciones | `notifications` |
   | Dock | `dock` |
+  | Switcher | `switcher` |
 
   Dentro de «Barras», cada tarjeta (isla y barra, topbar, taskbar) solo aparece si su feature
   está compilada. Atajos lista solo los comandos cuya feature está compilada.
@@ -51,9 +54,12 @@ Todos los valores vienen de `state.shared.config` (tipo `Config`), salvo lo indi
 | Workspaces | número y nombre de cada workspace (o «sin nombre») | `workspaces.count`, `workspaces.names` |
 | Notificaciones | tiempo en la isla | `notifications.ttl_secs` |
 | Dock | activado y apps fijadas | `dock.enabled`, `dock.pinned` |
+| Switcher | estilo activo y siete chips cliqueables | `switcher.style` |
 | config.toml | ruta (con `~`) y el texto del archivo, en monoespaciado y con scroll; comentarios, secciones y líneas en tonos distintos | archivo de `config::path()` |
 
-Los interruptores y los selectores son **de solo lectura**: no responden al clic.
+Los interruptores y selectores son **de solo lectura**, salvo los chips de **Switcher**: al hacer
+clic se aplica el estilo en memoria con `--tune` (sin escribir el archivo). La fila «Estilo activo»
+se actualiza en el siguiente frame: `View.cfg` apunta a `shared.config`, que `apply_tune` refresca.
 
 ### config.toml
 
@@ -97,6 +103,10 @@ funcionaran, y tampoco se inventa su valor:
 - [ ] **Añadir a la configuración** lo que el mockup prevé y hoy no existe (sección de dashboard,
       estilo por defecto de overview, elementos de la topbar, «No molestar» y posición de
       notificaciones), cada cosa con su consumidor. Sin consumidor, no entra en la página.
+- [ ] **Persistir los cambios en vivo** (empezando por `switcher.style`) en `config.toml` con
+      `toml_edit`, conservando comentarios. Hoy el chip cambia la sesión, no el archivo.
+- [ ] **Hacer interactivas las demás páginas** con las claves ya existentes de `--tune`
+      (`taskbar.side`, `taskbar.size`, `taskbar.autohide`, `topbar.height`, `dock.activate`, `dock.hold`).
 - [ ] **Recarga en vivo** al cambiar el archivo mientras el panel está abierto.
 - [ ] **Acciones del sistema** (wifi, volumen, brillo): fuera del panel de ajustes.
 - [ ] **Verificación en el R7** de lo que la vista previa no cubre: clics, el cierre al pulsar
