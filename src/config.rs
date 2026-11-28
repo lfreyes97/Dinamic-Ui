@@ -203,17 +203,52 @@ impl Default for OverviewConfig {
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum WindowSwitcherStyle {
-    /// Tarjeta protagonista con las dos vecinas del MRU (implementación original).
+    /// 00 · tarjeta protagonista con las dos vecinas del MRU (original).
     #[default]
+    #[serde(rename = "cards")]
     Cards,
-    /// MRU apilado en diagonal, con la ventana activa al frente y sin workspace.
+    /// 01 · tira de miniaturas; la seleccionada crece y las demás se atenúan.
+    #[serde(rename = "filmstrip")]
+    Filmstrip,
+    /// 02 · rejilla de ventanas agrupada por workspace.
+    #[serde(rename = "grid")]
+    Grid,
+    /// 03 · lista MRU a la izquierda y vista previa a la derecha.
+    #[serde(rename = "list")]
+    List,
+    /// 04 · tres capas escaladas en profundidad.
+    #[serde(rename = "stack")]
+    Stack,
+    /// 05 · la propia ventana es la tarjeta (sin workspace).
+    #[serde(rename = "windows")]
+    WindowOnly,
+    /// 06 · MRU apilado en diagonal, activa al frente (sin workspace).
+    #[serde(rename = "cascade")]
     Cascade,
 }
 
 impl WindowSwitcherStyle {
+    /// Siguiente estilo en el orden de las maquetas (cíclico).
+    pub fn next(self) -> Self {
+        match self {
+            Self::Cards => Self::Filmstrip,
+            Self::Filmstrip => Self::Grid,
+            Self::Grid => Self::List,
+            Self::List => Self::Stack,
+            Self::Stack => Self::WindowOnly,
+            Self::WindowOnly => Self::Cascade,
+            Self::Cascade => Self::Cards,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Cards => "cards",
+            Self::Filmstrip => "filmstrip",
+            Self::Grid => "grid",
+            Self::List => "list",
+            Self::Stack => "stack",
+            Self::WindowOnly => "windows",
             Self::Cascade => "cascade",
         }
     }
@@ -225,6 +260,11 @@ impl FromStr for WindowSwitcherStyle {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
             "cards" => Ok(Self::Cards),
+            "filmstrip" => Ok(Self::Filmstrip),
+            "grid" => Ok(Self::Grid),
+            "list" => Ok(Self::List),
+            "stack" => Ok(Self::Stack),
+            "windows" => Ok(Self::WindowOnly),
             "cascade" => Ok(Self::Cascade),
             _ => Err(()),
         }
@@ -533,12 +573,31 @@ mod tests {
     }
 
     #[test]
-    fn switcher_style_defaults_to_cards_and_accepts_cascade() {
+    fn switcher_style_defaults_to_cards_and_parses_every_mockup() {
         let default: Config = toml::from_str("").unwrap();
         assert_eq!(default.switcher.style, WindowSwitcherStyle::Cards);
-        let cascade: Config = toml::from_str("[switcher]\nstyle = \"cascade\"\n").unwrap();
-        assert_eq!(cascade.switcher.style, WindowSwitcherStyle::Cascade);
-        assert_eq!(WindowSwitcherStyle::Cascade.as_str(), "cascade");
+        for (name, style) in [
+            ("cards", WindowSwitcherStyle::Cards),
+            ("filmstrip", WindowSwitcherStyle::Filmstrip),
+            ("grid", WindowSwitcherStyle::Grid),
+            ("list", WindowSwitcherStyle::List),
+            ("stack", WindowSwitcherStyle::Stack),
+            ("windows", WindowSwitcherStyle::WindowOnly),
+            ("cascade", WindowSwitcherStyle::Cascade),
+        ] {
+            let cfg: Config = toml::from_str(&format!("[switcher]\nstyle = \"{name}\"\n")).unwrap();
+            assert_eq!(cfg.switcher.style, style, "estilo {name}");
+            assert_eq!(style.as_str(), name);
+        }
         assert!("galeria".parse::<WindowSwitcherStyle>().is_err());
+        let mut style = WindowSwitcherStyle::Cards;
+        for _ in 0..7 {
+            style = style.next();
+        }
+        assert_eq!(style, WindowSwitcherStyle::Cards, "el ciclo cierra");
+        assert_eq!(
+            WindowSwitcherStyle::Cascade.next(),
+            WindowSwitcherStyle::Cards
+        );
     }
 }

@@ -60,12 +60,17 @@ pub struct Shared {
     // ── Colas diferidas ───────────────────────────────────────────────
     pub pending_commands: Vec<String>,
     pub pending_spawns: Vec<Vec<String>>,
+    /// Ajustes `--tune` que pidió la UI; `main` los aplica fuera del render.
+    pub pending_tune: Vec<String>,
     #[cfg(feature = "dock")]
     pub dock_action: Option<DockAction>,
     #[cfg(feature = "overview")]
     pub overview_focus: Option<String>,
     #[cfg(feature = "overview")]
     pub overview_workspace: Option<u32>,
+    /// Arrastre de una ventana a otro workspace: (dirección, workspace destino).
+    #[cfg(feature = "overview")]
+    pub overview_move: Option<(String, u32)>,
     #[cfg(feature = "command-menu")]
     pub menu_action: Option<crate::launcher::EntryAction>,
 }
@@ -212,12 +217,15 @@ impl Shared {
             pulse: 0.0,
             pending_commands: Vec::new(),
             pending_spawns: Vec::new(),
+            pending_tune: Vec::new(),
             #[cfg(feature = "dock")]
             dock_action: None,
             #[cfg(feature = "overview")]
             overview_focus: None,
             #[cfg(feature = "overview")]
             overview_workspace: None,
+            #[cfg(feature = "overview")]
+            overview_move: None,
             #[cfg(feature = "command-menu")]
             menu_action: None,
         }

@@ -17,7 +17,7 @@ use smithay_client_toolkit::seat::keyboard::Keysym;
 use super::component::{close_overlays, Component, DrawCtx, UpdateCtx};
 use super::*;
 use crate::approach;
-use crate::config::{BarMaxState, Config, Side, StripSize, ThemeConfig};
+use crate::config::{BarMaxState, Config, Side, StripSize, ThemeConfig, WindowSwitcherStyle};
 
 /// Estado del panel de configuración.
 #[derive(Default)]
@@ -51,12 +51,13 @@ pub enum Page {
     Workspaces,
     Notifications,
     Dock,
+    Switcher,
     Keys,
     Toml,
 }
 
 /// Orden de las páginas; `ConfigPanelState::page` es un índice en esta lista.
-pub const PAGES: [Page; 9] = [
+pub const PAGES: [Page; 10] = [
     Page::Theme,
     Page::Bars,
     Page::Overviews,
@@ -64,6 +65,7 @@ pub const PAGES: [Page; 9] = [
     Page::Workspaces,
     Page::Notifications,
     Page::Dock,
+    Page::Switcher,
     Page::Keys,
     Page::Toml,
 ];
@@ -98,6 +100,7 @@ impl Page {
             Self::Workspaces => "Workspaces",
             Self::Notifications => "Notificaciones",
             Self::Dock => "Dock",
+            Self::Switcher => "Switcher",
             Self::Keys => "Atajos",
             Self::Toml => "config.toml",
         }
@@ -114,6 +117,9 @@ impl Page {
             Self::Workspaces => "Cantidad de escritorios virtuales y sus nombres.",
             Self::Notifications => "Cuánto tiempo queda visible la tarjeta de una notificación.",
             Self::Dock => "Dock inferior: activación y apps fijadas.",
+            Self::Switcher => {
+                "Estilo del selector de ventanas (Alt+Tab). El cambio es inmediato y en memoria."
+            }
             Self::Keys => "Comandos de dinamic-ui. Enlázalos a teclas en Hyprland.",
             Self::Toml => "El archivo de configuración tal como estaba al abrir este panel.",
         }
@@ -128,6 +134,7 @@ impl Page {
             Self::Workspaces => ic::SQUARES_FOUR,
             Self::Notifications => ic::BELL,
             Self::Dock => ic::RECTANGLE,
+            Self::Switcher => ic::APP_WINDOW,
             Self::Keys => ic::KEYBOARD,
             Self::Toml => ic::FILE_CODE,
         }
@@ -136,7 +143,9 @@ impl Page {
     pub fn group(self) -> Group {
         match self {
             Self::Theme | Self::Bars | Self::Overviews | Self::Dashboard => Group::Look,
-            Self::Workspaces | Self::Notifications | Self::Dock | Self::Keys => Group::Behavior,
+            Self::Workspaces | Self::Notifications | Self::Dock | Self::Switcher | Self::Keys => {
+                Group::Behavior
+            }
             Self::Toml => Group::System,
         }
     }
@@ -152,13 +161,14 @@ impl Page {
             Self::Workspaces => &["bar", "overview"],
             Self::Notifications => &["notifications"],
             Self::Dock => &["dock"],
+            Self::Switcher => &["switcher"],
         }
     }
 }
 
 /// ¿Está compilada la feature `name`? Solo cuentan las que usa el panel.
 pub fn compiled(name: &str) -> bool {
-    let built: [(&str, bool); 10] = [
+    let built: [(&str, bool); 11] = [
         ("bar", cfg!(feature = "bar")),
         ("topbar", cfg!(feature = "topbar")),
         ("taskbar", cfg!(feature = "taskbar")),
@@ -166,6 +176,7 @@ pub fn compiled(name: &str) -> bool {
         ("dashboard", cfg!(feature = "dashboard")),
         ("notifications", cfg!(feature = "notifications")),
         ("dock", cfg!(feature = "dock")),
+        ("switcher", cfg!(feature = "switcher")),
         ("activities", cfg!(feature = "activities")),
         ("command-menu", cfg!(feature = "command-menu")),
         ("config-panel", cfg!(feature = "config-panel")),
@@ -214,7 +225,7 @@ pub struct CommandInfo {
 
 /// Espejo de `Command` en `src/control.rs` (nombre y feature). Habría que derivarla de allí:
 /// hoy es una lista escrita a mano, así que puede quedarse atrás si se añade un comando.
-pub static COMMANDS: [CommandInfo; 17] = [
+pub static COMMANDS: [CommandInfo; 20] = [
     CommandInfo {
         name: "toggle",
         desc: "Expande o contrae la barra",
@@ -284,6 +295,21 @@ pub static COMMANDS: [CommandInfo; 17] = [
         name: "config-panel",
         desc: "Este panel (también --config)",
         feature: Some("config-panel"),
+    },
+    CommandInfo {
+        name: "window-switcher",
+        desc: "Switcher de ventanas (Alt+Tab)",
+        feature: Some("switcher"),
+    },
+    CommandInfo {
+        name: "workspace-switcher",
+        desc: "Switcher de workspaces (Super+Tab)",
+        feature: Some("switcher"),
+    },
+    CommandInfo {
+        name: "switcher-style-next",
+        desc: "Cambia al siguiente estilo del switcher",
+        feature: Some("switcher"),
     },
     CommandInfo {
         name: "taskbar",
@@ -617,7 +643,12 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut UiState, palette: Palette) {
         cfg: state.shared.config.as_ref(),
         file: state.config_panel.file.as_ref(),
     };
-    content(ui, &rects, &view, page);
+    if let Some(style) = content(ui, &rects, &view, page) {
+        state
+            .shared
+            .pending_tune
+            .push(format!("switcher.style={style}"));
+    }
     footer(ui, &rects, s, p);
     if let Some(next) = picked {
         state.config_panel.page = index_of(next);
@@ -781,7 +812,7 @@ fn footer(ui: &egui::Ui, r: &Rects, s: f32, p: Palette) {
         ui,
         pos2(r.foot.min.x + PAD * s, r.foot.center().y),
         Align2::LEFT_CENTER,
-        "Solo lectura: edita config.toml y recarga con --reload",
+        "Switcher: cambios en vivo · el resto es solo lectura",
         TEXT_CAPTION * s,
         p.muted,
     );
@@ -795,7 +826,8 @@ fn footer(ui: &egui::Ui, r: &Rects, s: f32, p: Palette) {
     );
 }
 
-fn content(ui: &mut egui::Ui, r: &Rects, v: &View, page: Page) {
+/// Devuelve el estilo elegido en una página interactiva, si la hubo.
+fn content(ui: &mut egui::Ui, r: &Rects, v: &View, page: Page) -> Option<&'static str> {
     header(ui, r.head, v, page);
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -805,16 +837,17 @@ fn content(ui: &mut egui::Ui, r: &Rects, v: &View, page: Page) {
     child.set_clip_rect(r.body);
     if page == Page::Toml {
         // El texto de config.toml tiene su propio scroll: no va dentro del de la página.
-        page_body(&mut child, page, v);
+        page_body(&mut child, page, v)
     } else {
         egui::ScrollArea::vertical()
             .id_salt(page.title())
             .auto_shrink([false, false])
-            .show(&mut child, |ui| page_body(ui, page, v));
+            .show(&mut child, |ui| page_body(ui, page, v))
+            .inner
     }
 }
 
-fn page_body(ui: &mut egui::Ui, page: Page, v: &View) {
+fn page_body(ui: &mut egui::Ui, page: Page, v: &View) -> Option<&'static str> {
     match page {
         Page::Theme => theme_page(ui, v),
         Page::Bars => bars_page(ui, v),
@@ -823,9 +856,11 @@ fn page_body(ui: &mut egui::Ui, page: Page, v: &View) {
         Page::Workspaces => workspaces_page(ui, v),
         Page::Notifications => notifications_page(ui, v),
         Page::Dock => dock_page(ui, v),
+        Page::Switcher => return switcher_page(ui, v),
         Page::Keys => keys_page(ui, v),
         Page::Toml => toml_page(ui, v),
     }
+    None
 }
 
 // ── Páginas ─────────────────────────────────────────────────────────────
@@ -1171,6 +1206,107 @@ fn dock_page(ui: &mut egui::Ui, v: &View) {
             );
         }
     });
+}
+
+/// Los siete estilos llevados a código, con su valor de configuración.
+const STYLE_CHIPS: [(&str, WindowSwitcherStyle); 7] = [
+    ("cards", WindowSwitcherStyle::Cards),
+    ("filmstrip", WindowSwitcherStyle::Filmstrip),
+    ("grid", WindowSwitcherStyle::Grid),
+    ("list", WindowSwitcherStyle::List),
+    ("stack", WindowSwitcherStyle::Stack),
+    ("windows", WindowSwitcherStyle::WindowOnly),
+    ("cascade", WindowSwitcherStyle::Cascade),
+];
+
+/// Página interactiva del switcher: los chips encolan un `--tune` en `Shared`.
+fn switcher_page(ui: &mut egui::Ui, v: &View) -> Option<&'static str> {
+    let (s, p) = (v.s, v.p);
+    let current = v.cfg.switcher.style;
+    let mut picked = None;
+    card(ui, s, "Estilo del switcher de ventanas", p, |ui| {
+        setting_row(
+            ui,
+            s,
+            "Estilo activo",
+            "switcher.style · igual que dinamic-ui --tune=switcher.style=<estilo>",
+            Control::Text(current.as_str().to_string()),
+            p,
+        );
+        ui.add_space(6.0 * s);
+        for row in [&STYLE_CHIPS[..4], &STYLE_CHIPS[4..]] {
+            if let Some(style) = style_chips(ui, s, p, row, current) {
+                picked = Some(style);
+            }
+            ui.add_space(8.0 * s);
+        }
+        setting_row(
+            ui,
+            s,
+            "Aplicación",
+            "Cambio inmediato en memoria; para conservarlo, edita [switcher] en config.toml",
+            Control::Muted("sin guardar en disco".to_string()),
+            p,
+        );
+    });
+    picked
+}
+
+/// Fila de chips; devuelve el valor del que se hizo clic.
+fn style_chips(
+    ui: &mut egui::Ui,
+    s: f32,
+    p: Palette,
+    styles: &'static [(&'static str, WindowSwitcherStyle)],
+    current: WindowSwitcherStyle,
+) -> Option<&'static str> {
+    let h = 30.0 * s;
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::hover());
+    let gap = 6.0 * s;
+    let widths = styles
+        .iter()
+        .map(|(name, _)| (name.len() as f32 * 6.2 + 20.0) * s)
+        .collect::<Vec<_>>();
+    let mut x = rect.min.x;
+    let mut picked = None;
+    for ((name, style), w) in styles.iter().zip(widths) {
+        let chip = Rect::from_min_size(pos2(x, rect.min.y), vec2(w, h));
+        x += w + gap;
+        let selected = *style == current;
+        let resp = ui.interact(
+            chip,
+            ui.scope_id().with(("config-style", *name)),
+            Sense::click(),
+        );
+        let fill = if resp.is_pointer_button_down_on() {
+            p.pressed
+        } else if selected {
+            p.accent
+        } else if resp.hovered() {
+            p.hover
+        } else {
+            p.badge
+        };
+        ui.painter().rect(
+            chip,
+            CornerRadius::same(Radius::of(Radius::SM)),
+            fill,
+            Stroke::new(1.0, if selected { p.accent } else { p.border }),
+            StrokeKind::Middle,
+        );
+        text_at(
+            ui,
+            chip.center(),
+            Align2::CENTER_CENTER,
+            *name,
+            TEXT_CAPTION * s,
+            if selected { p.solid() } else { p.text },
+        );
+        if resp.clicked() {
+            picked = Some(*name);
+        }
+    }
+    picked
 }
 
 fn keys_page(ui: &mut egui::Ui, v: &View) {
@@ -1573,6 +1709,31 @@ mod tests {
         assert!(visible_pages(&only("overview")).contains(&Page::Workspaces));
         assert!(visible_pages(&only("taskbar")).contains(&Page::Bars));
         assert!(!visible_pages(&only("taskbar")).contains(&Page::Workspaces));
+    }
+
+    #[test]
+    fn switcher_page_only_shows_with_its_feature() {
+        assert_eq!(
+            visible_pages(&only("switcher")),
+            vec![Page::Theme, Page::Switcher, Page::Keys, Page::Toml]
+        );
+        assert!(!visible_pages(&none).contains(&Page::Switcher));
+        assert_eq!(Page::Switcher.group(), Group::Behavior);
+    }
+
+    #[test]
+    fn style_chips_cover_every_style_once() {
+        let names = STYLE_CHIPS
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>();
+        assert_eq!(names.len(), 7);
+        assert!(names
+            .iter()
+            .all(|name| names.iter().filter(|n| *n == name).count() == 1));
+        for (name, style) in STYLE_CHIPS {
+            assert_eq!(style.as_str(), name);
+        }
     }
 
     #[test]

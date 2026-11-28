@@ -316,6 +316,8 @@ hl.bind("ALT + TAB",              hl.dsp.exec_cmd(dinamicUi .. " --window-switch
 hl.bind("ALT + SHIFT + TAB",      hl.dsp.exec_cmd(dinamicUi .. " --window-switcher-prev"), { repeating = true })
 hl.bind(mainMod .. " + TAB",      hl.dsp.exec_cmd(dinamicUi .. " --workspace-switcher"), { repeating = true })
 hl.bind(mainMod .. " + SHIFT + TAB", hl.dsp.exec_cmd(dinamicUi .. " --workspace-switcher-prev"), { repeating = true })
+-- Cicla entre las siete implementaciones del switcher de ventanas.
+hl.bind(mainMod .. " + ALT + TAB", hl.dsp.exec_cmd(dinamicUi .. " --switcher-style-next"))
 -- Soltar Alt/Super confirma el switcher. El shell NO toma el teclado: lo hace
 -- Hyprland con estos binds y este evento (0 = release, 1 = press).
 hl.on("input.keyboard.key", function(keycode, _, state)
@@ -325,6 +327,11 @@ hl.on("input.keyboard.key", function(keycode, _, state)
     end
 end)
 
+-- Ajustes internos en vivo (socket de control, sin recargar config):
+--   dinamic-ui --tune=taskbar.side=left
+--   dinamic-ui --tune=dock.activate=48
+--   dinamic-ui --tune=?            -- lista las claves
+-- Se pueden enlazar a cualquier tecla con hl.bind + hl.dsp.exec_cmd.
 -- Control de la isla/barra/panel (socket de control, sin depender del foco del layer)
 hl.bind(mainMod .. " + I",          hl.dsp.exec_cmd(dinamicUi .. " --toggle"))
 hl.bind(mainMod .. " + SHIFT + I",  hl.dsp.exec_cmd(dinamicUi .. " --panel"))

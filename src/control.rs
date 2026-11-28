@@ -9,7 +9,13 @@ use std::{
     path::PathBuf,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Claves aceptadas por `--tune=<clave>=<valor>`.
+pub const TUNE_KEYS: &str = "taskbar.side=top|right|bottom|left · taskbar.size=<px> · \
+    taskbar.autohide=on|off · topbar.height=<px> · dock.activate=<px> · dock.hold=<px> · \
+    needs.hold=<segundos> · \
+    switcher.style=cards|filmstrip|grid|list|stack|windows|cascade";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     Toggle,
     Expand,
@@ -30,16 +36,19 @@ pub enum Command {
     WorkspaceSwitcher,
     WorkspaceSwitcherPrev,
     SwitcherConfirm,
+    SwitcherStyleNext,
     Taskbar,
     Topbar,
     Menu,
     OsdVolume,
     OsdBrightness,
     Screenshots,
+    /// Ajuste interno en caliente: `tune:<clave>=<valor>`.
+    Tune(String),
 }
 
 impl Command {
-    pub fn name(self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match self {
             Self::Toggle => "toggle",
             Self::Expand => "expand",
@@ -60,18 +69,28 @@ impl Command {
             Self::WorkspaceSwitcher => "workspace-switcher",
             Self::WorkspaceSwitcherPrev => "workspace-switcher-prev",
             Self::SwitcherConfirm => "switcher-confirm",
+            Self::SwitcherStyleNext => "switcher-style-next",
             Self::Taskbar => "taskbar",
             Self::Topbar => "topbar",
             Self::Menu => "menu",
             Self::OsdVolume => "osd-volume",
             Self::OsdBrightness => "osd-brightness",
             Self::Screenshots => "screenshots",
+            Self::Tune(_) => "tune",
+        }
+    }
+
+    /// Representación en el socket: los comandos con payload añaden `:` + valor.
+    pub fn wire(&self) -> String {
+        match self {
+            Self::Tune(payload) => format!("tune:{payload}"),
+            other => other.name().to_string(),
         }
     }
 
     /// Feature de Cargo que implementa el comando y si este binario la incluye.
     /// `None`: lo atiende el núcleo (siempre disponible).
-    pub(crate) fn feature(self) -> Option<(&'static str, bool)> {
+    pub(crate) fn feature(&self) -> Option<(&'static str, bool)> {
         match self {
             Self::Toggle
             | Self::Expand
@@ -86,7 +105,8 @@ impl Command {
             | Self::WindowSwitcherPrev
             | Self::WorkspaceSwitcher
             | Self::WorkspaceSwitcherPrev
-            | Self::SwitcherConfirm => Some(("switcher", cfg!(feature = "switcher"))),
+            | Self::SwitcherConfirm
+            | Self::SwitcherStyleNext => Some(("switcher", cfg!(feature = "switcher"))),
             Self::Activities => Some(("activities", cfg!(feature = "activities"))),
             Self::Dashboard => Some(("dashboard", cfg!(feature = "dashboard"))),
             Self::ConfigPanel => Some(("config-panel", cfg!(feature = "config-panel"))),
@@ -95,12 +115,16 @@ impl Command {
             Self::Menu => Some(("command-menu", cfg!(feature = "command-menu"))),
             Self::OsdVolume | Self::OsdBrightness => Some(("osd", cfg!(feature = "osd"))),
             Self::Screenshots => Some(("screenshots", cfg!(feature = "screenshots"))),
-            Self::Quit | Self::Reload => None,
+            Self::Quit | Self::Reload | Self::Tune(_) => None,
         }
     }
 
     pub(crate) fn parse(s: &str) -> Option<Self> {
-        match s.trim() {
+        let s = s.trim();
+        if let Some(payload) = s.strip_prefix("tune:").or_else(|| s.strip_prefix("tune=")) {
+            return Some(Self::Tune(payload.to_string()));
+        }
+        match s {
             "toggle" => Some(Self::Toggle),
             "expand" => Some(Self::Expand),
             "collapse" => Some(Self::Collapse),
@@ -122,6 +146,7 @@ impl Command {
             "workspace-switcher" => Some(Self::WorkspaceSwitcher),
             "workspace-switcher-prev" => Some(Self::WorkspaceSwitcherPrev),
             "switcher-confirm" => Some(Self::SwitcherConfirm),
+            "switcher-style-next" => Some(Self::SwitcherStyleNext),
             "taskbar" => Some(Self::Taskbar),
             "topbar" => Some(Self::Topbar),
             "menu" => Some(Self::Menu),
@@ -143,6 +168,12 @@ pub fn handle_cli() -> Option<i32> {
     let arg = env::args().nth(1)?;
     let arg = arg.trim_start_matches('-');
     let command = Command::parse(arg)?;
+    if let Command::Tune(payload) = &command {
+        if payload == "?" {
+            eprintln!("[dinamic-ui] claves --tune: {TUNE_KEYS}");
+            return Some(0);
+        }
+    }
     if let Some((feature, false)) = command.feature() {
         eprintln!(
             "[dinamic-ui] `--{arg}` no disponible: este binario se compiló sin la feature `{feature}`"
@@ -156,7 +187,7 @@ pub fn handle_cli() -> Option<i32> {
     };
     match UnixStream::connect(&path) {
         Ok(mut stream) => {
-            let _ = stream.write_all(command.name().as_bytes());
+            let _ = stream.write_all(command.wire().as_bytes());
             Some(0)
         }
         Err(e) => {
@@ -190,7 +221,7 @@ impl ControlServer {
     pub fn poll(&mut self) -> Vec<Command> {
         let mut commands = Vec::new();
         while let Ok((mut stream, _)) = self.listener.accept() {
-            let mut buf = [0u8; 64];
+            let mut buf = [0u8; 128];
             if let Ok(n) = stream.read(&mut buf) {
                 let text = String::from_utf8_lossy(&buf[..n]);
                 if let Some(command) = Command::parse(&text) {

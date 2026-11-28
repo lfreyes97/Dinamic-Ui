@@ -13,16 +13,21 @@ use needs::{Need, NeedTracker};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_registry,
+    globals::GlobalData,
     output::{OutputHandler, OutputState},
     reexports::{
         calloop::{generic::Generic, timer::Timer, EventLoop, Interest, Mode, PostAction},
         calloop_wayland_source::WaylandSource,
+        protocols::wp::cursor_shape::v1::client::{
+            wp_cursor_shape_device_v1::{Shape, WpCursorShapeDeviceV1},
+            wp_cursor_shape_manager_v1::WpCursorShapeManagerV1,
+        },
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
         keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-        pointer::{PointerEvent, PointerEventKind, PointerHandler},
+        pointer::{PointerData, PointerEvent, PointerEventKind, PointerHandler},
         Capability, SeatHandler, SeatState,
     },
     shell::{
@@ -38,7 +43,7 @@ use ui::{metrics, reservations, UiState};
 use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_region, wl_seat, wl_surface},
-    Connection, QueueHandle,
+    Connection, Proxy, QueueHandle,
 };
 
 type InputRects = Vec<(i32, i32, i32, i32)>;
@@ -151,6 +156,13 @@ struct DinamicUi {
     reservations: Reservations,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     pointer: Option<wl_pointer::WlPointer>,
+    /// `wp_cursor_shape_manager_v1`, si el compositor lo ofrece.
+    cursor_shape: Option<WpCursorShapeManagerV1>,
+    shape_device: Option<WpCursorShapeDeviceV1>,
+    /// Último icono pedido por egui, para no repetir `set_shape` igual.
+    cursor_icon: egui::CursorIcon,
+    /// Un `Enter` cambia el serial: hay que reaplicar el shape aunque el icono sea el mismo.
+    cursor_dirty: bool,
 
     gfx: Gfx,
     ui_state: UiState,
@@ -212,6 +224,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let compositor_state = CompositorState::bind(&globals, &qh)?;
     let layer_shell = LayerShell::bind(&globals, &qh)?;
+    let cursor_shape = globals
+        .bind::<WpCursorShapeManagerV1, DinamicUi, GlobalData>(&qh, 1..=2, GlobalData)
+        .ok();
 
     let surface = compositor_state.create_surface(&qh);
     let layer =
@@ -241,6 +256,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         reservations,
         keyboard: None,
         pointer: None,
+        cursor_shape,
+        shape_device: None,
+        cursor_icon: egui::CursorIcon::Default,
+        cursor_dirty: true,
         gfx,
         ui_state: UiState::new(),
         ipc: HyprlandIpc::new(),
@@ -362,6 +381,134 @@ impl DinamicUi {
         self.sysinfo.force_refresh(data);
     }
 
+    /// Reemplaza la config en memoria y refresca el estado, sin leer el archivo
+    /// (mismo camino que los sliders del previewer).
+    fn set_config(&mut self, cfg: config::Config) {
+        config::set(cfg);
+        self.ui_state.shared.config = config::get();
+        #[cfg(feature = "taskbar")]
+        {
+            let enabled = self.ui_state.shared.config.taskbar.enabled;
+            self.ui_state.taskbar.enabled = enabled;
+            self.ui_state.taskbar.visible = enabled;
+        }
+        #[cfg(feature = "topbar")]
+        {
+            self.ui_state.topbar.enabled = self.ui_state.shared.config.topbar.enabled;
+        }
+    }
+
+    /// Cicla el estilo del switcher por el mismo camino que `--tune`.
+    fn cycle_switcher_style(&mut self) {
+        let style = self.ui_state.shared.config.switcher.style.next();
+        let mut cfg = (*self.ui_state.shared.config).clone();
+        cfg.switcher.style = style;
+        self.set_config(cfg);
+    }
+
+    /// Ajustes internos en caliente: `--tune=<clave>=<valor>` (ver `control::TUNE_KEYS`).
+    fn apply_tune(&mut self, text: &str) {
+        let Some((key, value)) = text.split_once('=') else {
+            eprintln!("[dinamic-ui] tune: se esperaba clave=valor ({text})");
+            return;
+        };
+        let outcome: Result<(), String> = (|| {
+            match key {
+                "taskbar.side" => {
+                    let side = match value {
+                        "top" => config::Side::Top,
+                        "right" => config::Side::Right,
+                        "bottom" => config::Side::Bottom,
+                        "left" => config::Side::Left,
+                        other => return Err(format!("lado desconocido: {other}")),
+                    };
+                    let mut cfg = (*self.ui_state.shared.config).clone();
+                    cfg.taskbar.side = side;
+                    self.set_config(cfg);
+                }
+                "taskbar.size" => {
+                    let size = value
+                        .parse::<u32>()
+                        .map_err(|_| format!("tamaño inválido: {value}"))?;
+                    let mut cfg = (*self.ui_state.shared.config).clone();
+                    cfg.taskbar.size = size;
+                    self.set_config(cfg);
+                }
+                "taskbar.autohide" => {
+                    let on = match value {
+                        "on" | "true" | "1" => true,
+                        "off" | "false" | "0" => false,
+                        other => return Err(format!("booleano inválido: {other}")),
+                    };
+                    let mut cfg = (*self.ui_state.shared.config).clone();
+                    cfg.taskbar.autohide = on;
+                    self.set_config(cfg);
+                }
+                "topbar.height" => {
+                    let height = value
+                        .parse::<u32>()
+                        .map_err(|_| format!("altura inválida: {value}"))?;
+                    let mut cfg = (*self.ui_state.shared.config).clone();
+                    cfg.topbar.height = height;
+                    self.set_config(cfg);
+                }
+                "dock.activate" => {
+                    let margin = value
+                        .parse::<u32>()
+                        .map_err(|_| format!("margen inválido: {value}"))?;
+                    self.ui_state.shared.dock_activate_margin = margin as i32;
+                }
+                "dock.hold" => {
+                    let margin = value
+                        .parse::<u32>()
+                        .map_err(|_| format!("margen inválido: {value}"))?;
+                    self.ui_state.shared.dock_persist_margin = margin as i32;
+                }
+                "needs.hold" => {
+                    let secs = value
+                        .parse::<u64>()
+                        .map_err(|_| format!("segundos inválidos: {value}"))?;
+                    self.need_tracker.set_hold(Duration::from_secs(secs));
+                }
+                "switcher.style" => {
+                    let style = value
+                        .parse::<config::WindowSwitcherStyle>()
+                        .map_err(|_| format!("estilo desconocido: {value}"))?;
+                    let mut cfg = (*self.ui_state.shared.config).clone();
+                    cfg.switcher.style = style;
+                    self.set_config(cfg);
+                }
+                other => return Err(format!("clave desconocida: {other}")),
+            }
+            Ok(())
+        })();
+        if let Err(error) = outcome {
+            eprintln!("[dinamic-ui] tune {key}: {error}");
+        }
+    }
+
+    /// Aplica al wl_pointer el icono que pidió egui este frame. Sin esto el
+    /// surface a pantalla completa no cambia (ni muestra) el cursor del sistema.
+    fn apply_cursor(&mut self) {
+        let icon = self.gfx.cursor_icon;
+        if icon == self.cursor_icon && !self.cursor_dirty {
+            return;
+        }
+        let Some(serial) = self
+            .pointer
+            .as_ref()
+            .and_then(|p| p.data::<PointerData<()>>())
+            .and_then(|d| d.latest_enter_serial())
+        else {
+            return;
+        };
+        if let Some(device) = &self.shape_device {
+            device.set_shape(serial, cursor_shape_for(icon));
+            self.cursor_icon = icon;
+            self.cursor_dirty = false;
+        }
+    }
+
     fn draw(&mut self, qh: &QueueHandle<Self>) {
         let mut dirty = std::mem::take(&mut self.input_dirty);
 
@@ -379,6 +526,8 @@ impl DinamicUi {
                 control::Command::OsdVolume => self.show_osd(ui::osd::OsdKind::Volume),
                 #[cfg(feature = "osd")]
                 control::Command::OsdBrightness => self.show_osd(ui::osd::OsdKind::Brightness),
+                control::Command::Tune(payload) => self.apply_tune(&payload),
+                control::Command::SwitcherStyleNext => self.cycle_switcher_style(),
                 other => eprintln!(
                     "[dinamic-ui] comando `{}` no disponible: componente no compilado",
                     other.name()
@@ -464,6 +613,10 @@ impl DinamicUi {
         // Colas diferidas: órdenes a Hyprland y comandos externos fuera del render.
         for command in self.ui_state.shared.pending_commands.drain(..) {
             self.ipc.dispatch(&command);
+        }
+        // La UI solo encola ajustes: `apply_tune` tiene el `set_config` del núcleo.
+        for payload in std::mem::take(&mut self.ui_state.shared.pending_tune) {
+            self.apply_tune(&payload);
         }
         for argv in self.ui_state.shared.pending_spawns.drain(..) {
             sysinfo::spawn_detached(argv);
@@ -594,6 +747,7 @@ impl DinamicUi {
             {
                 eprintln!("[dinamic-ui] render: {e}");
             }
+            self.apply_cursor();
         }
         self.layer.commit();
     }
@@ -712,7 +866,12 @@ impl SeatHandler for DinamicUi {
             self.keyboard = self.seat_state.get_keyboard(qh, &seat, None).ok();
         }
         if capability == Capability::Pointer && self.pointer.is_none() {
-            self.pointer = self.seat_state.get_pointer(qh, &seat).ok();
+            if let Ok(pointer) = self.seat_state.get_pointer(qh, &seat) {
+                if let Some(manager) = &self.cursor_shape {
+                    self.shape_device = Some(manager.get_pointer(&pointer, qh, GlobalData));
+                }
+                self.pointer = Some(pointer);
+            }
         }
     }
 
@@ -838,7 +997,11 @@ impl PointerHandler for DinamicUi {
             has_events = true;
             let pos = egui::Pos2::new(event.position.0 as f32, event.position.1 as f32);
             match event.kind {
-                PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
+                PointerEventKind::Enter { .. } => {
+                    self.cursor_dirty = true;
+                    self.pending_events.push(egui::Event::PointerMoved(pos));
+                }
+                PointerEventKind::Motion { .. } => {
                     self.pending_events.push(egui::Event::PointerMoved(pos));
                 }
                 PointerEventKind::Leave { .. } => {
@@ -888,6 +1051,48 @@ impl PointerHandler for DinamicUi {
             // Responder al ratón de inmediato (dock/isla) sin esperar 250 ms.
             self.tick = true;
         }
+    }
+}
+
+/// Convierte el icono que pide egui a un shape de `wp_cursor_shape_v1`.
+fn cursor_shape_for(icon: egui::CursorIcon) -> Shape {
+    use egui::CursorIcon as C;
+    match icon {
+        C::Default => Shape::Default,
+        C::ContextMenu => Shape::ContextMenu,
+        C::Help => Shape::Help,
+        C::PointingHand => Shape::Pointer,
+        C::Progress => Shape::Progress,
+        C::Wait => Shape::Wait,
+        C::Cell => Shape::Cell,
+        C::Crosshair => Shape::Crosshair,
+        C::Text => Shape::Text,
+        C::VerticalText => Shape::VerticalText,
+        C::Alias => Shape::Alias,
+        C::Copy => Shape::Copy,
+        C::Move => Shape::Move,
+        C::NoDrop => Shape::NoDrop,
+        C::NotAllowed => Shape::NotAllowed,
+        C::Grab => Shape::Grab,
+        C::Grabbing => Shape::Grabbing,
+        C::ResizeEast => Shape::EResize,
+        C::ResizeNorth => Shape::NResize,
+        C::ResizeNorthEast => Shape::NeResize,
+        C::ResizeNorthWest => Shape::NwResize,
+        C::ResizeSouth => Shape::SResize,
+        C::ResizeSouthEast => Shape::SeResize,
+        C::ResizeSouthWest => Shape::SwResize,
+        C::ResizeWest => Shape::WResize,
+        C::ResizeHorizontal => Shape::EwResize,
+        C::ResizeVertical => Shape::NsResize,
+        C::ResizeNeSw => Shape::NeswResize,
+        C::ResizeNwSe => Shape::NwseResize,
+        C::ResizeColumn => Shape::ColResize,
+        C::ResizeRow => Shape::RowResize,
+        C::AllScroll => Shape::AllScroll,
+        C::ZoomIn => Shape::ZoomIn,
+        C::ZoomOut => Shape::ZoomOut,
+        _ => Shape::Default,
     }
 }
 
